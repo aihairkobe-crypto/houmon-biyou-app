@@ -4,13 +4,13 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0">
 <meta name="theme-color" content="#1d9e75">
-<title>i,hair 訪問美容</title>
+<title>訪問美容 管理</title>
 <style>
   :root{
     --bg:#f4f6f5; --surface:#ffffff; --line:#e4e8e6;
     --text:#1f2624; --muted:#6b7572; --hint:#9aa3a0;
     --accent:#1d9e75; --accent-soft:#e1f5ee; --accent-text:#0f6e56;
-    --warn:#ba7517; --warn-soft:#faeeda;
+    --warn:#ba7517; --warn-soft:#faeeda; --danger:#a32d2d;
     --radius:12px; --radius-sm:8px;
   }
   *{box-sizing:border-box; -webkit-tap-highlight-color:transparent;}
@@ -46,7 +46,8 @@
   .tag.done{background:var(--accent-soft); color:var(--accent-text);}
   .tag.todo{background:var(--warn-soft); color:var(--warn);}
 
-  .empty{text-align:center; color:var(--hint); padding:40px 16px; font-size:14px;}
+  .empty{text-align:center; color:var(--hint); padding:34px 16px; font-size:14px;}
+  .empty .btn{max-width:320px; margin:16px auto 0;}
 
   .fab{position:fixed; right:18px; bottom:84px; z-index:30; background:var(--accent); color:#fff; border:none;
     width:56px; height:56px; border-radius:50%; font-size:28px; box-shadow:0 4px 14px rgba(29,158,117,.4);}
@@ -56,42 +57,43 @@
   nav.tabs button .ic{font-size:20px; line-height:1;}
   nav.tabs button.on{color:var(--accent);}
 
-  /* 一覧テーブル（PC） */
-  .tbl{width:100%; border-collapse:collapse; background:var(--surface); border:1px solid var(--line); border-radius:var(--radius); overflow:hidden; font-size:14px;}
-  .tbl th{text-align:left; font-weight:400; color:var(--muted); font-size:12px; padding:10px 12px; border-bottom:1px solid var(--line); background:#fafbfb;}
-  .tbl td{padding:11px 12px; border-bottom:1px solid var(--line);}
-  .tbl tr:last-child td{border-bottom:none;}
-
   /* モーダル */
   .modal-bg{position:fixed; inset:0; background:rgba(20,28,25,.45); z-index:40; display:none; align-items:flex-end; justify-content:center;}
   .modal-bg.open{display:flex;}
-  .modal{background:var(--surface); width:100%; max-width:560px; max-height:90vh; overflow:auto; border-radius:18px 18px 0 0; padding:18px 18px 28px;}
+  .modal{background:var(--surface); width:100%; max-width:560px; max-height:92vh; overflow:auto; border-radius:18px 18px 0 0; padding:18px 18px 28px;}
   @media(min-width:640px){ .modal-bg{align-items:center;} .modal{border-radius:18px;} }
-  .modal h2{font-size:17px; margin-bottom:14px;}
+  .modal h2{font-size:17px; margin-bottom:6px;}
+  .modal .lead{font-size:13px; color:var(--muted); margin-bottom:8px;}
   label{display:block; font-size:13px; color:var(--muted); margin:12px 0 5px;}
-  input,select,textarea{width:100%; font-family:inherit; font-size:15px; padding:10px 12px; border:1px solid var(--line); border-radius:var(--radius-sm); background:var(--surface); color:var(--text);}
+  input,select,textarea{width:100%; font-family:inherit; font-size:16px; padding:11px 12px; border:1px solid var(--line); border-radius:var(--radius-sm); background:var(--surface); color:var(--text);}
   textarea{resize:vertical; min-height:54px;}
   .btn{display:block; width:100%; padding:13px; border:none; border-radius:var(--radius-sm); font-size:15px; font-weight:600; margin-top:18px;}
   .btn.primary{background:var(--accent); color:#fff;}
   .btn.ghost{background:none; border:1px solid var(--line); color:var(--muted); font-weight:400; margin-top:8px;}
+  .btn.danger{background:none; border:1px solid var(--line); color:var(--danger); font-weight:400; margin-top:8px;}
   .row-2{display:grid; grid-template-columns:1fr 1fr; gap:10px;}
   .chips{display:flex; flex-wrap:wrap; gap:8px;}
   .chip{padding:8px 14px; border:1px solid var(--line); border-radius:20px; font-size:14px; background:var(--surface);}
   .chip.sel{background:var(--accent-soft); border-color:var(--accent); color:var(--accent-text);}
 
-  .rec-row{display:grid; grid-template-columns:1fr 96px; gap:8px; align-items:center; padding:8px 0; border-bottom:1px solid var(--line);}
+  .rec-row{display:grid; grid-template-columns:1fr 104px; gap:8px; align-items:center; padding:8px 0; border-bottom:1px solid var(--line);}
   .rec-row .cn{font-size:14px;}
   .rec-row .care{font-size:11px; color:var(--warn); margin-top:2px;}
-  .rec-row input{padding:8px 10px; font-size:14px;}
+  .rec-row input{padding:9px 10px; font-size:14px;}
 
   .fac-block{background:var(--surface); border:1px solid var(--line); border-radius:var(--radius); padding:14px; margin-bottom:10px;}
-  .fac-block .fn{font-size:15px; font-weight:600; display:flex; justify-content:space-between; align-items:center;}
-  .cust-li{display:flex; justify-content:space-between; padding:8px 0; border-top:1px solid var(--line); font-size:14px;}
+  .fac-block .fn{font-size:15px; font-weight:600; display:flex; justify-content:space-between; align-items:center; gap:8px;}
+  .fac-block .fn .edit{font-size:12px; color:var(--muted); font-weight:400; background:none; border:none; padding:4px;}
+  .cust-li{display:flex; justify-content:space-between; align-items:center; padding:8px 0; border-top:1px solid var(--line); font-size:14px;}
   .cust-li .cc{color:var(--warn); font-size:12px;}
-  .add-link{background:none; border:none; color:var(--accent); font-size:13px; padding:6px 0;}
+  .cust-li .del{background:none; border:none; color:var(--hint); font-size:16px; padding:2px 6px;}
+  .add-link{background:none; border:none; color:var(--accent); font-size:14px; padding:8px 0; font-weight:500;}
+  .list-row{display:flex; justify-content:space-between; align-items:center; padding:10px 0; border-top:1px solid var(--line); font-size:15px;}
+  .list-row:first-child{border-top:none;}
+  .list-row .del{background:none; border:none; color:var(--hint); font-size:16px; padding:2px 8px;}
 
-  .sum-bar{display:flex; align-items:center; gap:8px; margin:6px 0;}
-  .sum-bar .nm{width:96px; font-size:13px;}
+  .sum-bar{display:flex; align-items:center; gap:8px; margin:8px 0;}
+  .sum-bar .nm{width:104px; font-size:13px; overflow:hidden; text-overflow:ellipsis; white-space:nowrap;}
   .sum-bar .track{flex:1; height:14px; background:#eef1f0; border-radius:7px; overflow:hidden;}
   .sum-bar .fill{height:100%; background:var(--accent);}
   .sum-bar .am{width:84px; text-align:right; font-size:13px;}
@@ -101,9 +103,9 @@
 </head>
 <body>
 
-<header class="top">
+<header class="top" id="topbar" style="display:none">
   <div class="top-in">
-    <div class="brand">i,hair 訪問美容<small>フィールド管理</small></div>
+    <div class="brand" id="brand">訪問美容<small>管理</small></div>
     <div class="date-nav" id="dateNav">
       <button onclick="shiftDay(-1)">‹</button>
       <span class="d" id="dLabel"></span>
@@ -114,9 +116,9 @@
 
 <div class="wrap" id="view"></div>
 
-<button class="fab" id="fab" onclick="onFab()">＋</button>
+<button class="fab" id="fab" onclick="onFab()" style="display:none">＋</button>
 
-<nav class="tabs">
+<nav class="tabs" id="tabs" style="display:none">
   <button data-tab="today" class="on" onclick="go('today')"><span class="ic">📅</span>今日</button>
   <button data-tab="customers" onclick="go('customers')"><span class="ic">👥</span>顧客台帳</button>
   <button data-tab="summary" onclick="go('summary')"><span class="ic">📊</span>売上集計</button>
@@ -130,48 +132,45 @@
 
 <script>
 /* ============================================================
-   DB層 ―― ここだけ後でSupabaseに差し替えれば共有化できる
+   DB層 ―― ここだけ後でクラウド(Supabase等)に差し替えれば共有化できる
    今は端末内(localStorage)に保存する
    ============================================================ */
-var STORE_KEY = "ihair_houmon_v1";
+var STORE_KEY = "houmon_app_v2";
 
 function loadDB(){
   var raw = localStorage.getItem(STORE_KEY);
   if(raw){ try{ return JSON.parse(raw); }catch(e){} }
-  return seedDB();
+  return emptyDB();
 }
 function saveDB(){ localStorage.setItem(STORE_KEY, JSON.stringify(DB)); }
 function uid(){ return Date.now().toString(36) + Math.random().toString(36).slice(2,6); }
 
-/* 初回サンプルデータ（「サンプル削除」で消せる） */
-function seedDB(){
-  var today = ymd(new Date());
+/* 空のDB（どの事業者でも使える初期状態） */
+function emptyDB(){
   return {
-    staff: [
-      {id:"s1", name:"板谷"},
-      {id:"s2", name:"直香"},
-      {id:"s3", name:"高村"}
-    ],
-    facilities: [
-      {id:"f1", name:"きらくえん", type:"施設", address:"神戸市", note:""},
-      {id:"f2", name:"グループホーム花", type:"施設", address:"神戸市", note:""},
-      {id:"f3", name:"在宅 山本様", type:"在宅", address:"神戸市", note:"駐車場あり"}
-    ],
-    customers: [
-      {id:"c1", facilityId:"f1", name:"田中 ハナ", care:"右耳が聞こえにくい"},
-      {id:"c2", facilityId:"f1", name:"佐藤 キク", care:""},
-      {id:"c3", facilityId:"f1", name:"鈴木 ウメ", care:"車椅子"},
-      {id:"c4", facilityId:"f2", name:"伊藤 マツ", care:""},
-      {id:"c5", facilityId:"f2", name:"渡辺 タケ", care:"認知症・声かけ丁寧に"},
-      {id:"c6", facilityId:"f3", name:"山本 様", care:""}
-    ],
-    visits: [
-      {id:"v1", date:today, time:"13:00", facilityId:"f1", staffIds:["s2","s3"], status:"plan", note:""},
-      {id:"v2", date:today, time:"15:30", facilityId:"f3", staffIds:["s1"], status:"plan", note:""},
-      {id:"v3", date:today, time:"17:00", facilityId:"f2", staffIds:["s3"], status:"plan", note:""}
-    ],
-    records: [] // {id, visitId, customerId, staffId, menu, amount}
+    settings: {bizName:"", ready:false},
+    staff: [], facilities: [], customers: [], visits: [], records: []
   };
+}
+
+/* 任意：サンプルデータ（お試し用） */
+function fillSample(){
+  var t = ymd(new Date());
+  DB.staff = [{id:"s1",name:"担当A"},{id:"s2",name:"担当B"}];
+  DB.facilities = [
+    {id:"f1",name:"サンプル園",type:"施設",address:"",note:""},
+    {id:"f2",name:"在宅 サンプル様",type:"在宅",address:"",note:""}
+  ];
+  DB.customers = [
+    {id:"c1",facilityId:"f1",name:"利用者 一郎",care:"車椅子"},
+    {id:"c2",facilityId:"f1",name:"利用者 花子",care:""},
+    {id:"c3",facilityId:"f2",name:"サンプル 様",care:""}
+  ];
+  DB.visits = [
+    {id:"v1",date:t,time:"13:00",facilityId:"f1",staffIds:["s1","s2"],status:"plan",note:""},
+    {id:"v2",date:t,time:"15:30",facilityId:"f2",staffIds:["s1"],status:"plan",note:""}
+  ];
+  DB.records = [];
 }
 
 var DB = loadDB();
@@ -181,6 +180,7 @@ var DB = loadDB();
    ============================================================ */
 function ymd(d){ return d.getFullYear()+"-"+String(d.getMonth()+1).padStart(2,"0")+"-"+String(d.getDate()).padStart(2,"0"); }
 function yen(n){ return "¥"+(n||0).toLocaleString("ja-JP"); }
+function esc(s){ return (s||"").replace(/&/g,"&amp;").replace(/</g,"&lt;").replace(/>/g,"&gt;").replace(/"/g,"&quot;"); }
 function facName(id){ var f=DB.facilities.find(function(x){return x.id===id;}); return f?f.name:"(不明)"; }
 function staffName(id){ var s=DB.staff.find(function(x){return x.id===id;}); return s?s.name:"?"; }
 function custOf(facId){ return DB.customers.filter(function(c){return c.facilityId===facId;}); }
@@ -202,6 +202,7 @@ function toast(msg){ var t=document.getElementById("toast"); t.textContent=msg; 
    描画
    ============================================================ */
 function render(){
+  document.getElementById("brand").innerHTML = esc(DB.settings.bizName||"訪問美容")+"<small>訪問美容 管理</small>";
   document.getElementById("dLabel").textContent = fmtDate(current);
   if(tab==="today") renderToday();
   else if(tab==="customers") renderCustomers();
@@ -222,15 +223,17 @@ function renderToday(){
     + card("売上", yen(sales))
     + '</div>';
 
-  if(vs.length===0){ h += '<div class="empty">この日の訪問予約はありません。<br>右下の ＋ から追加できます。</div>'; }
-  else{
+  if(vs.length===0){
+    h += '<div class="empty">この日の訪問予約はありません。'
+      + '<button class="btn primary" onclick="addVisitForm()">＋ 訪問を追加</button></div>';
+  } else {
     vs.forEach(function(v){
       var done = v.status==="done";
       var tg = done ? '<span class="tag done">完了 '+yen(visitTotal(v.id))+'</span>'
                     : (recOfVisit(v.id).length>0 ? '<span class="tag todo">入力中</span>' : '<span class="tag plan">予定</span>');
       h += '<div class="visit" onclick="openVisit(\''+v.id+'\')">'
-        + '<div class="row1"><span class="name">'+facName(v.facilityId)+'</span><span class="time">'+v.time+'</span></div>'
-        + '<div class="meta">利用者 '+custOf(v.facilityId).length+'名 ・ 担当 '+v.staffIds.map(staffName).join("/")+'</div>'
+        + '<div class="row1"><span class="name">'+esc(facName(v.facilityId))+'</span><span class="time">'+v.time+'</span></div>'
+        + '<div class="meta">利用者 '+custOf(v.facilityId).length+'名 ・ 担当 '+(v.staffIds.map(staffName).join("/")||"未設定")+'</div>'
         + tg + '</div>';
     });
   }
@@ -240,12 +243,17 @@ function card(l,v){ return '<div class="card"><div class="lbl">'+l+'</div><div c
 
 function renderCustomers(){
   var h = '<div class="sec-title">施設・在宅先 と 利用者</div>';
-  if(DB.facilities.length===0){ h+='<div class="empty">右下の ＋ から訪問先を登録できます。</div>'; }
+  h += '<button class="btn primary" onclick="addFacilityForm()" style="margin:0 0 14px">＋ 訪問先を追加</button>';
+  if(DB.facilities.length===0){
+    h += '<div class="empty">訪問先がまだありません。<br>上のボタンから施設・在宅先を登録してください。</div>';
+  }
   DB.facilities.forEach(function(f){
     var cs = custOf(f.id);
-    h += '<div class="fac-block"><div class="fn"><span>'+f.name+' <span style="font-size:11px;color:var(--muted)">'+f.type+'</span></span></div>';
+    h += '<div class="fac-block"><div class="fn"><span>'+esc(f.name)+' <span style="font-size:11px;color:var(--muted)">'+esc(f.type)+'</span></span>'
+      + '<button class="edit" onclick="editFacilityForm(\''+f.id+'\')">編集</button></div>';
     cs.forEach(function(c){
-      h += '<div class="cust-li"><span>'+c.name+(c.care?' <span class="cc">⚠ '+c.care+'</span>':'')+'</span></div>';
+      h += '<div class="cust-li"><span>'+esc(c.name)+(c.care?' <span class="cc">⚠ '+esc(c.care)+'</span>':'')+'</span>'
+        + '<button class="del" onclick="delCustomer(\''+c.id+'\')">✕</button></div>';
     });
     h += '<button class="add-link" onclick="addCustomerForm(\''+f.id+'\')">＋ 利用者を追加</button>';
     h += '</div>';
@@ -270,7 +278,6 @@ function renderSummary(){
 
   var h = '<div class="sec-title">'+ym.replace("-","年")+'月 の売上</div>';
   h += '<div class="card" style="margin-bottom:16px"><div class="lbl">月間売上合計</div><div class="val">'+yen(total)+'</div></div>';
-
   h += '<div class="sec-title">担当別</div>' + bars(byStaff, staffName, total);
   h += '<div class="sec-title">施設別</div>' + bars(byFac, facName, total);
   if(total===0) h += '<div class="empty">この月の売上入力はまだありません。</div>';
@@ -283,40 +290,72 @@ function bars(obj, nameFn, total){
   var h='<div class="card">';
   keys.forEach(function(k){
     var pct = max? Math.round(obj[k]/max*100):0;
-    h += '<div class="sum-bar"><span class="nm">'+nameFn(k)+'</span><span class="track"><span class="fill" style="width:'+pct+'%"></span></span><span class="am">'+yen(obj[k])+'</span></div>';
+    h += '<div class="sum-bar"><span class="nm">'+esc(nameFn(k))+'</span><span class="track"><span class="fill" style="width:'+pct+'%"></span></span><span class="am">'+yen(obj[k])+'</span></div>';
   });
   return h+'</div>';
 }
 
 function renderSettings(){
-  var h = '<div class="sec-title">担当（フレンドシップメンバー）</div><div class="card">';
-  DB.staff.forEach(function(s){ h+='<div class="cust-li"><span>'+s.name+'</span></div>'; });
+  var h = '<div class="sec-title">事業者</div><div class="card">'
+    + '<div class="list-row"><span>事業者名</span><span style="color:var(--muted)">'+esc(DB.settings.bizName||"未設定")+'</span></div>'
+    + '<button class="add-link" onclick="editBizForm()">事業者名を変更</button></div>';
+
+  h += '<div class="sec-title">担当（スタッフ）</div><div class="card">';
+  if(DB.staff.length===0) h += '<div style="font-size:13px;color:var(--muted)">担当が未登録です。</div>';
+  DB.staff.forEach(function(s){
+    h += '<div class="list-row"><span>'+esc(s.name)+'</span><button class="del" onclick="delStaff(\''+s.id+'\')">✕</button></div>';
+  });
   h += '<button class="add-link" onclick="addStaffForm()">＋ 担当を追加</button></div>';
 
   h += '<div class="sec-title">データ</div><div class="card">';
-  h += '<div style="font-size:13px;color:var(--muted);margin-bottom:8px">このデータはこの端末の中だけに保存されています（無料・お試し版）。次の段階で3人共有に切り替えます。</div>';
+  h += '<div style="font-size:13px;color:var(--muted);margin-bottom:8px">このデータはこの端末の中だけに保存されています（無料・お試し版）。複数人で共有するには次の段階でクラウド接続します。</div>';
   h += '<button class="btn ghost" onclick="exportJSON()">バックアップを書き出す</button>';
-  h += '<button class="btn ghost" onclick="resetDB()" style="color:#a32d2d">サンプル/データを初期化</button>';
+  h += '<button class="btn danger" onclick="resetDB()">すべてのデータを消去</button>';
   h += '</div>';
   document.getElementById("view").innerHTML = h;
 }
 
 /* ============================================================
-   モーダル & 入力
+   モーダル
    ============================================================ */
 function openModal(html){ document.getElementById("modal").innerHTML=html; document.getElementById("modalBg").classList.add("open"); }
 function closeModal(){ document.getElementById("modalBg").classList.remove("open"); }
 
 function onFab(){ if(tab==="today") addVisitForm(); else if(tab==="customers") addFacilityForm(); }
 
-/* 予約追加 */
+/* ---- 初回セットアップ ---- */
+function setupForm(){
+  document.getElementById("modalBg").classList.add("open");
+  document.getElementById("modal").innerHTML =
+    '<h2>はじめに</h2><div class="lead">このアプリを使う事業者の情報を登録します（あとで変更できます）。</div>'
+    + '<label>事業者名・屋号</label><input id="suBiz" placeholder="例：○○ビューティー">'
+    + '<label>最初の担当者（あなたの名前）</label><input id="suStaff" placeholder="例：山田">'
+    + '<label style="margin-top:16px"><input type="checkbox" id="suSample" style="width:auto;vertical-align:-2px;margin-right:6px">サンプルデータを入れて使い方を試す</label>'
+    + '<button class="btn primary" onclick="saveSetup()">はじめる</button>';
+}
+function saveSetup(){
+  var biz=document.getElementById("suBiz").value.trim();
+  var staff=document.getElementById("suStaff").value.trim();
+  if(!biz){ toast("事業者名を入力してください"); return; }
+  if(document.getElementById("suSample").checked){ fillSample(); }
+  DB.settings.bizName = biz;
+  DB.settings.ready = true;
+  if(staff) DB.staff.push({id:uid(), name:staff});
+  saveDB(); closeModal(); boot();
+}
+
+/* ---- 予約追加（その場で訪問先も作れる） ---- */
 function addVisitForm(){
-  if(DB.facilities.length===0){ toast("先に顧客台帳で訪問先を登録してください"); go("customers"); return; }
-  var facOpts = DB.facilities.map(function(f){return '<option value="'+f.id+'">'+f.name+'</option>';}).join("");
-  var staffChips = DB.staff.map(function(s){return '<span class="chip" data-sid="'+s.id+'" onclick="this.classList.toggle(\'sel\')">'+s.name+'</span>';}).join("");
+  var facOpts = DB.facilities.map(function(f){return '<option value="'+f.id+'">'+esc(f.name)+'</option>';}).join("");
+  facOpts += '<option value="__new__">＋ 新しい訪問先を入力…</option>';
+  var staffChips = DB.staff.length
+    ? DB.staff.map(function(s){return '<span class="chip" data-sid="'+s.id+'" onclick="this.classList.toggle(\'sel\')">'+esc(s.name)+'</span>';}).join("")
+    : '<span style="font-size:13px;color:var(--muted)">担当は設定タブで追加できます</span>';
   openModal(
     '<h2>訪問を追加</h2>'
-    + '<label>訪問先</label><select id="mFac">'+facOpts+'</select>'
+    + '<label>訪問先</label><select id="mFac" onchange="toggleNewFac()">'+facOpts+'</select>'
+    + '<div id="newFacWrap" style="display:none"><label>新しい訪問先の名前</label><input id="mNewFac" placeholder="例：○○園 / 在宅 △△様">'
+    + '<label>種別</label><select id="mNewFacType"><option>施設</option><option>在宅</option></select></div>'
     + '<div class="row-2"><div><label>日付</label><input type="date" id="mDate" value="'+ymd(current)+'"></div>'
     + '<div><label>時間</label><input type="time" id="mTime" value="13:00"></div></div>'
     + '<label>担当（複数可）</label><div class="chips" id="mStaff">'+staffChips+'</div>'
@@ -324,42 +363,58 @@ function addVisitForm(){
     + '<button class="btn primary" onclick="saveVisit()">保存</button>'
     + '<button class="btn ghost" onclick="closeModal()">キャンセル</button>'
   );
+  if(DB.facilities.length===0){ document.getElementById("mFac").value="__new__"; toggleNewFac(); }
+}
+function toggleNewFac(){
+  var isNew = document.getElementById("mFac").value==="__new__";
+  document.getElementById("newFacWrap").style.display = isNew? "block":"none";
 }
 function saveVisit(){
+  var facId = document.getElementById("mFac").value;
+  if(facId==="__new__"){
+    var nm=document.getElementById("mNewFac").value.trim();
+    if(!nm){ toast("新しい訪問先の名前を入力してください"); return; }
+    facId = uid();
+    DB.facilities.push({id:facId, name:nm, type:document.getElementById("mNewFacType").value, address:"", note:""});
+  }
   var sids = Array.prototype.slice.call(document.querySelectorAll("#mStaff .chip.sel")).map(function(c){return c.dataset.sid;});
   var v = {id:uid(), date:document.getElementById("mDate").value, time:document.getElementById("mTime").value,
-    facilityId:document.getElementById("mFac").value, staffIds:sids, status:"plan", note:document.getElementById("mNote").value};
+    facilityId:facId, staffIds:sids, status:"plan", note:document.getElementById("mNote").value};
   DB.visits.push(v); saveDB(); closeModal();
-  current = new Date(v.date+"T00:00:00"); render(); toast("訪問を追加しました");
+  current = new Date(v.date+"T00:00:00"); go("today"); toast("訪問を追加しました");
 }
 
-/* 予約詳細・実績入力 */
+/* ---- 予約詳細・実績入力 ---- */
 function openVisit(vid){
   var v = DB.visits.find(function(x){return x.id===vid;});
   var cs = custOf(v.facilityId);
   var existing = recOfVisit(vid);
-  var staffOpts = v.staffIds.length? v.staffIds : DB.staff.map(function(s){return s.id;});
-  var staffSel = '<select id="recStaff">'+staffOpts.map(function(id){return '<option value="'+id+'">'+staffName(id)+'</option>';}).join("")+'</select>';
+  var staffOpts = (v.staffIds.length? v.staffIds : DB.staff.map(function(s){return s.id;}));
+  var staffSel = staffOpts.length
+    ? '<select id="recStaff">'+staffOpts.map(function(id){return '<option value="'+id+'">'+esc(staffName(id))+'</option>';}).join("")+'</select>'
+    : '<div style="font-size:13px;color:var(--muted)">担当が未登録です（設定タブで追加できます）</div>';
 
   var rows = cs.map(function(c){
     var ex = existing.find(function(r){return r.customerId===c.id;});
-    return '<div class="rec-row"><div><div class="cn">'+c.name+'</div>'+(c.care?'<div class="care">⚠ '+c.care+'</div>':'')
-      + '<input type="text" class="rMenu" data-cid="'+c.id+'" placeholder="施術（カット等）" value="'+(ex?ex.menu||"":"")+'" style="margin-top:4px"></div>'
+    return '<div class="rec-row"><div><div class="cn">'+esc(c.name)+'</div>'+(c.care?'<div class="care">⚠ '+esc(c.care)+'</div>':'')
+      + '<input type="text" class="rMenu" data-cid="'+c.id+'" placeholder="施術（カット等）" value="'+esc(ex?ex.menu:"")+'" style="margin-top:4px"></div>'
       + '<input type="number" inputmode="numeric" class="rAmt" data-cid="'+c.id+'" placeholder="金額" value="'+(ex?ex.amount||"":"")+'"></div>';
   }).join("");
 
   openModal(
-    '<h2>'+facName(v.facilityId)+' <span style="font-size:13px;color:var(--muted)">'+v.date+' '+v.time+'</span></h2>'
+    '<h2>'+esc(facName(v.facilityId))+' <span style="font-size:13px;color:var(--muted)">'+v.date+' '+v.time+'</span></h2>'
     + '<label>担当（この実績の記録者）</label>'+staffSel
     + '<div style="font-size:13px;color:var(--muted);margin:14px 0 4px">利用者ごとに施術と金額を入力</div>'
-    + (rows || '<div class="empty">この施設に利用者が未登録です。顧客台帳で追加してください。</div>')
-    + '<button class="btn primary" onclick="saveRecords(\''+vid+'\')">完了として保存</button>'
+    + (rows || '<div class="empty">この施設に利用者が未登録です。<button class="btn primary" onclick="closeModal();go(\'customers\')">顧客台帳で追加</button></div>')
+    + (cs.length? '<button class="btn primary" onclick="saveRecords(\''+vid+'\')">完了として保存</button>':'')
+    + '<button class="btn danger" onclick="delVisit(\''+vid+'\')">この訪問を削除</button>'
     + '<button class="btn ghost" onclick="closeModal()">閉じる</button>'
   );
 }
 function saveRecords(vid){
-  var staffId = document.getElementById("recStaff").value;
-  DB.records = DB.records.filter(function(r){return r.visitId!==vid;}); // 入れ直し
+  var staffEl = document.getElementById("recStaff");
+  var staffId = staffEl? staffEl.value : "";
+  DB.records = DB.records.filter(function(r){return r.visitId!==vid;});
   var menus = document.querySelectorAll(".rMenu");
   var amts = document.querySelectorAll(".rAmt");
   var any=false;
@@ -375,57 +430,138 @@ function saveRecords(vid){
   v.status = any ? "done" : "plan";
   saveDB(); closeModal(); render(); toast(any?"完了を記録しました":"保存しました");
 }
+function delVisit(vid){
+  if(confirm("この訪問予約を削除しますか？")){
+    DB.visits = DB.visits.filter(function(x){return x.id!==vid;});
+    DB.records = DB.records.filter(function(r){return r.visitId!==vid;});
+    saveDB(); closeModal(); render(); toast("削除しました");
+  }
+}
 
-/* 顧客台帳：施設・利用者追加 */
+/* ---- 訪問先（施設）追加・編集 ---- */
 function addFacilityForm(){
   openModal(
     '<h2>訪問先を追加</h2>'
     + '<label>名称</label><input id="fName" placeholder="○○園 / 在宅 △△様">'
     + '<label>種別</label><select id="fType"><option>施設</option><option>在宅</option></select>'
-    + '<label>住所・メモ</label><input id="fAddr" placeholder="神戸市 / 駐車場など">'
+    + '<label>住所・メモ</label><input id="fAddr" placeholder="駐車場・アクセスなど">'
     + '<button class="btn primary" onclick="saveFacility()">保存</button>'
     + '<button class="btn ghost" onclick="closeModal()">キャンセル</button>'
   );
+  setTimeout(function(){ var e=document.getElementById("fName"); if(e) e.focus(); },50);
 }
 function saveFacility(){
   var name=document.getElementById("fName").value.trim(); if(!name){toast("名称を入力してください");return;}
   DB.facilities.push({id:uid(), name:name, type:document.getElementById("fType").value, address:document.getElementById("fAddr").value, note:""});
-  saveDB(); closeModal(); render(); toast("訪問先を追加しました");
+  saveDB(); closeModal(); go("customers"); toast("訪問先を追加しました");
 }
+function editFacilityForm(facId){
+  var f=DB.facilities.find(function(x){return x.id===facId;});
+  openModal(
+    '<h2>訪問先を編集</h2>'
+    + '<label>名称</label><input id="fName" value="'+esc(f.name)+'">'
+    + '<label>種別</label><select id="fType"><option'+(f.type==="施設"?" selected":"")+'>施設</option><option'+(f.type==="在宅"?" selected":"")+'>在宅</option></select>'
+    + '<label>住所・メモ</label><input id="fAddr" value="'+esc(f.address||"")+'">'
+    + '<button class="btn primary" onclick="updateFacility(\''+facId+'\')">保存</button>'
+    + '<button class="btn danger" onclick="delFacility(\''+facId+'\')">この訪問先を削除</button>'
+    + '<button class="btn ghost" onclick="closeModal()">キャンセル</button>'
+  );
+}
+function updateFacility(facId){
+  var f=DB.facilities.find(function(x){return x.id===facId;});
+  var name=document.getElementById("fName").value.trim(); if(!name){toast("名称を入力してください");return;}
+  f.name=name; f.type=document.getElementById("fType").value; f.address=document.getElementById("fAddr").value;
+  saveDB(); closeModal(); render(); toast("更新しました");
+}
+function delFacility(facId){
+  var hasVisit = DB.visits.some(function(v){return v.facilityId===facId;});
+  var msg = hasVisit? "この訪問先と、ひも付く利用者・訪問予約も削除します。よろしいですか？" : "この訪問先と利用者を削除しますか？";
+  if(confirm(msg)){
+    DB.facilities = DB.facilities.filter(function(x){return x.id!==facId;});
+    DB.customers = DB.customers.filter(function(c){return c.facilityId!==facId;});
+    DB.visits = DB.visits.filter(function(v){return v.facilityId!==facId;});
+    saveDB(); closeModal(); render(); toast("削除しました");
+  }
+}
+
+/* ---- 利用者 追加・削除 ---- */
 function addCustomerForm(facId){
   openModal(
-    '<h2>利用者を追加 <span style="font-size:13px;color:var(--muted)">'+facName(facId)+'</span></h2>'
-    + '<label>お名前</label><input id="cName" placeholder="田中 ハナ">'
-    + '<label>配慮事項（要配慮：施術時の注意）</label><textarea id="cCare" placeholder="車椅子 / 耳が遠い 等"></textarea>'
+    '<h2>利用者を追加 <span style="font-size:13px;color:var(--muted)">'+esc(facName(facId))+'</span></h2>'
+    + '<label>お名前</label><input id="cName" placeholder="お名前">'
+    + '<label>配慮事項（施術時の注意）</label><textarea id="cCare" placeholder="車椅子 / 耳が遠い 等"></textarea>'
     + '<button class="btn primary" onclick="saveCustomer(\''+facId+'\')">保存</button>'
     + '<button class="btn ghost" onclick="closeModal()">キャンセル</button>'
   );
+  setTimeout(function(){ var e=document.getElementById("cName"); if(e) e.focus(); },50);
 }
 function saveCustomer(facId){
   var name=document.getElementById("cName").value.trim(); if(!name){toast("お名前を入力してください");return;}
   DB.customers.push({id:uid(), facilityId:facId, name:name, care:document.getElementById("cCare").value.trim()});
   saveDB(); closeModal(); render(); toast("利用者を追加しました");
 }
+function delCustomer(cid){
+  if(confirm("この利用者を削除しますか？")){
+    DB.customers = DB.customers.filter(function(c){return c.id!==cid;});
+    saveDB(); render(); toast("削除しました");
+  }
+}
+
+/* ---- 担当 追加・削除 ---- */
 function addStaffForm(){
   openModal('<h2>担当を追加</h2><label>お名前</label><input id="sName" placeholder="氏名">'
     + '<button class="btn primary" onclick="saveStaff()">保存</button><button class="btn ghost" onclick="closeModal()">キャンセル</button>');
+  setTimeout(function(){ var e=document.getElementById("sName"); if(e) e.focus(); },50);
 }
 function saveStaff(){
   var name=document.getElementById("sName").value.trim(); if(!name){toast("お名前を入力してください");return;}
   DB.staff.push({id:uid(), name:name}); saveDB(); closeModal(); render(); toast("担当を追加しました");
 }
+function delStaff(sid){
+  if(confirm("この担当を削除しますか？（過去の売上記録は残ります）")){
+    DB.staff = DB.staff.filter(function(s){return s.id!==sid;});
+    saveDB(); render(); toast("削除しました");
+  }
+}
 
-/* データ操作 */
+/* ---- 事業者名 ---- */
+function editBizForm(){
+  openModal('<h2>事業者名を変更</h2><label>事業者名・屋号</label><input id="bizName" value="'+esc(DB.settings.bizName||"")+'">'
+    + '<button class="btn primary" onclick="saveBiz()">保存</button><button class="btn ghost" onclick="closeModal()">キャンセル</button>');
+}
+function saveBiz(){
+  var v=document.getElementById("bizName").value.trim(); if(!v){toast("名称を入力してください");return;}
+  DB.settings.bizName=v; saveDB(); closeModal(); render(); toast("更新しました");
+}
+
+/* ---- データ操作 ---- */
 function exportJSON(){
   var blob = new Blob([JSON.stringify(DB,null,2)], {type:"application/json"});
-  var a=document.createElement("a"); a.href=URL.createObjectURL(blob); a.download="ihair_houmon_backup.json"; a.click();
+  var a=document.createElement("a"); a.href=URL.createObjectURL(blob); a.download="houmon_backup.json"; a.click();
 }
 function resetDB(){
-  if(confirm("すべてのデータを初期サンプルに戻します。よろしいですか？")){ localStorage.removeItem(STORE_KEY); DB=loadDB(); saveDB(); render(); toast("初期化しました"); }
+  if(confirm("すべてのデータを消去し、最初のセットアップからやり直します。よろしいですか？")){
+    localStorage.removeItem(STORE_KEY); DB=emptyDB(); saveDB(); boot();
+  }
 }
 
-/* 起動 */
-go("today");
+/* ============================================================
+   起動
+   ============================================================ */
+function boot(){
+  if(!DB.settings || !DB.settings.ready){
+    document.getElementById("topbar").style.display="none";
+    document.getElementById("tabs").style.display="none";
+    document.getElementById("fab").style.display="none";
+    document.getElementById("view").innerHTML="";
+    setupForm();
+    return;
+  }
+  document.getElementById("topbar").style.display="block";
+  document.getElementById("tabs").style.display="flex";
+  go("today");
+}
+boot();
 </script>
 </body>
 </html>
