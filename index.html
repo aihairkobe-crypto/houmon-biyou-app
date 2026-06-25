@@ -252,10 +252,16 @@ function renderCustomers(){
     h += '<div class="fac-block"><div class="fn"><span>'+esc(f.name)+' <span style="font-size:11px;color:var(--muted)">'+esc(f.type)+'</span></span>'
       + '<button class="edit" onclick="editFacilityForm(\''+f.id+'\')">編集</button></div>';
     cs.forEach(function(c){
-      h += '<div class="cust-li"><span>'+esc(c.name)+(c.care?' <span class="cc">⚠ '+esc(c.care)+'</span>':'')+'</span>'
-        + '<button class="del" onclick="delCustomer(\''+c.id+'\')">✕</button></div>';
+      var sub = [];
+      if(c.menu) sub.push(esc(c.menu)+(c.price?" "+yen(c.price):""));
+      else if(c.price) sub.push(yen(c.price));
+      if(c.phone) sub.push("☎ "+esc(c.phone));
+      var subline = sub.length? '<div style="font-size:12px;color:var(--muted)">'+sub.join("　")+'</div>':'';
+      h += '<div class="cust-li" onclick="customerForm(\''+f.id+'\',\''+c.id+'\')"><div><div>'+esc(c.name)
+        +(c.care?' <span class="cc">⚠ '+esc(c.care)+'</span>':'')+'</div>'+subline+'</div>'
+        + '<button class="del" onclick="event.stopPropagation();delCustomer(\''+c.id+'\')">✕</button></div>';
     });
-    h += '<button class="add-link" onclick="addCustomerForm(\''+f.id+'\')">＋ 利用者を追加</button>';
+    h += '<button class="add-link" onclick="customerForm(\''+f.id+'\')">＋ 利用者を追加</button>';
     h += '</div>';
   });
   document.getElementById("view").innerHTML = h;
@@ -396,9 +402,11 @@ function openVisit(vid){
 
   var rows = cs.map(function(c){
     var ex = existing.find(function(r){return r.customerId===c.id;});
+    var dMenu = ex? (ex.menu||"") : (c.menu||"");      // 未入力なら定番メニューを初期表示
+    var dAmt  = ex? (ex.amount||"") : (c.price||"");   // 未入力なら通常価格を初期表示
     return '<div class="rec-row"><div><div class="cn">'+esc(c.name)+'</div>'+(c.care?'<div class="care">⚠ '+esc(c.care)+'</div>':'')
-      + '<input type="text" class="rMenu" data-cid="'+c.id+'" placeholder="施術（カット等）" value="'+esc(ex?ex.menu:"")+'" style="margin-top:4px"></div>'
-      + '<input type="number" inputmode="numeric" class="rAmt" data-cid="'+c.id+'" placeholder="金額" value="'+(ex?ex.amount||"":"")+'"></div>';
+      + '<input type="text" class="rMenu" data-cid="'+c.id+'" placeholder="施術（カット等）" value="'+esc(dMenu)+'" style="margin-top:4px"></div>'
+      + '<input type="number" inputmode="numeric" class="rAmt" data-cid="'+c.id+'" placeholder="金額" value="'+dAmt+'"></div>';
   }).join("");
 
   openModal(
@@ -484,26 +492,71 @@ function delFacility(facId){
   }
 }
 
-/* ---- 利用者 追加・削除 ---- */
-function addCustomerForm(facId){
+/* ---- 利用者 追加・編集・削除（詳細項目） ---- */
+function ageOf(birth){
+  if(!birth) return "";
+  var b=new Date(birth); if(isNaN(b)) return "";
+  var n=new Date(); var a=n.getFullYear()-b.getFullYear();
+  var m=n.getMonth()-b.getMonth();
+  if(m<0||(m===0&&n.getDate()<b.getDate())) a--;
+  return a;
+}
+function genderOpts(sel){
+  return ["未選択","女性","男性","その他"].map(function(g){
+    return '<option'+((sel||"未選択")===g?" selected":"")+'>'+g+'</option>';
+  }).join("");
+}
+/* 追加(cidなし)・編集(cidあり)を兼ねる */
+function customerForm(facId, cid){
+  var c = cid ? DB.customers.find(function(x){return x.id===cid;}) : {};
+  var isEdit = !!cid;
+  var age = ageOf(c.birth); var ageTxt = age!==""? "（"+age+"歳）":"";
   openModal(
-    '<h2>利用者を追加 <span style="font-size:13px;color:var(--muted)">'+esc(facName(facId))+'</span></h2>'
-    + '<label>お名前</label><input id="cName" placeholder="お名前">'
-    + '<label>配慮事項（施術時の注意）</label><textarea id="cCare" placeholder="車椅子 / 耳が遠い 等"></textarea>'
-    + '<button class="btn primary" onclick="saveCustomer(\''+facId+'\')">保存</button>'
+    '<h2>'+(isEdit?'利用者を編集':'利用者を追加')+' <span style="font-size:13px;color:var(--muted)">'+esc(facName(facId))+'</span></h2>'
+    + '<div class="sec-title" style="margin:6px 0 0">基本</div>'
+    + '<label>お名前</label><input id="cName" value="'+esc(c.name||"")+'" placeholder="お名前">'
+    + '<label>フリガナ</label><input id="cKana" value="'+esc(c.kana||"")+'" placeholder="ヤマダ ハナコ">'
+    + '<div class="row-2"><div><label>性別</label><select id="cGender">'+genderOpts(c.gender)+'</select></div>'
+    + '<div><label>生年月日 <span style="color:var(--accent-text)">'+ageTxt+'</span></label><input type="date" id="cBirth" value="'+esc(c.birth||"")+'"></div></div>'
+    + '<div class="sec-title">連絡先</div>'
+    + '<label>電話番号</label><input type="tel" id="cPhone" value="'+esc(c.phone||"")+'" placeholder="090-0000-0000">'
+    + '<label>住所</label><input id="cAddr" value="'+esc(c.address||"")+'" placeholder="神戸市…">'
+    + '<div class="sec-title">施術（訪問入力時に自動表示）</div>'
+    + '<label>定番メニュー</label><input id="cMenu" value="'+esc(c.menu||"")+'" placeholder="カット / カット＋カラー 等">'
+    + '<label>通常価格（円）</label><input type="number" inputmode="numeric" id="cPrice" value="'+(c.price||"")+'" placeholder="3300">'
+    + '<div class="sec-title">安全・配慮</div>'
+    + '<label>配慮・注意事項</label><textarea id="cCare" placeholder="車椅子 / 耳が遠い / アレルギー / ペースメーカー / 皮膚・血圧 等">'+esc(c.care||"")+'</textarea>'
+    + '<div class="sec-title">その他</div>'
+    + '<label>緊急連絡先（ご家族・ケアマネ等）</label><input id="cEmg" value="'+esc(c.emergency||"")+'" placeholder="長女 090-… / ケアマネ ○○">'
+    + '<label>メモ</label><textarea id="cNote" placeholder="申し送り・履歴など">'+esc(c.note||"")+'</textarea>'
+    + '<button class="btn primary" onclick="saveCustomerForm(\''+facId+'\','+(cid?'\''+cid+'\'':'null')+')">保存</button>'
+    + (isEdit? '<button class="btn danger" onclick="delCustomer(\''+cid+'\')">この利用者を削除</button>':'')
     + '<button class="btn ghost" onclick="closeModal()">キャンセル</button>'
   );
-  setTimeout(function(){ var e=document.getElementById("cName"); if(e) e.focus(); },50);
+  setTimeout(function(){ var e=document.getElementById("cName"); if(e&&!isEdit) e.focus(); },50);
 }
-function saveCustomer(facId){
-  var name=document.getElementById("cName").value.trim(); if(!name){toast("お名前を入力してください");return;}
-  DB.customers.push({id:uid(), facilityId:facId, name:name, care:document.getElementById("cCare").value.trim()});
-  saveDB(); closeModal(); render(); toast("利用者を追加しました");
+function gv(id){ var e=document.getElementById(id); return e? e.value.trim():""; }
+function saveCustomerForm(facId, cid){
+  var name=gv("cName"); if(!name){toast("お名前を入力してください");return;}
+  var data = {
+    name:name, kana:gv("cKana"), gender:gv("cGender"), birth:gv("cBirth"),
+    phone:gv("cPhone"), address:gv("cAddr"), menu:gv("cMenu"),
+    price:Number(gv("cPrice"))||0, care:gv("cCare"), emergency:gv("cEmg"), note:gv("cNote")
+  };
+  if(cid){
+    var c=DB.customers.find(function(x){return x.id===cid;});
+    for(var k in data) c[k]=data[k];
+    toast("更新しました");
+  } else {
+    data.id=uid(); data.facilityId=facId; DB.customers.push(data);
+    toast("利用者を追加しました");
+  }
+  saveDB(); closeModal(); render();
 }
 function delCustomer(cid){
   if(confirm("この利用者を削除しますか？")){
     DB.customers = DB.customers.filter(function(c){return c.id!==cid;});
-    saveDB(); render(); toast("削除しました");
+    saveDB(); closeModal(); render(); toast("削除しました");
   }
 }
 
