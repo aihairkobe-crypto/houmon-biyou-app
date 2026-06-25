@@ -142,8 +142,53 @@ function loadDB(){
   if(raw){ try{ return JSON.parse(raw); }catch(e){} }
   return emptyDB();
 }
-function saveDB(){ localStorage.setItem(STORE_KEY, JSON.stringify(DB)); }
+function saveDB(){
+  try{ localStorage.setItem(STORE_KEY, JSON.stringify(DB)); return true; }
+  catch(e){ toast("保存容量の上限です。写真を減らすか、クラウド接続をご検討ください"); return false; }
+}
 function uid(){ return Date.now().toString(36) + Math.random().toString(36).slice(2,6); }
+
+/* 写真：縮小してdataURLにする（端末保存の容量対策） */
+var photoBuf = {};
+function pickPhoto(key, maxDim, q){
+  var inp=document.createElement("input"); inp.type="file"; inp.accept="image/*"; inp.capture="environment";
+  inp.onchange=function(){
+    var file=inp.files[0]; if(!file) return;
+    var img=new Image(); var url=URL.createObjectURL(file);
+    img.onload=function(){
+      var scale=Math.min(1, maxDim/Math.max(img.width,img.height));
+      var cw=Math.round(img.width*scale), ch=Math.round(img.height*scale);
+      var cv=document.createElement("canvas"); cv.width=cw; cv.height=ch;
+      cv.getContext("2d").drawImage(img,0,0,cw,ch);
+      URL.revokeObjectURL(url);
+      photoBuf[key]=cv.toDataURL("image/jpeg", q);
+      var pv=document.getElementById("pv_"+key);
+      if(pv){ pv.src=photoBuf[key]; pv.style.display="block"; }
+    };
+    img.src=url;
+  };
+  inp.click();
+}
+function photoSlot(key, existing, label){
+  var src = (photoBuf[key]!==undefined? photoBuf[key] : (existing||""));
+  return '<div style="margin-top:6px"><div style="font-size:12px;color:var(--muted);margin-bottom:4px">'+label+'</div>'
+    + '<img id="pv_'+key+'" src="'+src+'" style="display:'+(src?"block":"none")+';max-width:120px;border-radius:8px;border:1px solid var(--line);margin-bottom:6px">'
+    + '<button type="button" class="chip" onclick="pickPhoto(\''+key+'\',500,0.5)">📷 写真を撮る/選ぶ</button>'
+    + (src?' <button type="button" class="chip" onclick="clearPhoto(\''+key+'\')">削除</button>':'')+'</div>';
+}
+function clearPhoto(key){ photoBuf[key]=""; var pv=document.getElementById("pv_"+key); if(pv){pv.src="";pv.style.display="none";} }
+/* 周期から次回目安日を計算（最終施術日 + 週数） */
+function lastVisitDate(cid){
+  var ds = DB.records.filter(function(r){return r.customerId===cid;})
+    .map(function(r){ var v=DB.visits.find(function(x){return x.id===r.visitId;}); return v?v.date:""; })
+    .filter(Boolean).sort();
+  return ds.length? ds[ds.length-1] : "";
+}
+function nextDueDate(c){
+  if(!c.cycleWeeks) return "";
+  var last=lastVisitDate(c.id); if(!last) return "";
+  var d=new Date(last+"T00:00:00"); d.setDate(d.getDate()+c.cycleWeeks*7); return ymd(d);
+}
 
 /* 空のDB（どの事業者でも使える初期状態） */
 function emptyDB(){
@@ -223,6 +268,16 @@ function renderToday(){
     + card("売上", yen(sales))
     + '</div>';
 
+  // 次回目安が来ている利用者のリマインド
+  var today = ymd(new Date());
+  var due = DB.customers.filter(function(c){ var d=nextDueDate(c); return d && d<=today; });
+  if(due.length){
+    h += '<div class="card" style="background:var(--warn-soft);border-color:#f0d9a8;margin-bottom:16px">'
+      + '<div style="font-size:13px;color:var(--warn);font-weight:600;margin-bottom:6px">⏰ そろそろの利用者（'+due.length+'名）</div>'
+      + due.slice(0,8).map(function(c){return '<div style="font-size:13px;color:var(--warn)" onclick="customerForm(\''+c.facilityId+'\',\''+c.id+'\')">・'+esc(c.name)+'（'+esc(facName(c.facilityId))+'）目安 '+nextDueDate(c)+'</div>';}).join("")
+      + '</div>';
+  }
+
   if(vs.length===0){
     h += '<div class="empty">この日の訪問予約はありません。'
       + '<button class="btn primary" onclick="addVisitForm()">＋ 訪問を追加</button></div>';
@@ -249,16 +304,19 @@ function renderCustomers(){
   }
   DB.facilities.forEach(function(f){
     var cs = custOf(f.id);
-    h += '<div class="fac-block"><div class="fn"><span>'+esc(f.name)+' <span style="font-size:11px;color:var(--muted)">'+esc(f.type)+'</span></span>'
+    h += '<div class="fac-block"><div class="fn"><span>'+esc(f.name)+' <span style="font-size:11px;color:var(--muted)">'+esc(f.type)+(f.billing?' ・ '+esc(f.billing):"")+'</span></span>'
       + '<button class="edit" onclick="editFacilityForm(\''+f.id+'\')">編集</button></div>';
     cs.forEach(function(c){
       var sub = [];
+      if(c.staffId) sub.push("担当 "+esc(staffName(c.staffId)));
       if(c.menu) sub.push(esc(c.menu)+(c.price?" "+yen(c.price):""));
       else if(c.price) sub.push(yen(c.price));
       if(c.phone) sub.push("☎ "+esc(c.phone));
       var subline = sub.length? '<div style="font-size:12px;color:var(--muted)">'+sub.join("　")+'</div>':'';
+      var due = nextDueDate(c);
+      var dueBadge = due ? '<div style="font-size:12px;color:'+(due<=ymd(new Date())?"var(--warn)":"var(--accent-text)")+'">'+(due<=ymd(new Date())?"⏰ そろそろ":"次回目安")+' '+due+'</div>':'';
       h += '<div class="cust-li" onclick="customerForm(\''+f.id+'\',\''+c.id+'\')"><div><div>'+esc(c.name)
-        +(c.care?' <span class="cc">⚠ '+esc(c.care)+'</span>':'')+'</div>'+subline+'</div>'
+        +(c.care?' <span class="cc">⚠ '+esc(c.care)+'</span>':'')+'</div>'+subline+dueBadge+'</div>'
         + '<button class="del" onclick="event.stopPropagation();delCustomer(\''+c.id+'\')">✕</button></div>';
     });
     h += '<button class="add-link" onclick="customerForm(\''+f.id+'\')">＋ 利用者を追加</button>';
@@ -392,27 +450,35 @@ function saveVisit(){
 
 /* ---- 予約詳細・実績入力 ---- */
 function openVisit(vid){
+  photoBuf = {}; // 写真バッファ初期化
   var v = DB.visits.find(function(x){return x.id===vid;});
   var cs = custOf(v.facilityId);
   var existing = recOfVisit(vid);
-  var staffOpts = (v.staffIds.length? v.staffIds : DB.staff.map(function(s){return s.id;}));
-  var staffSel = staffOpts.length
-    ? '<select id="recStaff">'+staffOpts.map(function(id){return '<option value="'+id+'">'+esc(staffName(id))+'</option>';}).join("")+'</select>'
-    : '<div style="font-size:13px;color:var(--muted)">担当が未登録です（設定タブで追加できます）</div>';
+  var defStaff = (v.staffIds && v.staffIds.length)? v.staffIds[0] : "";
 
   var rows = cs.map(function(c){
     var ex = existing.find(function(r){return r.customerId===c.id;});
-    var dMenu = ex? (ex.menu||"") : (c.menu||"");      // 未入力なら定番メニューを初期表示
-    var dAmt  = ex? (ex.amount||"") : (c.price||"");   // 未入力なら通常価格を初期表示
-    return '<div class="rec-row"><div><div class="cn">'+esc(c.name)+'</div>'+(c.care?'<div class="care">⚠ '+esc(c.care)+'</div>':'')
-      + '<input type="text" class="rMenu" data-cid="'+c.id+'" placeholder="施術（カット等）" value="'+esc(dMenu)+'" style="margin-top:4px"></div>'
-      + '<input type="number" inputmode="numeric" class="rAmt" data-cid="'+c.id+'" placeholder="金額" value="'+dAmt+'"></div>';
+    var dMenu = ex? (ex.menu||"") : (c.menu||"");                 // 未入力なら定番メニュー
+    var dAmt  = ex? (ex.amount||"") : (c.price||"");              // 未入力なら通常価格
+    var dStaff = ex? (ex.staffId||"") : (c.staffId||defStaff);    // 半固定：顧客の担当→なければ訪問担当
+    var staffSel = DB.staff.length
+      ? '<select class="rStaff" data-cid="'+c.id+'">'+staffOptsHtml(dStaff,true)+'</select>'
+      : '';
+    return '<div style="border:1px solid var(--line);border-radius:var(--radius-sm);padding:10px;margin-bottom:8px">'
+      + '<div class="cn" style="font-weight:600">'+esc(c.name)+'</div>'+(c.care?'<div class="care">⚠ '+esc(c.care)+'</div>':'')
+      + '<div class="rec-row" style="border:none;padding:6px 0">'
+      + '<input type="text" class="rMenu" data-cid="'+c.id+'" placeholder="施術（カット等）" value="'+esc(dMenu)+'">'
+      + '<input type="number" inputmode="numeric" class="rAmt" data-cid="'+c.id+'" placeholder="金額" value="'+dAmt+'"></div>'
+      + (staffSel? '<div style="margin-top:4px"><span style="font-size:12px;color:var(--muted)">担当</span> '+staffSel+'</div>':'')
+      + '<div style="display:flex;gap:14px;margin-top:8px">'
+      + photoSlot("before_"+c.id, ex&&ex.photoBefore, "施術前")
+      + photoSlot("after_"+c.id, ex&&ex.photoAfter, "施術後")
+      + '</div></div>';
   }).join("");
 
   openModal(
     '<h2>'+esc(facName(v.facilityId))+' <span style="font-size:13px;color:var(--muted)">'+v.date+' '+v.time+'</span></h2>'
-    + '<label>担当（この実績の記録者）</label>'+staffSel
-    + '<div style="font-size:13px;color:var(--muted);margin:14px 0 4px">利用者ごとに施術と金額を入力</div>'
+    + '<div style="font-size:13px;color:var(--muted);margin:8px 0 8px">利用者ごとに 施術・金額・担当・写真 を入力</div>'
     + (rows || '<div class="empty">この施設に利用者が未登録です。<button class="btn primary" onclick="closeModal();go(\'customers\')">顧客台帳で追加</button></div>')
     + (cs.length? '<button class="btn primary" onclick="saveRecords(\''+vid+'\')">完了として保存</button>':'')
     + '<button class="btn danger" onclick="delVisit(\''+vid+'\')">この訪問を削除</button>'
@@ -420,23 +486,28 @@ function openVisit(vid){
   );
 }
 function saveRecords(vid){
-  var staffEl = document.getElementById("recStaff");
-  var staffId = staffEl? staffEl.value : "";
+  var existing = recOfVisit(vid);
   DB.records = DB.records.filter(function(r){return r.visitId!==vid;});
-  var menus = document.querySelectorAll(".rMenu");
-  var amts = document.querySelectorAll(".rAmt");
+  var rows = document.querySelectorAll(".rMenu");
   var any=false;
-  amts.forEach(function(a,i){
-    var amount = Number(a.value)||0;
-    var menu = menus[i].value;
-    if(amount>0 || menu){
-      DB.records.push({id:uid(), visitId:vid, customerId:a.dataset.cid, staffId:staffId, menu:menu, amount:amount});
+  rows.forEach(function(menuEl){
+    var cid = menuEl.dataset.cid;
+    var amtEl = document.querySelector('.rAmt[data-cid="'+cid+'"]');
+    var staffEl = document.querySelector('.rStaff[data-cid="'+cid+'"]');
+    var amount = Number(amtEl.value)||0;
+    var menu = menuEl.value;
+    var ex = existing.find(function(r){return r.customerId===cid;});
+    var before = photoBuf["before_"+cid]!==undefined? photoBuf["before_"+cid] : (ex?ex.photoBefore:"");
+    var after  = photoBuf["after_"+cid]!==undefined? photoBuf["after_"+cid] : (ex?ex.photoAfter:"");
+    if(amount>0 || menu || before || after){
+      DB.records.push({id:uid(), visitId:vid, customerId:cid, staffId:staffEl?staffEl.value:"",
+        menu:menu, amount:amount, photoBefore:before||"", photoAfter:after||""});
       any=true;
     }
   });
   var v = DB.visits.find(function(x){return x.id===vid;});
   v.status = any ? "done" : "plan";
-  saveDB(); closeModal(); render(); toast(any?"完了を記録しました":"保存しました");
+  if(saveDB()){ closeModal(); render(); toast(any?"完了を記録しました":"保存しました"); }
 }
 function delVisit(vid){
   if(confirm("この訪問予約を削除しますか？")){
@@ -447,38 +518,47 @@ function delVisit(vid){
 }
 
 /* ---- 訪問先（施設）追加・編集 ---- */
+function typeOptsF(sel){ return ["施設","在宅"].map(function(t){return '<option'+(sel===t?" selected":"")+'>'+t+'</option>';}).join(""); }
+function billingOpts(sel){ return ["施設一括","個人別"].map(function(t){return '<option'+((sel||"施設一括")===t?" selected":"")+'>'+t+'</option>';}).join(""); }
+function facilityFields(f){
+  f=f||{};
+  return '<label>名称</label><input id="fName" value="'+esc(f.name||"")+'" placeholder="○○園 / 在宅 △△様">'
+    + '<label>種別</label><select id="fType">'+typeOptsF(f.type||"施設")+'</select>'
+    + '<label>住所・アクセスメモ</label><input id="fAddr" value="'+esc(f.address||"")+'" placeholder="駐車場・アクセスなど">'
+    + '<label>請求先区分</label><select id="fBilling">'+billingOpts(f.billing)+'</select>'
+    + '<label>支払方法</label><select id="fPay">'+payOpts(f.payMethod)+'</select>'
+    + '<label>請求先・担当者メモ</label><input id="fBillTo" value="'+esc(f.billTo||"")+'" placeholder="経理担当・請求書送付先など">';
+}
+function readFacilityFields(f){
+  f.name=document.getElementById("fName").value.trim();
+  f.type=document.getElementById("fType").value;
+  f.address=document.getElementById("fAddr").value;
+  f.billing=document.getElementById("fBilling").value;
+  f.payMethod=document.getElementById("fPay").value;
+  f.billTo=document.getElementById("fBillTo").value;
+  return f;
+}
 function addFacilityForm(){
-  openModal(
-    '<h2>訪問先を追加</h2>'
-    + '<label>名称</label><input id="fName" placeholder="○○園 / 在宅 △△様">'
-    + '<label>種別</label><select id="fType"><option>施設</option><option>在宅</option></select>'
-    + '<label>住所・メモ</label><input id="fAddr" placeholder="駐車場・アクセスなど">'
+  openModal('<h2>訪問先を追加</h2>'+facilityFields()
     + '<button class="btn primary" onclick="saveFacility()">保存</button>'
-    + '<button class="btn ghost" onclick="closeModal()">キャンセル</button>'
-  );
+    + '<button class="btn ghost" onclick="closeModal()">キャンセル</button>');
   setTimeout(function(){ var e=document.getElementById("fName"); if(e) e.focus(); },50);
 }
 function saveFacility(){
-  var name=document.getElementById("fName").value.trim(); if(!name){toast("名称を入力してください");return;}
-  DB.facilities.push({id:uid(), name:name, type:document.getElementById("fType").value, address:document.getElementById("fAddr").value, note:""});
-  saveDB(); closeModal(); go("customers"); toast("訪問先を追加しました");
+  if(!document.getElementById("fName").value.trim()){toast("名称を入力してください");return;}
+  var f=readFacilityFields({id:uid(), note:""});
+  DB.facilities.push(f); saveDB(); closeModal(); go("customers"); toast("訪問先を追加しました");
 }
 function editFacilityForm(facId){
   var f=DB.facilities.find(function(x){return x.id===facId;});
-  openModal(
-    '<h2>訪問先を編集</h2>'
-    + '<label>名称</label><input id="fName" value="'+esc(f.name)+'">'
-    + '<label>種別</label><select id="fType"><option'+(f.type==="施設"?" selected":"")+'>施設</option><option'+(f.type==="在宅"?" selected":"")+'>在宅</option></select>'
-    + '<label>住所・メモ</label><input id="fAddr" value="'+esc(f.address||"")+'">'
+  openModal('<h2>訪問先を編集</h2>'+facilityFields(f)
     + '<button class="btn primary" onclick="updateFacility(\''+facId+'\')">保存</button>'
     + '<button class="btn danger" onclick="delFacility(\''+facId+'\')">この訪問先を削除</button>'
-    + '<button class="btn ghost" onclick="closeModal()">キャンセル</button>'
-  );
+    + '<button class="btn ghost" onclick="closeModal()">キャンセル</button>');
 }
 function updateFacility(facId){
-  var f=DB.facilities.find(function(x){return x.id===facId;});
-  var name=document.getElementById("fName").value.trim(); if(!name){toast("名称を入力してください");return;}
-  f.name=name; f.type=document.getElementById("fType").value; f.address=document.getElementById("fAddr").value;
+  if(!document.getElementById("fName").value.trim()){toast("名称を入力してください");return;}
+  readFacilityFields(DB.facilities.find(function(x){return x.id===facId;}));
   saveDB(); closeModal(); render(); toast("更新しました");
 }
 function delFacility(facId){
@@ -506,11 +586,34 @@ function genderOpts(sel){
     return '<option'+((sel||"未選択")===g?" selected":"")+'>'+g+'</option>';
   }).join("");
 }
+function staffOptsHtml(selId, includeEmpty){
+  var h = includeEmpty? '<option value="">（未設定）</option>' : '';
+  h += DB.staff.map(function(s){return '<option value="'+s.id+'"'+(s.id===selId?" selected":"")+'>'+esc(s.name)+'</option>';}).join("");
+  return h;
+}
+function consentOpts(sel){
+  return ["未","同意済","不要"].map(function(g){return '<option'+((sel||"未")===g?" selected":"")+'>'+g+'</option>';}).join("");
+}
+function payOpts(sel){
+  return ["未設定","現金","振込","施設一括","その他"].map(function(g){return '<option'+((sel||"未設定")===g?" selected":"")+'>'+g+'</option>';}).join("");
+}
+/* 利用者の施術履歴（records→visit日付） */
+function customerHistoryHtml(cid){
+  var rows = DB.records.filter(function(r){return r.customerId===cid;}).map(function(r){
+    var v=DB.visits.find(function(x){return x.id===r.visitId;}); return {date:v?v.date:"", menu:r.menu, amount:r.amount, staff:r.staffId};
+  }).sort(function(a,b){return (b.date||"").localeCompare(a.date||"");});
+  if(rows.length===0) return '<div style="font-size:13px;color:var(--muted)">まだ施術履歴はありません。</div>';
+  return rows.slice(0,12).map(function(r){
+    return '<div class="list-row"><span>'+esc(r.date)+' '+esc(r.menu||"")+(r.staff?' <span style="color:var(--muted)">/'+esc(staffName(r.staff))+'</span>':'')+'</span><span>'+yen(r.amount)+'</span></div>';
+  }).join("");
+}
 /* 追加(cidなし)・編集(cidあり)を兼ねる */
 function customerForm(facId, cid){
+  photoBuf = {}; // 写真バッファ初期化
   var c = cid ? DB.customers.find(function(x){return x.id===cid;}) : {};
   var isEdit = !!cid;
   var age = ageOf(c.birth); var ageTxt = age!==""? "（"+age+"歳）":"";
+  var due = nextDueDate(c); var dueTxt = due? '<span style="color:var(--accent-text)">次回目安 '+due+'</span>':'';
   openModal(
     '<h2>'+(isEdit?'利用者を編集':'利用者を追加')+' <span style="font-size:13px;color:var(--muted)">'+esc(facName(facId))+'</span></h2>'
     + '<div class="sec-title" style="margin:6px 0 0">基本</div>'
@@ -521,14 +624,24 @@ function customerForm(facId, cid){
     + '<div class="sec-title">連絡先</div>'
     + '<label>電話番号</label><input type="tel" id="cPhone" value="'+esc(c.phone||"")+'" placeholder="090-0000-0000">'
     + '<label>住所</label><input id="cAddr" value="'+esc(c.address||"")+'" placeholder="神戸市…">'
+    + '<div class="sec-title">担当・周期</div>'
+    + '<label>担当（半固定：通常この人。訪問ごとに変更可）</label><select id="cStaff">'+staffOptsHtml(c.staffId,true)+'</select>'
+    + '<div class="row-2"><div><label>来店周期（週）</label><input type="number" inputmode="numeric" id="cCycle" value="'+(c.cycleWeeks||"")+'" placeholder="4"></div>'
+    + '<div><label>&nbsp;</label><div style="font-size:13px;padding:11px 0">'+(dueTxt||'<span style="color:var(--hint)">履歴がたまると表示</span>')+'</div></div></div>'
     + '<div class="sec-title">施術（訪問入力時に自動表示）</div>'
     + '<label>定番メニュー</label><input id="cMenu" value="'+esc(c.menu||"")+'" placeholder="カット / カット＋カラー 等">'
     + '<label>通常価格（円）</label><input type="number" inputmode="numeric" id="cPrice" value="'+(c.price||"")+'" placeholder="3300">'
+    + '<div class="sec-title">支払・契約</div>'
+    + '<div class="row-2"><div><label>支払方法</label><select id="cPay">'+payOpts(c.payMethod)+'</select></div>'
+    + '<div><label>同意書</label><select id="cConsent">'+consentOpts(c.consent)+'</select></div></div>'
     + '<div class="sec-title">安全・配慮</div>'
     + '<label>配慮・注意事項</label><textarea id="cCare" placeholder="車椅子 / 耳が遠い / アレルギー / ペースメーカー / 皮膚・血圧 等">'+esc(c.care||"")+'</textarea>'
+    + '<div class="sec-title">スタイル写真</div>'
+    + photoSlot("cust", c.photo, "現在のヘアスタイル")
     + '<div class="sec-title">その他</div>'
     + '<label>緊急連絡先（ご家族・ケアマネ等）</label><input id="cEmg" value="'+esc(c.emergency||"")+'" placeholder="長女 090-… / ケアマネ ○○">'
     + '<label>メモ</label><textarea id="cNote" placeholder="申し送り・履歴など">'+esc(c.note||"")+'</textarea>'
+    + (isEdit? '<div class="sec-title">施術履歴</div><div class="card">'+customerHistoryHtml(cid)+'</div>':'')
     + '<button class="btn primary" onclick="saveCustomerForm(\''+facId+'\','+(cid?'\''+cid+'\'':'null')+')">保存</button>'
     + (isEdit? '<button class="btn danger" onclick="delCustomer(\''+cid+'\')">この利用者を削除</button>':'')
     + '<button class="btn ghost" onclick="closeModal()">キャンセル</button>'
@@ -540,18 +653,20 @@ function saveCustomerForm(facId, cid){
   var name=gv("cName"); if(!name){toast("お名前を入力してください");return;}
   var data = {
     name:name, kana:gv("cKana"), gender:gv("cGender"), birth:gv("cBirth"),
-    phone:gv("cPhone"), address:gv("cAddr"), menu:gv("cMenu"),
-    price:Number(gv("cPrice"))||0, care:gv("cCare"), emergency:gv("cEmg"), note:gv("cNote")
+    phone:gv("cPhone"), address:gv("cAddr"), staffId:gv("cStaff"),
+    cycleWeeks:Number(gv("cCycle"))||0, menu:gv("cMenu"), price:Number(gv("cPrice"))||0,
+    payMethod:gv("cPay"), consent:gv("cConsent"), care:gv("cCare"),
+    emergency:gv("cEmg"), note:gv("cNote")
   };
+  if(photoBuf.cust!==undefined) data.photo=photoBuf.cust;
   if(cid){
     var c=DB.customers.find(function(x){return x.id===cid;});
     for(var k in data) c[k]=data[k];
-    toast("更新しました");
+    if(photoBuf.cust===undefined && c.photo===undefined) c.photo="";
   } else {
     data.id=uid(); data.facilityId=facId; DB.customers.push(data);
-    toast("利用者を追加しました");
   }
-  saveDB(); closeModal(); render();
+  if(saveDB()){ toast(cid?"更新しました":"利用者を追加しました"); closeModal(); render(); }
 }
 function delCustomer(cid){
   if(confirm("この利用者を削除しますか？")){
