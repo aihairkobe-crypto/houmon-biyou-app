@@ -1,0 +1,431 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0">
+<meta name="theme-color" content="#1d9e75">
+<title>i,hair 訪問美容</title>
+<style>
+  :root{
+    --bg:#f4f6f5; --surface:#ffffff; --line:#e4e8e6;
+    --text:#1f2624; --muted:#6b7572; --hint:#9aa3a0;
+    --accent:#1d9e75; --accent-soft:#e1f5ee; --accent-text:#0f6e56;
+    --warn:#ba7517; --warn-soft:#faeeda;
+    --radius:12px; --radius-sm:8px;
+  }
+  *{box-sizing:border-box; -webkit-tap-highlight-color:transparent;}
+  body{margin:0; font-family:-apple-system,BlinkMacSystemFont,"Hiragino Sans","Noto Sans JP",sans-serif;
+    background:var(--bg); color:var(--text); line-height:1.6; padding-bottom:72px;}
+  h1,h2,h3{font-weight:600; margin:0;}
+  button{font-family:inherit; cursor:pointer;}
+  .wrap{max-width:920px; margin:0 auto; padding:16px;}
+
+  header.top{position:sticky; top:0; z-index:20; background:var(--surface); border-bottom:1px solid var(--line);}
+  .top-in{max-width:920px; margin:0 auto; padding:12px 16px; display:flex; align-items:center; justify-content:space-between;}
+  .brand{font-size:17px; font-weight:600;}
+  .brand small{display:block; font-size:11px; color:var(--muted); font-weight:400;}
+  .date-nav{display:flex; align-items:center; gap:6px;}
+  .date-nav button{border:1px solid var(--line); background:var(--surface); width:34px; height:34px; border-radius:var(--radius-sm); font-size:16px; color:var(--text);}
+  .date-nav .d{font-size:14px; min-width:104px; text-align:center;}
+
+  .cards{display:grid; grid-template-columns:repeat(3,1fr); gap:10px; margin-bottom:16px;}
+  .card{background:var(--surface); border:1px solid var(--line); border-radius:var(--radius); padding:12px 14px;}
+  .card .lbl{font-size:12px; color:var(--muted);}
+  .card .val{font-size:22px; font-weight:600; margin-top:2px;}
+
+  .sec-title{font-size:13px; color:var(--muted); margin:18px 4px 8px;}
+
+  .visit{background:var(--surface); border:1px solid var(--line); border-radius:var(--radius); padding:14px; margin-bottom:10px; cursor:pointer;}
+  .visit:active{background:#fafbfb;}
+  .visit .row1{display:flex; align-items:center; justify-content:space-between;}
+  .visit .name{font-size:16px; font-weight:600;}
+  .visit .time{font-size:13px; color:var(--muted);}
+  .visit .meta{font-size:13px; color:var(--muted); margin-top:4px;}
+  .tag{display:inline-block; font-size:11px; padding:2px 9px; border-radius:20px; margin-top:8px;}
+  .tag.plan{background:#eef1f0; color:var(--muted);}
+  .tag.done{background:var(--accent-soft); color:var(--accent-text);}
+  .tag.todo{background:var(--warn-soft); color:var(--warn);}
+
+  .empty{text-align:center; color:var(--hint); padding:40px 16px; font-size:14px;}
+
+  .fab{position:fixed; right:18px; bottom:84px; z-index:30; background:var(--accent); color:#fff; border:none;
+    width:56px; height:56px; border-radius:50%; font-size:28px; box-shadow:0 4px 14px rgba(29,158,117,.4);}
+
+  nav.tabs{position:fixed; left:0; right:0; bottom:0; z-index:25; background:var(--surface); border-top:1px solid var(--line); display:flex;}
+  nav.tabs button{flex:1; border:none; background:none; padding:9px 0 8px; color:var(--muted); font-size:11px; display:flex; flex-direction:column; align-items:center; gap:3px;}
+  nav.tabs button .ic{font-size:20px; line-height:1;}
+  nav.tabs button.on{color:var(--accent);}
+
+  /* 一覧テーブル（PC） */
+  .tbl{width:100%; border-collapse:collapse; background:var(--surface); border:1px solid var(--line); border-radius:var(--radius); overflow:hidden; font-size:14px;}
+  .tbl th{text-align:left; font-weight:400; color:var(--muted); font-size:12px; padding:10px 12px; border-bottom:1px solid var(--line); background:#fafbfb;}
+  .tbl td{padding:11px 12px; border-bottom:1px solid var(--line);}
+  .tbl tr:last-child td{border-bottom:none;}
+
+  /* モーダル */
+  .modal-bg{position:fixed; inset:0; background:rgba(20,28,25,.45); z-index:40; display:none; align-items:flex-end; justify-content:center;}
+  .modal-bg.open{display:flex;}
+  .modal{background:var(--surface); width:100%; max-width:560px; max-height:90vh; overflow:auto; border-radius:18px 18px 0 0; padding:18px 18px 28px;}
+  @media(min-width:640px){ .modal-bg{align-items:center;} .modal{border-radius:18px;} }
+  .modal h2{font-size:17px; margin-bottom:14px;}
+  label{display:block; font-size:13px; color:var(--muted); margin:12px 0 5px;}
+  input,select,textarea{width:100%; font-family:inherit; font-size:15px; padding:10px 12px; border:1px solid var(--line); border-radius:var(--radius-sm); background:var(--surface); color:var(--text);}
+  textarea{resize:vertical; min-height:54px;}
+  .btn{display:block; width:100%; padding:13px; border:none; border-radius:var(--radius-sm); font-size:15px; font-weight:600; margin-top:18px;}
+  .btn.primary{background:var(--accent); color:#fff;}
+  .btn.ghost{background:none; border:1px solid var(--line); color:var(--muted); font-weight:400; margin-top:8px;}
+  .row-2{display:grid; grid-template-columns:1fr 1fr; gap:10px;}
+  .chips{display:flex; flex-wrap:wrap; gap:8px;}
+  .chip{padding:8px 14px; border:1px solid var(--line); border-radius:20px; font-size:14px; background:var(--surface);}
+  .chip.sel{background:var(--accent-soft); border-color:var(--accent); color:var(--accent-text);}
+
+  .rec-row{display:grid; grid-template-columns:1fr 96px; gap:8px; align-items:center; padding:8px 0; border-bottom:1px solid var(--line);}
+  .rec-row .cn{font-size:14px;}
+  .rec-row .care{font-size:11px; color:var(--warn); margin-top:2px;}
+  .rec-row input{padding:8px 10px; font-size:14px;}
+
+  .fac-block{background:var(--surface); border:1px solid var(--line); border-radius:var(--radius); padding:14px; margin-bottom:10px;}
+  .fac-block .fn{font-size:15px; font-weight:600; display:flex; justify-content:space-between; align-items:center;}
+  .cust-li{display:flex; justify-content:space-between; padding:8px 0; border-top:1px solid var(--line); font-size:14px;}
+  .cust-li .cc{color:var(--warn); font-size:12px;}
+  .add-link{background:none; border:none; color:var(--accent); font-size:13px; padding:6px 0;}
+
+  .sum-bar{display:flex; align-items:center; gap:8px; margin:6px 0;}
+  .sum-bar .nm{width:96px; font-size:13px;}
+  .sum-bar .track{flex:1; height:14px; background:#eef1f0; border-radius:7px; overflow:hidden;}
+  .sum-bar .fill{height:100%; background:var(--accent);}
+  .sum-bar .am{width:84px; text-align:right; font-size:13px;}
+  .toast{position:fixed; bottom:90px; left:50%; transform:translateX(-50%); background:#1f2624; color:#fff; padding:10px 18px; border-radius:20px; font-size:13px; z-index:60; opacity:0; transition:opacity .25s; pointer-events:none;}
+  .toast.show{opacity:1;}
+</style>
+</head>
+<body>
+
+<header class="top">
+  <div class="top-in">
+    <div class="brand">i,hair 訪問美容<small>フィールド管理</small></div>
+    <div class="date-nav" id="dateNav">
+      <button onclick="shiftDay(-1)">‹</button>
+      <span class="d" id="dLabel"></span>
+      <button onclick="shiftDay(1)">›</button>
+    </div>
+  </div>
+</header>
+
+<div class="wrap" id="view"></div>
+
+<button class="fab" id="fab" onclick="onFab()">＋</button>
+
+<nav class="tabs">
+  <button data-tab="today" class="on" onclick="go('today')"><span class="ic">📅</span>今日</button>
+  <button data-tab="customers" onclick="go('customers')"><span class="ic">👥</span>顧客台帳</button>
+  <button data-tab="summary" onclick="go('summary')"><span class="ic">📊</span>売上集計</button>
+  <button data-tab="settings" onclick="go('settings')"><span class="ic">⚙️</span>設定</button>
+</nav>
+
+<div class="modal-bg" id="modalBg" onclick="if(event.target===this)closeModal()">
+  <div class="modal" id="modal"></div>
+</div>
+<div class="toast" id="toast"></div>
+
+<script>
+/* ============================================================
+   DB層 ―― ここだけ後でSupabaseに差し替えれば共有化できる
+   今は端末内(localStorage)に保存する
+   ============================================================ */
+var STORE_KEY = "ihair_houmon_v1";
+
+function loadDB(){
+  var raw = localStorage.getItem(STORE_KEY);
+  if(raw){ try{ return JSON.parse(raw); }catch(e){} }
+  return seedDB();
+}
+function saveDB(){ localStorage.setItem(STORE_KEY, JSON.stringify(DB)); }
+function uid(){ return Date.now().toString(36) + Math.random().toString(36).slice(2,6); }
+
+/* 初回サンプルデータ（「サンプル削除」で消せる） */
+function seedDB(){
+  var today = ymd(new Date());
+  return {
+    staff: [
+      {id:"s1", name:"板谷"},
+      {id:"s2", name:"直香"},
+      {id:"s3", name:"高村"}
+    ],
+    facilities: [
+      {id:"f1", name:"きらくえん", type:"施設", address:"神戸市", note:""},
+      {id:"f2", name:"グループホーム花", type:"施設", address:"神戸市", note:""},
+      {id:"f3", name:"在宅 山本様", type:"在宅", address:"神戸市", note:"駐車場あり"}
+    ],
+    customers: [
+      {id:"c1", facilityId:"f1", name:"田中 ハナ", care:"右耳が聞こえにくい"},
+      {id:"c2", facilityId:"f1", name:"佐藤 キク", care:""},
+      {id:"c3", facilityId:"f1", name:"鈴木 ウメ", care:"車椅子"},
+      {id:"c4", facilityId:"f2", name:"伊藤 マツ", care:""},
+      {id:"c5", facilityId:"f2", name:"渡辺 タケ", care:"認知症・声かけ丁寧に"},
+      {id:"c6", facilityId:"f3", name:"山本 様", care:""}
+    ],
+    visits: [
+      {id:"v1", date:today, time:"13:00", facilityId:"f1", staffIds:["s2","s3"], status:"plan", note:""},
+      {id:"v2", date:today, time:"15:30", facilityId:"f3", staffIds:["s1"], status:"plan", note:""},
+      {id:"v3", date:today, time:"17:00", facilityId:"f2", staffIds:["s3"], status:"plan", note:""}
+    ],
+    records: [] // {id, visitId, customerId, staffId, menu, amount}
+  };
+}
+
+var DB = loadDB();
+
+/* ============================================================
+   ユーティリティ
+   ============================================================ */
+function ymd(d){ return d.getFullYear()+"-"+String(d.getMonth()+1).padStart(2,"0")+"-"+String(d.getDate()).padStart(2,"0"); }
+function yen(n){ return "¥"+(n||0).toLocaleString("ja-JP"); }
+function facName(id){ var f=DB.facilities.find(function(x){return x.id===id;}); return f?f.name:"(不明)"; }
+function staffName(id){ var s=DB.staff.find(function(x){return x.id===id;}); return s?s.name:"?"; }
+function custOf(facId){ return DB.customers.filter(function(c){return c.facilityId===facId;}); }
+function recOfVisit(vid){ return DB.records.filter(function(r){return r.visitId===vid;}); }
+function visitTotal(vid){ return recOfVisit(vid).reduce(function(a,r){return a+(Number(r.amount)||0);},0); }
+
+var current = new Date();
+var tab = "today";
+
+function shiftDay(n){ current.setDate(current.getDate()+n); render(); }
+function go(t){ tab=t; document.querySelectorAll("nav.tabs button").forEach(function(b){b.classList.toggle("on", b.dataset.tab===t);});
+  document.getElementById("dateNav").style.visibility = (t==="today")?"visible":"hidden";
+  document.getElementById("fab").style.display = (t==="today"||t==="customers")?"block":"none";
+  render();
+}
+function toast(msg){ var t=document.getElementById("toast"); t.textContent=msg; t.classList.add("show"); setTimeout(function(){t.classList.remove("show");},1600); }
+
+/* ============================================================
+   描画
+   ============================================================ */
+function render(){
+  document.getElementById("dLabel").textContent = fmtDate(current);
+  if(tab==="today") renderToday();
+  else if(tab==="customers") renderCustomers();
+  else if(tab==="summary") renderSummary();
+  else renderSettings();
+}
+function fmtDate(d){ var w=["日","月","火","水","木","金","土"]; return (d.getMonth()+1)+"/"+d.getDate()+" ("+w[d.getDay()]+")"; }
+
+function renderToday(){
+  var ds = ymd(current);
+  var vs = DB.visits.filter(function(v){return v.date===ds;}).sort(function(a,b){return a.time.localeCompare(b.time);});
+  var people = vs.reduce(function(a,v){return a+custOf(v.facilityId).length;},0);
+  var sales = vs.reduce(function(a,v){return a+visitTotal(v.id);},0);
+
+  var h = '<div class="cards">'
+    + card("訪問", vs.length+"件")
+    + card("対象人数", people+"名")
+    + card("売上", yen(sales))
+    + '</div>';
+
+  if(vs.length===0){ h += '<div class="empty">この日の訪問予約はありません。<br>右下の ＋ から追加できます。</div>'; }
+  else{
+    vs.forEach(function(v){
+      var done = v.status==="done";
+      var tg = done ? '<span class="tag done">完了 '+yen(visitTotal(v.id))+'</span>'
+                    : (recOfVisit(v.id).length>0 ? '<span class="tag todo">入力中</span>' : '<span class="tag plan">予定</span>');
+      h += '<div class="visit" onclick="openVisit(\''+v.id+'\')">'
+        + '<div class="row1"><span class="name">'+facName(v.facilityId)+'</span><span class="time">'+v.time+'</span></div>'
+        + '<div class="meta">利用者 '+custOf(v.facilityId).length+'名 ・ 担当 '+v.staffIds.map(staffName).join("/")+'</div>'
+        + tg + '</div>';
+    });
+  }
+  document.getElementById("view").innerHTML = h;
+}
+function card(l,v){ return '<div class="card"><div class="lbl">'+l+'</div><div class="val">'+v+'</div></div>'; }
+
+function renderCustomers(){
+  var h = '<div class="sec-title">施設・在宅先 と 利用者</div>';
+  if(DB.facilities.length===0){ h+='<div class="empty">右下の ＋ から訪問先を登録できます。</div>'; }
+  DB.facilities.forEach(function(f){
+    var cs = custOf(f.id);
+    h += '<div class="fac-block"><div class="fn"><span>'+f.name+' <span style="font-size:11px;color:var(--muted)">'+f.type+'</span></span></div>';
+    cs.forEach(function(c){
+      h += '<div class="cust-li"><span>'+c.name+(c.care?' <span class="cc">⚠ '+c.care+'</span>':'')+'</span></div>';
+    });
+    h += '<button class="add-link" onclick="addCustomerForm(\''+f.id+'\')">＋ 利用者を追加</button>';
+    h += '</div>';
+  });
+  document.getElementById("view").innerHTML = h;
+}
+
+function renderSummary(){
+  var ym = ymd(current).slice(0,7);
+  var recs = DB.records.filter(function(r){
+    var v = DB.visits.find(function(x){return x.id===r.visitId;});
+    return v && v.date.slice(0,7)===ym;
+  });
+  var total = recs.reduce(function(a,r){return a+(Number(r.amount)||0);},0);
+
+  var byStaff = {}, byFac = {};
+  recs.forEach(function(r){
+    byStaff[r.staffId] = (byStaff[r.staffId]||0) + (Number(r.amount)||0);
+    var v = DB.visits.find(function(x){return x.id===r.visitId;});
+    if(v) byFac[v.facilityId] = (byFac[v.facilityId]||0) + (Number(r.amount)||0);
+  });
+
+  var h = '<div class="sec-title">'+ym.replace("-","年")+'月 の売上</div>';
+  h += '<div class="card" style="margin-bottom:16px"><div class="lbl">月間売上合計</div><div class="val">'+yen(total)+'</div></div>';
+
+  h += '<div class="sec-title">担当別</div>' + bars(byStaff, staffName, total);
+  h += '<div class="sec-title">施設別</div>' + bars(byFac, facName, total);
+  if(total===0) h += '<div class="empty">この月の売上入力はまだありません。</div>';
+  document.getElementById("view").innerHTML = h;
+}
+function bars(obj, nameFn, total){
+  var keys = Object.keys(obj).sort(function(a,b){return obj[b]-obj[a];});
+  if(keys.length===0) return '';
+  var max = Math.max.apply(null, keys.map(function(k){return obj[k];}));
+  var h='<div class="card">';
+  keys.forEach(function(k){
+    var pct = max? Math.round(obj[k]/max*100):0;
+    h += '<div class="sum-bar"><span class="nm">'+nameFn(k)+'</span><span class="track"><span class="fill" style="width:'+pct+'%"></span></span><span class="am">'+yen(obj[k])+'</span></div>';
+  });
+  return h+'</div>';
+}
+
+function renderSettings(){
+  var h = '<div class="sec-title">担当（フレンドシップメンバー）</div><div class="card">';
+  DB.staff.forEach(function(s){ h+='<div class="cust-li"><span>'+s.name+'</span></div>'; });
+  h += '<button class="add-link" onclick="addStaffForm()">＋ 担当を追加</button></div>';
+
+  h += '<div class="sec-title">データ</div><div class="card">';
+  h += '<div style="font-size:13px;color:var(--muted);margin-bottom:8px">このデータはこの端末の中だけに保存されています（無料・お試し版）。次の段階で3人共有に切り替えます。</div>';
+  h += '<button class="btn ghost" onclick="exportJSON()">バックアップを書き出す</button>';
+  h += '<button class="btn ghost" onclick="resetDB()" style="color:#a32d2d">サンプル/データを初期化</button>';
+  h += '</div>';
+  document.getElementById("view").innerHTML = h;
+}
+
+/* ============================================================
+   モーダル & 入力
+   ============================================================ */
+function openModal(html){ document.getElementById("modal").innerHTML=html; document.getElementById("modalBg").classList.add("open"); }
+function closeModal(){ document.getElementById("modalBg").classList.remove("open"); }
+
+function onFab(){ if(tab==="today") addVisitForm(); else if(tab==="customers") addFacilityForm(); }
+
+/* 予約追加 */
+function addVisitForm(){
+  if(DB.facilities.length===0){ toast("先に顧客台帳で訪問先を登録してください"); go("customers"); return; }
+  var facOpts = DB.facilities.map(function(f){return '<option value="'+f.id+'">'+f.name+'</option>';}).join("");
+  var staffChips = DB.staff.map(function(s){return '<span class="chip" data-sid="'+s.id+'" onclick="this.classList.toggle(\'sel\')">'+s.name+'</span>';}).join("");
+  openModal(
+    '<h2>訪問を追加</h2>'
+    + '<label>訪問先</label><select id="mFac">'+facOpts+'</select>'
+    + '<div class="row-2"><div><label>日付</label><input type="date" id="mDate" value="'+ymd(current)+'"></div>'
+    + '<div><label>時間</label><input type="time" id="mTime" value="13:00"></div></div>'
+    + '<label>担当（複数可）</label><div class="chips" id="mStaff">'+staffChips+'</div>'
+    + '<label>メモ</label><textarea id="mNote" placeholder="駐車場・持ち物など"></textarea>'
+    + '<button class="btn primary" onclick="saveVisit()">保存</button>'
+    + '<button class="btn ghost" onclick="closeModal()">キャンセル</button>'
+  );
+}
+function saveVisit(){
+  var sids = Array.prototype.slice.call(document.querySelectorAll("#mStaff .chip.sel")).map(function(c){return c.dataset.sid;});
+  var v = {id:uid(), date:document.getElementById("mDate").value, time:document.getElementById("mTime").value,
+    facilityId:document.getElementById("mFac").value, staffIds:sids, status:"plan", note:document.getElementById("mNote").value};
+  DB.visits.push(v); saveDB(); closeModal();
+  current = new Date(v.date+"T00:00:00"); render(); toast("訪問を追加しました");
+}
+
+/* 予約詳細・実績入力 */
+function openVisit(vid){
+  var v = DB.visits.find(function(x){return x.id===vid;});
+  var cs = custOf(v.facilityId);
+  var existing = recOfVisit(vid);
+  var staffOpts = v.staffIds.length? v.staffIds : DB.staff.map(function(s){return s.id;});
+  var staffSel = '<select id="recStaff">'+staffOpts.map(function(id){return '<option value="'+id+'">'+staffName(id)+'</option>';}).join("")+'</select>';
+
+  var rows = cs.map(function(c){
+    var ex = existing.find(function(r){return r.customerId===c.id;});
+    return '<div class="rec-row"><div><div class="cn">'+c.name+'</div>'+(c.care?'<div class="care">⚠ '+c.care+'</div>':'')
+      + '<input type="text" class="rMenu" data-cid="'+c.id+'" placeholder="施術（カット等）" value="'+(ex?ex.menu||"":"")+'" style="margin-top:4px"></div>'
+      + '<input type="number" inputmode="numeric" class="rAmt" data-cid="'+c.id+'" placeholder="金額" value="'+(ex?ex.amount||"":"")+'"></div>';
+  }).join("");
+
+  openModal(
+    '<h2>'+facName(v.facilityId)+' <span style="font-size:13px;color:var(--muted)">'+v.date+' '+v.time+'</span></h2>'
+    + '<label>担当（この実績の記録者）</label>'+staffSel
+    + '<div style="font-size:13px;color:var(--muted);margin:14px 0 4px">利用者ごとに施術と金額を入力</div>'
+    + (rows || '<div class="empty">この施設に利用者が未登録です。顧客台帳で追加してください。</div>')
+    + '<button class="btn primary" onclick="saveRecords(\''+vid+'\')">完了として保存</button>'
+    + '<button class="btn ghost" onclick="closeModal()">閉じる</button>'
+  );
+}
+function saveRecords(vid){
+  var staffId = document.getElementById("recStaff").value;
+  DB.records = DB.records.filter(function(r){return r.visitId!==vid;}); // 入れ直し
+  var menus = document.querySelectorAll(".rMenu");
+  var amts = document.querySelectorAll(".rAmt");
+  var any=false;
+  amts.forEach(function(a,i){
+    var amount = Number(a.value)||0;
+    var menu = menus[i].value;
+    if(amount>0 || menu){
+      DB.records.push({id:uid(), visitId:vid, customerId:a.dataset.cid, staffId:staffId, menu:menu, amount:amount});
+      any=true;
+    }
+  });
+  var v = DB.visits.find(function(x){return x.id===vid;});
+  v.status = any ? "done" : "plan";
+  saveDB(); closeModal(); render(); toast(any?"完了を記録しました":"保存しました");
+}
+
+/* 顧客台帳：施設・利用者追加 */
+function addFacilityForm(){
+  openModal(
+    '<h2>訪問先を追加</h2>'
+    + '<label>名称</label><input id="fName" placeholder="○○園 / 在宅 △△様">'
+    + '<label>種別</label><select id="fType"><option>施設</option><option>在宅</option></select>'
+    + '<label>住所・メモ</label><input id="fAddr" placeholder="神戸市 / 駐車場など">'
+    + '<button class="btn primary" onclick="saveFacility()">保存</button>'
+    + '<button class="btn ghost" onclick="closeModal()">キャンセル</button>'
+  );
+}
+function saveFacility(){
+  var name=document.getElementById("fName").value.trim(); if(!name){toast("名称を入力してください");return;}
+  DB.facilities.push({id:uid(), name:name, type:document.getElementById("fType").value, address:document.getElementById("fAddr").value, note:""});
+  saveDB(); closeModal(); render(); toast("訪問先を追加しました");
+}
+function addCustomerForm(facId){
+  openModal(
+    '<h2>利用者を追加 <span style="font-size:13px;color:var(--muted)">'+facName(facId)+'</span></h2>'
+    + '<label>お名前</label><input id="cName" placeholder="田中 ハナ">'
+    + '<label>配慮事項（要配慮：施術時の注意）</label><textarea id="cCare" placeholder="車椅子 / 耳が遠い 等"></textarea>'
+    + '<button class="btn primary" onclick="saveCustomer(\''+facId+'\')">保存</button>'
+    + '<button class="btn ghost" onclick="closeModal()">キャンセル</button>'
+  );
+}
+function saveCustomer(facId){
+  var name=document.getElementById("cName").value.trim(); if(!name){toast("お名前を入力してください");return;}
+  DB.customers.push({id:uid(), facilityId:facId, name:name, care:document.getElementById("cCare").value.trim()});
+  saveDB(); closeModal(); render(); toast("利用者を追加しました");
+}
+function addStaffForm(){
+  openModal('<h2>担当を追加</h2><label>お名前</label><input id="sName" placeholder="氏名">'
+    + '<button class="btn primary" onclick="saveStaff()">保存</button><button class="btn ghost" onclick="closeModal()">キャンセル</button>');
+}
+function saveStaff(){
+  var name=document.getElementById("sName").value.trim(); if(!name){toast("お名前を入力してください");return;}
+  DB.staff.push({id:uid(), name:name}); saveDB(); closeModal(); render(); toast("担当を追加しました");
+}
+
+/* データ操作 */
+function exportJSON(){
+  var blob = new Blob([JSON.stringify(DB,null,2)], {type:"application/json"});
+  var a=document.createElement("a"); a.href=URL.createObjectURL(blob); a.download="ihair_houmon_backup.json"; a.click();
+}
+function resetDB(){
+  if(confirm("すべてのデータを初期サンプルに戻します。よろしいですか？")){ localStorage.removeItem(STORE_KEY); DB=loadDB(); saveDB(); render(); toast("初期化しました"); }
+}
+
+/* 起動 */
+go("today");
+</script>
+</body>
+</html>
