@@ -46,10 +46,21 @@
   .cal-day:active{background:var(--accent-soft);}
   .cal-day.today{border-color:var(--accent);}
   .cal-day.sel{background:var(--accent); color:#fff;}
-  .cal-dot{font-size:10px; background:var(--info); color:#fff; border-radius:10px; padding:0 5px; margin-top:1px; line-height:1.4;}
-  .cal-day.sel .cal-dot{background:#fff; color:var(--accent-text);}
-  .cal-free{font-size:9px; color:var(--hint); margin-top:1px;}
-  .cal-day.sel .cal-free{color:#d7f0e6;}
+  .cal-mk{font-size:9px; margin-top:1px; line-height:1.3;}
+  .cal-mk.free{color:var(--accent-text);}
+  .cal-mk.part{color:var(--info);}
+  .cal-mk.full{color:#c0392b; font-weight:600;}
+  .cal-day.sel .cal-mk{color:#eafff7 !important;}
+
+  .slot{display:flex; gap:10px; align-items:stretch; margin-bottom:6px;}
+  .slot .tm{width:52px; flex:none; font-size:13px; color:var(--muted); padding-top:10px;}
+  .slot .body{flex:1;}
+  .slot-free{border:1px dashed var(--line); border-radius:var(--radius-sm); padding:9px 12px; color:var(--hint); font-size:13px; cursor:pointer; display:flex; justify-content:space-between; align-items:center;}
+  .slot-free:active{background:var(--accent-soft);}
+  .slot-bk{background:var(--surface); border:1px solid var(--line); border-left:3px solid var(--accent); border-radius:var(--radius-sm); padding:9px 12px; cursor:pointer;}
+  .slot-bk .bn{font-weight:600; font-size:14px;}
+  .slot-bk .bm{font-size:12px; color:var(--muted);}
+  .slot-cont{border-left:3px solid var(--accent-soft); padding:6px 12px; color:var(--hint); font-size:12px;}
 
   .recept-btn{display:block; width:100%; background:var(--accent); color:#fff; border:none; padding:15px; border-radius:var(--radius); font-size:16px; font-weight:600; margin-bottom:14px; box-shadow:0 3px 10px rgba(29,158,117,.3);}
 
@@ -162,8 +173,19 @@ function saveDB(){ try{ localStorage.setItem(STORE_KEY, JSON.stringify(DB)); ret
 function uid(){ return Date.now().toString(36)+Math.random().toString(36).slice(2,6); }
 
 function emptyDB(){
-  return { settings:{bizName:"", regNumber:"", mode:"solo", ready:false}, staff:[], clients:[], members:[], bookings:[], records:[] };
+  return { settings:{bizName:"", regNumber:"", mode:"solo", openHour:9, closeHour:18, slotMin:60, ready:false}, staff:[], clients:[], members:[], bookings:[], records:[] };
 }
+/* 営業時間・枠（既存データにも安全なフォールバック） */
+function sOpen(){ return DB.settings.openHour!=null?DB.settings.openHour:9; }
+function sClose(){ return DB.settings.closeHour!=null?DB.settings.closeHour:18; }
+function sSlot(){ return DB.settings.slotMin||60; }
+function t2m(t){ var p=(t||"0:0").split(":"); return (+p[0])*60+(+p[1]||0); }
+function m2t(m){ return String(Math.floor(m/60)).padStart(2,"0")+":"+String(m%60).padStart(2,"0"); }
+function bkDur(b){ return Number(b.duration)||sSlot(); }
+function slotsOfDay(){ var a=[]; for(var m=sOpen()*60; m+sSlot()<=sClose()*60; m+=sSlot()) a.push(m); return a; }
+function bookingsOfDay(ds){ return DB.bookings.filter(function(b){return b.date===ds;}); }
+function bookingsAtSlot(ds,slotStart){ var e=slotStart+sSlot(); return bookingsOfDay(ds).filter(function(b){ var s=t2m(b.time), en=s+bkDur(b); return s<e && en>slotStart; }); }
+function dayFreeCount(ds){ return slotsOfDay().filter(function(m){ return bookingsAtSlot(ds,m).length===0; }).length; }
 function fillSample(){
   var t=ymd(new Date());
   DB.staff=[{id:"s1",name:"担当A"},{id:"s2",name:"担当B"}];
@@ -257,11 +279,13 @@ function renderCalendar(){
   var h='<div class="cal"><div class="cal-head"><button onclick="shiftMonth(-1)">‹</button><span>'+y+'年'+(mo+1)+'月</span><button onclick="shiftMonth(1)">›</button></div>';
   h+='<div class="cal-grid">'+wd.map(function(d,i){return '<div class="cal-wd" style="color:'+(i===0?"#c0392b":i===6?"#185fa5":"var(--muted)")+'">'+d+'</div>';}).join("");
   for(var i=0;i<startDow;i++) h+='<div></div>';
+  var totalSlots=slotsOfDay().length;
   for(var d=1;d<=days;d++){
     var ds=y+"-"+String(mo+1).padStart(2,"0")+"-"+String(d).padStart(2,"0");
-    var n=cnt[ds]||0;
+    var free=dayFreeCount(ds);
+    var mark = free===0 ? '<span class="cal-mk full">満</span>' : (free===totalSlots ? '<span class="cal-mk free">空'+free+'</span>' : '<span class="cal-mk part">空'+free+'</span>');
     var cls="cal-day"+(ds===sel?" sel":"")+(ds===today?" today":"");
-    h+='<div class="'+cls+'" onclick="pickDay(\''+ds+'\')"><span>'+d+'</span>'+(n?'<span class="cal-dot">'+n+'</span>':'<span class="cal-free">空</span>')+'</div>';
+    h+='<div class="'+cls+'" onclick="pickDay(\''+ds+'\')"><span>'+d+'</span>'+mark+'</div>';
   }
   h+='</div></div>';
   return h;
@@ -284,14 +308,43 @@ function renderToday(){
       +due.slice(0,6).map(function(m){return '<div style="font-size:13px;color:var(--warn)">・'+esc(m.name)+'（'+esc(clientName(m.clientId))+'）目安 '+nextDue(m)+'</div>';}).join("")+'</div>';
   }
 
-  if(bs.length===0){ h+='<div class="empty">この日の予約はありません。<br>上のボタンから受付できます。</div>'; }
-  else { bs.forEach(function(b){
-    var done=b.status==="done";
-    var tg=done?'<span class="tag done">完了 '+yen(bookingSales(b.id))+(bookingTravel(b.id)?'（内 交通費 '+yen(bookingTravel(b.id))+'）':'')+'</span>':(recOfBooking(b.id).length>0?'<span class="tag todo">入力中</span>':'<span class="tag plan">予定</span>');
-    h+='<div class="booking" onclick="openBooking(\''+b.id+'\')"><div class="row1"><span class="name">'+esc(clientName(b.clientId))+'<span class="kindtag">'+esc(clientKind(b.clientId))+'</span></span><span class="time">'+b.time+'</span></div>'
-      +'<div class="meta">対象 '+membersOf(b.clientId).length+'名 ・ 担当 '+(b.staffIds.map(staffName).join("/")||"未設定")+(b.channel?' ・ <span class="ch">受付 '+esc(b.channel)+'</span>':'')+'</div>'+tg+'</div>';
-  }); }
+  h+='<div class="sec-title">'+fmtDate(current)+' の時間枠（空きをタップで受付）</div>';
+  h+=renderDayTimeline(ds);
+  // 営業時間外の予約があれば下に表示
+  var slots=slotsOfDay(); var inHours=function(b){var s=t2m(b.time); return s>=sOpen()*60 && s<sClose()*60;};
+  var outside=bs.filter(function(b){return !inHours(b);});
+  if(outside.length){ h+='<div class="sec-title">時間外の予約</div>'; outside.forEach(function(b){ h+=bookingCardHtml(b); }); }
   document.getElementById("view").innerHTML=h;
+}
+function bookingCardHtml(b){
+  var done=b.status==="done";
+  var tg=done?'<span class="tag done">完了 '+yen(bookingSales(b.id))+(bookingTravel(b.id)?'（内 交通費 '+yen(bookingTravel(b.id))+'）':'')+'</span>':(recOfBooking(b.id).length>0?'<span class="tag todo">入力中</span>':'<span class="tag plan">予定</span>');
+  return '<div class="booking" onclick="openBooking(\''+b.id+'\')"><div class="row1"><span class="name">'+esc(clientName(b.clientId))+'<span class="kindtag">'+esc(clientKind(b.clientId))+'</span></span><span class="time">'+b.time+'</span></div>'
+    +'<div class="meta">対象 '+membersOf(b.clientId).length+'名 ・ 担当 '+(b.staffIds.map(staffName).join("/")||"未設定")+(b.channel?' ・ <span class="ch">受付 '+esc(b.channel)+'</span>':'')+'</div>'+tg+'</div>';
+}
+function renderDayTimeline(ds){
+  var slots=slotsOfDay(); if(!slots.length) return '<div class="empty">営業時間が未設定です（設定で変更できます）。</div>';
+  var h='';
+  slots.forEach(function(m){
+    var occ=bookingsAtSlot(ds,m);
+    var starting=occ.filter(function(b){var s=t2m(b.time); return s>=m && s<m+sSlot();});
+    var contOnly=occ.length>0 && starting.length===0;
+    h+='<div class="slot"><div class="tm">'+m2t(m)+'</div><div class="body">';
+    if(occ.length===0){
+      h+='<div class="slot-free" onclick="receptionWizard({date:\''+ds+'\',time:\''+m2t(m)+'\'})"><span>空き</span><span>＋ ここに受付</span></div>';
+    } else if(contOnly){
+      h+='<div class="slot-cont">（施術中）</div>';
+    } else {
+      starting.forEach(function(b){
+        var done=b.status==="done";
+        var tg=done?'完了 '+yen(bookingSales(b.id)):(recOfBooking(b.id).length>0?'入力中':'予定');
+        h+='<div class="slot-bk" onclick="openBooking(\''+b.id+'\')"><div class="bn">'+esc(clientName(b.clientId))+' <span class="kindtag">'+esc(clientKind(b.clientId))+'</span></div>'
+          +'<div class="bm">'+b.time+'〜'+m2t(t2m(b.time)+bkDur(b))+' ・ 対象 '+membersOf(b.clientId).length+'名 ・ 担当 '+(b.staffIds.map(staffName).join("/")||"未設定")+' ・ '+tg+'</div></div>';
+      });
+    }
+    h+='</div></div>';
+  });
+  return h;
 }
 
 function renderCustomers(){
@@ -378,9 +431,10 @@ function saveSetup(){
    予約受付フロー（背骨）
    ============================================================ */
 var rc={};  // 受付中の一時状態
-function receptionWizard(){
+function receptionWizard(preset){
+  preset=preset||{};
   rc={ channel:"電話", clientId:"", newClient:false, kind:"個人", staffIds:[],
-       f:{ date:ymd(current), time:"13:00", menu:"", price:"", travel:"", wish:"", note:"", clName:"", rules:"" } };
+       f:{ date:preset.date||ymd(current), time:preset.time||"13:00", dur:sSlot(), menu:"", price:"", travel:"", wish:"", note:"", clName:"", rules:"" } };
   drawReception();
 }
 function drawReception(){
@@ -414,7 +468,8 @@ function drawReception(){
       +'</div>';
   }
   // ③ 日程
-  h+='<label><span class="stepnum">③</span>日程</label><div class="row-2"><input type="date" id="rcDate" value="'+esc(rc.f.date)+'"><input type="time" id="rcTime" value="'+esc(rc.f.time)+'"></div>';
+  h+='<label><span class="stepnum">③</span>日程</label><div class="row-2"><input type="date" id="rcDate" value="'+esc(rc.f.date)+'"><input type="time" id="rcTime" value="'+esc(rc.f.time)+'"></div>'
+    +'<label>所要時間（分・空き枠の計算に使用）</label><input type="number" inputmode="numeric" id="rcDur" value="'+esc(rc.f.dur)+'" step="15" placeholder="60">';
   // ④ 担当
   h+='<label><span class="stepnum">④</span>担当（複数可）</label><div class="chips">'+staffChips+'</div>';
   // ⑤ 内容（任意・個人/リピートで便利）
@@ -429,7 +484,7 @@ function drawReception(){
 function rcSet(k,v){ rc[k]=v; rcCapture(); drawReception(); }
 function rcStaff(id){ var i=rc.staffIds.indexOf(id); if(i>=0) rc.staffIds.splice(i,1); else rc.staffIds.push(id); rcCapture(); drawReception(); }
 function rcCapture(){ // 入力中の値を保持（再描画で消えないように）
-  var map={rcDate:"date",rcTime:"time",rcMenu:"menu",rcPrice:"price",rcTravel:"travel",rcWish:"wish",rcNote:"note",rcClName:"clName",rcRules:"rules"};
+  var map={rcDate:"date",rcTime:"time",rcDur:"dur",rcMenu:"menu",rcPrice:"price",rcTravel:"travel",rcWish:"wish",rcNote:"note",rcClName:"clName",rcRules:"rules"};
   Object.keys(map).forEach(function(id){var e=document.getElementById(id); if(e) rc.f[map[id]]=e.value;});
 }
 function rcSearchRun(q){
@@ -458,7 +513,7 @@ function rcConfirm(){
     }
   }
   if(!clientId){toast("お客様を選ぶか、新規で登録してください");return;}
-  var b={id:uid(),date:rc.f.date,time:rc.f.time,clientId:clientId,channel:rc.channel,staffIds:rc.staffIds.slice(),
+  var b={id:uid(),date:rc.f.date,time:rc.f.time,duration:Number(rc.f.dur)||sSlot(),clientId:clientId,channel:rc.channel,staffIds:rc.staffIds.slice(),
     travel:Number(rc.f.travel)||0,note:rc.f.note||"",wish:rc.f.wish||"",status:"plan"};
   DB.bookings.push(b);
   // 内容が入っていれば実績の下書きとして保存（個人/リピート向け）
@@ -489,7 +544,8 @@ function openBooking(bid){
   var h='<h2>'+esc(cl.name)+' <span class="kindtag">'+esc(cl.kind)+'</span></h2><div class="lead">'+b.date+' '+b.time+(b.channel?' ・ 受付 '+esc(b.channel):'')+'</div>';
   if(cl.rules) h+='<div class="rulebox">⚠ ルール：'+esc(cl.rules)+'</div>';
   if(b.wish) h+='<div style="font-size:13px;margin:6px 0">ご希望：'+esc(b.wish)+'</div>';
-  h+='<label>出張交通費（円・この訪問の分）</label><input type="number" inputmode="numeric" id="bkTravel" value="'+(b.travel||"")+'" placeholder="0">';
+  h+='<div class="row-2"><div><label>所要時間（分）</label><input type="number" inputmode="numeric" id="bkDur" value="'+(b.duration||sSlot())+'" step="15"></div>'
+    +'<div><label>出張交通費（円）</label><input type="number" inputmode="numeric" id="bkTravel" value="'+(b.travel||"")+'" placeholder="0"></div></div>';
   h+='<div style="font-size:13px;color:var(--muted);margin:10px 0 6px">利用者ごとに 施術・金額・担当・写真 を入力</div>'
     +(rows||'<div class="empty">この顧客先に利用者が未登録です。<button class="btn primary" onclick="closeModal();go(\'customers\')">顧客タブで追加</button></div>')
     +(ms.length?'<button class="btn primary" onclick="saveRecords(\''+bid+'\')">完了として保存</button>':'')
@@ -510,6 +566,7 @@ function saveRecords(bid){
   });
   var b=DB.bookings.find(function(x){return x.id===bid;});
   var tvEl=document.getElementById("bkTravel"); if(tvEl) b.travel=Number(tvEl.value)||0;
+  var duEl=document.getElementById("bkDur"); if(duEl) b.duration=Number(duEl.value)||sSlot();
   b.status=(any||b.travel)?"done":"plan";
   if(saveDB()){ closeModal(); render(); toast("保存しました"); }
 }
@@ -627,9 +684,18 @@ function bizForm(){
     +'<label>事業者名・屋号</label><input id="bName" value="'+esc(DB.settings.bizName||"")+'">'
     +'<label>登録番号（インボイス）</label><input id="bReg" value="'+esc(DB.settings.regNumber||"")+'" placeholder="T0000000000000">'
     +'<label>利用モード</label><select id="bMode"><option value="solo"'+(DB.settings.mode==="solo"?" selected":"")+'>フリーランス（シンプル）</option><option value="org"'+(DB.settings.mode==="org"?" selected":"")+'>組織（スタッフ管理あり）</option></select>'
+    +'<div class="sec-title" style="margin-left:0">カレンダー（時間枠）</div>'
+    +'<div class="row-2"><div><label>営業開始（時）</label><input type="number" inputmode="numeric" id="bOpen" value="'+sOpen()+'" min="0" max="23"></div>'
+    +'<div><label>営業終了（時）</label><input type="number" inputmode="numeric" id="bClose" value="'+sClose()+'" min="1" max="24"></div></div>'
+    +'<label>1枠の長さ（分）</label><select id="bSlot"><option value="30"'+(sSlot()===30?" selected":"")+'>30分</option><option value="60"'+(sSlot()===60?" selected":"")+'>60分</option><option value="90"'+(sSlot()===90?" selected":"")+'>90分</option><option value="120"'+(sSlot()===120?" selected":"")+'>120分</option></select>'
     +'<button class="btn primary" onclick="saveBiz()">保存</button><button class="btn ghost" onclick="closeModal()">キャンセル</button>');
 }
-function saveBiz(){ var v=gv("bName"); if(!v){toast("名称を入力してください");return;} DB.settings.bizName=v; DB.settings.regNumber=gv("bReg"); DB.settings.mode=document.getElementById("bMode").value; saveDB(); closeModal(); render(); toast("更新しました"); }
+function saveBiz(){ var v=gv("bName"); if(!v){toast("名称を入力してください");return;}
+  DB.settings.bizName=v; DB.settings.regNumber=gv("bReg"); DB.settings.mode=document.getElementById("bMode").value;
+  var o=Number(gv("bOpen")), c=Number(gv("bClose")), sl=Number(document.getElementById("bSlot").value);
+  if(!(c>o)){ toast("営業終了は開始より後にしてください"); return; }
+  DB.settings.openHour=o; DB.settings.closeHour=c; DB.settings.slotMin=sl||60;
+  saveDB(); closeModal(); render(); toast("更新しました"); }
 function staffForm(){ openModal('<h2>担当を追加</h2><label>お名前</label><input id="stName"><button class="btn primary" onclick="saveStaff()">保存</button><button class="btn ghost" onclick="closeModal()">キャンセル</button>'); setTimeout(function(){var e=document.getElementById("stName");if(e)e.focus();},50); }
 function saveStaff(){ var n=gv("stName"); if(!n){toast("お名前を入力してください");return;} DB.staff.push({id:uid(),name:n}); saveDB(); closeModal(); render(); toast("担当を追加しました"); }
 function delStaff(sid){ if(confirm("この担当を削除しますか？（過去の記録は残ります）")){ DB.staff=DB.staff.filter(function(s){return s.id!==sid;}); saveDB(); render(); toast("削除しました"); } }
