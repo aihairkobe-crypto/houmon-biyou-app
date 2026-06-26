@@ -185,6 +185,16 @@ function sSlot(){ return DB.settings.slotMin||60; }
 function t2m(t){ var p=(t||"0:0").split(":"); return (+p[0])*60+(+p[1]||0); }
 function m2t(m){ return String(Math.floor(m/60)).padStart(2,"0")+":"+String(m%60).padStart(2,"0"); }
 function bkDur(b){ return Number(b.duration)||sSlot(); }
+function fmtDur(min){ min=Number(min)||0; var hh=Math.floor(min/60), mm=min%60; return (hh?hh+"時間":"")+(mm?mm+"分":(hh?"":"0分")); }
+/* 施術時間のワンタップ・プリセット（自由入力もOK） */
+function durChips(inputId){
+  var biz=(sClose()-sOpen())*60;
+  var presets=[30,60,90,120,180]; if(presets.indexOf(biz)<0) presets.push(biz);
+  return '<div class="chips" style="margin-top:6px">'+presets.map(function(v){
+    return '<span class="chip" onclick="setDur(\''+inputId+'\','+v+')">'+(v===biz?"終日":fmtDur(v))+'</span>';
+  }).join("")+'</div>';
+}
+function setDur(id,v){ var e=document.getElementById(id); if(e){ e.value=v; var lab=document.getElementById(id+"_lab"); if(lab) lab.textContent=fmtDur(v); } }
 function slotsOfDay(){ var a=[]; for(var m=sOpen()*60; m+sSlot()<=sClose()*60; m+=sSlot()) a.push(m); return a; }
 function bookingsOfDay(ds){ return DB.bookings.filter(function(b){return b.date===ds;}); }
 function bookingsAtSlot(ds,slotStart){ var e=slotStart+sSlot(); return bookingsOfDay(ds).filter(function(b){ var s=t2m(b.time), en=s+bkDur(b); return s<e && en>slotStart; }); }
@@ -567,8 +577,8 @@ function drawReception(){
   }
   // ③ 日程
   h+='<label><span class="stepnum">③</span>日程</label><div class="row-2"><input type="date" id="rcDate" value="'+esc(rc.f.date)+'"><input type="time" id="rcTime" value="'+esc(rc.f.time)+'"></div>'
-    +'<div class="row-2"><div><label>所要時間（分）</label><input type="number" inputmode="numeric" id="rcDur" value="'+esc(rc.f.dur)+'" step="15" placeholder="60"></div>'
-    +'<div><label>終了後の移動・休憩（分）</label><input type="number" inputmode="numeric" id="rcBuffer" value="'+esc(rc.f.buffer)+'" step="15" placeholder="0"></div></div>';
+    +'<label>施術時間（枠の長さ・分）<span id="rcDur_lab" style="color:var(--accent-text)"></span></label><input type="number" inputmode="numeric" id="rcDur" value="'+esc(rc.f.dur)+'" step="15" placeholder="60">'+durChips("rcDur")
+    +'<label>終了後の移動・休憩（分）</label><input type="number" inputmode="numeric" id="rcBuffer" value="'+esc(rc.f.buffer)+'" step="15" placeholder="0">';
   // ④ 担当
   h+='<label><span class="stepnum">④</span>担当（複数可）</label><div class="chips">'+staffChips+'</div>';
   // ⑤ 内容（任意・個人/リピートで便利）
@@ -647,7 +657,8 @@ function openBooking(bid){
   if(cl.rules) h+='<div class="rulebox">⚠ ルール：'+esc(cl.rules)+'</div>';
   if(b.wish) h+='<div style="font-size:13px;margin:6px 0">ご希望：'+esc(b.wish)+'</div>';
   h+='<div class="row-2"><div><label>開始時刻</label><input type="time" id="bkTime" value="'+esc(b.time)+'"></div>'
-    +'<div><label>所要時間（分）</label><input type="number" inputmode="numeric" id="bkDur" value="'+(b.duration||sSlot())+'" step="15"></div></div>'
+    +'<div><label>施術時間（分）</label><input type="number" inputmode="numeric" id="bkDur" value="'+(b.duration||sSlot())+'" step="15"></div></div>'
+    +durChips("bkDur")
     +'<label>出張交通費（円）</label><input type="number" inputmode="numeric" id="bkTravel" value="'+(b.travel||"")+'" placeholder="0">';
   h+='<div style="font-size:13px;color:var(--muted);margin:10px 0 6px">利用者ごとに 施術・金額・担当・写真 を入力</div>'
     +(rows||'<div class="empty">この顧客先に利用者が未登録です。<button class="btn primary" onclick="closeModal();go(\'customers\')">顧客タブで追加</button></div>')
