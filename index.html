@@ -595,16 +595,17 @@ function drawReception(){
       +'</div>';
   }
   // ③ 日程
-  h+='<label><span class="stepnum">③</span>日程</label><div class="row-2"><input type="date" id="rcDate" value="'+esc(rc.f.date)+'"><input type="time" id="rcTime" value="'+esc(rc.f.time)+'"></div>'
-    +'<label>施術時間（枠の長さ・分）<span id="rcDur_lab" style="color:var(--accent-text)"></span></label><input type="number" inputmode="numeric" id="rcDur" value="'+esc(rc.f.dur)+'" step="15" placeholder="60">'+durChips("rcDur")
-    +'<label>終了後の移動・休憩（分）</label><input type="number" inputmode="numeric" id="rcBuffer" value="'+esc(rc.f.buffer)+'" step="15" placeholder="0">';
-  // ④ 担当
-  h+='<label><span class="stepnum">④</span>担当（複数可）</label><div class="chips">'+staffChips+'</div>';
-  // ⑤ 内容（任意・個人/リピートで便利）
-  h+='<label><span class="stepnum">⑤</span>内容（任意・あとで確定でもOK）</label>'
+  h+='<label><span class="stepnum">③</span>日程</label><div class="row-2"><input type="date" id="rcDate" value="'+esc(rc.f.date)+'"><input type="time" id="rcTime" value="'+esc(rc.f.time)+'"></div>';
+  // ④ 内容（メニュー・価格・交通費・希望）
+  h+='<label><span class="stepnum">④</span>内容（任意・あとで確定でもOK）</label>'
     +'<div class="row-2"><input id="rcMenu" placeholder="メニュー" value="'+esc(rc.f.menu)+'"><input id="rcPrice" type="number" inputmode="numeric" placeholder="価格" value="'+esc(rc.f.price)+'"></div>'
     +'<input id="rcTravel" type="number" inputmode="numeric" placeholder="出張交通費（円・この訪問の分）" value="'+esc(rc.f.travel)+'" style="margin-top:8px">'
     +'<input id="rcWish" placeholder="スタイルの希望など（任意）" value="'+esc(rc.f.wish)+'" style="margin-top:8px">';
+  // ⑤ 施術時間・移動
+  h+='<label><span class="stepnum">⑤</span>施術時間（枠の長さ・分）<span id="rcDur_lab" style="color:var(--accent-text)"></span></label><input type="number" inputmode="numeric" id="rcDur" value="'+esc(rc.f.dur)+'" step="15" placeholder="60">'+durChips("rcDur")
+    +'<label>終了後の移動・休憩（分）</label><input type="number" inputmode="numeric" id="rcBuffer" value="'+esc(rc.f.buffer)+'" step="15" placeholder="0">';
+  // ⑥ 担当
+  h+='<label><span class="stepnum">⑥</span>担当（複数可）</label><div class="chips">'+staffChips+'</div>';
   h+='<label>メモ</label><textarea id="rcNote" placeholder="駐車場・持ち物・申し送りなど">'+esc(rc.f.note)+'</textarea>';
   h+='<button class="btn primary" onclick="rcConfirm()">予約を確定</button><button class="btn ghost" onclick="closeModal()">キャンセル</button>';
   openModal(h);
