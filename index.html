@@ -61,6 +61,8 @@
   .slot-bk .bn{font-weight:600; font-size:14px;}
   .slot-bk .bm{font-size:12px; color:var(--muted);}
   .slot-cont{border-left:3px solid var(--accent-soft); padding:6px 12px; color:var(--hint); font-size:12px;}
+  .slot-blk{background:#f1efe8; border:1px dashed #b4b2a9; border-radius:var(--radius-sm); padding:9px 12px; font-size:13px; color:#5f5e5a; display:flex; justify-content:space-between; align-items:center;}
+  .slot-blk .del{background:none; border:none; color:var(--hint); font-size:16px; padding:2px 6px;}
 
   .recept-btn{display:block; width:100%; background:var(--accent); color:#fff; border:none; padding:15px; border-radius:var(--radius); font-size:16px; font-weight:600; margin-bottom:14px; box-shadow:0 3px 10px rgba(29,158,117,.3);}
 
@@ -174,7 +176,7 @@ function saveDB(){ try{ localStorage.setItem(STORE_KEY, JSON.stringify(DB)); ret
 function uid(){ return Date.now().toString(36)+Math.random().toString(36).slice(2,6); }
 
 function emptyDB(){
-  return { settings:{bizName:"", regNumber:"", mode:"solo", openHour:9, closeHour:18, slotMin:60, ready:false}, staff:[], clients:[], members:[], bookings:[], records:[] };
+  return { settings:{bizName:"", regNumber:"", mode:"solo", openHour:9, closeHour:18, slotMin:60, ready:false}, staff:[], clients:[], members:[], bookings:[], records:[], blocks:[] };
 }
 /* 営業時間・枠（既存データにも安全なフォールバック） */
 function sOpen(){ return DB.settings.openHour!=null?DB.settings.openHour:9; }
@@ -186,7 +188,10 @@ function bkDur(b){ return Number(b.duration)||sSlot(); }
 function slotsOfDay(){ var a=[]; for(var m=sOpen()*60; m+sSlot()<=sClose()*60; m+=sSlot()) a.push(m); return a; }
 function bookingsOfDay(ds){ return DB.bookings.filter(function(b){return b.date===ds;}); }
 function bookingsAtSlot(ds,slotStart){ var e=slotStart+sSlot(); return bookingsOfDay(ds).filter(function(b){ var s=t2m(b.time), en=s+bkDur(b); return s<e && en>slotStart; }); }
-function dayFreeCount(ds){ return slotsOfDay().filter(function(m){ return bookingsAtSlot(ds,m).length===0; }).length; }
+function blocksOfDay(ds){ return (DB.blocks||[]).filter(function(b){return b.date===ds;}); }
+function blocksAtSlot(ds,slotStart){ var e=slotStart+sSlot(); return blocksOfDay(ds).filter(function(b){ var s=t2m(b.time), en=s+(Number(b.duration)||sSlot()); return s<e && en>slotStart; }); }
+function slotFree(ds,slotStart){ return bookingsAtSlot(ds,slotStart).length===0 && blocksAtSlot(ds,slotStart).length===0; }
+function dayFreeCount(ds){ return slotsOfDay().filter(function(m){ return slotFree(ds,m); }).length; }
 function fillSample(){
   var t=ymd(new Date());
   DB.staff=[{id:"s1",name:"担当A"},{id:"s2",name:"担当B"}];
@@ -328,26 +333,44 @@ function renderDayTimeline(ds){
   var slots=slotsOfDay(); if(!slots.length) return '<div class="empty">営業時間が未設定です（設定で変更できます）。</div>';
   var h='';
   slots.forEach(function(m){
-    var occ=bookingsAtSlot(ds,m);
-    var starting=occ.filter(function(b){var s=t2m(b.time); return s>=m && s<m+sSlot();});
-    var contOnly=occ.length>0 && starting.length===0;
+    var occ=bookingsAtSlot(ds,m), blk=blocksAtSlot(ds,m);
+    var startBk=occ.filter(function(b){var s=t2m(b.time); return s>=m && s<m+sSlot();});
+    var startBl=blk.filter(function(b){var s=t2m(b.time); return s>=m && s<m+sSlot();});
+    var contOnly=(occ.length+blk.length)>0 && startBk.length===0 && startBl.length===0;
     h+='<div class="slot"><div class="tm">'+m2t(m)+'</div><div class="body">';
-    if(occ.length===0){
-      h+='<div class="slot-free" onclick="receptionWizard({date:\''+ds+'\',time:\''+m2t(m)+'\'})"><span>空き</span><span>＋ ここに受付</span></div>';
+    if(occ.length===0 && blk.length===0){
+      h+='<div class="slot-free"><span style="cursor:pointer;flex:1" onclick="receptionWizard({date:\''+ds+'\',time:\''+m2t(m)+'\'})">空き　＋ ここに受付</span>'
+        +'<span style="color:var(--muted);font-size:12px;padding:2px 6px" onclick="blockForm(\''+ds+'\',\''+m2t(m)+'\')">🚫 ブロック</span></div>';
     } else if(contOnly){
-      h+='<div class="slot-cont">（施術中）</div>';
+      h+='<div class="slot-cont">'+(blk.length?'（'+esc(blk[0].label||"ブロック")+'）':'（施術中）')+'</div>';
     } else {
-      starting.forEach(function(b){
+      startBk.forEach(function(b){
         var done=b.status==="done";
         var tg=done?'完了 '+yen(bookingSales(b.id)):(recOfBooking(b.id).length>0?'入力中':'予定');
         h+='<div class="slot-bk" onclick="openBooking(\''+b.id+'\')"><div class="bn">'+esc(clientName(b.clientId))+' <span class="kindtag">'+esc(clientKind(b.clientId))+'</span></div>'
           +'<div class="bm">'+b.time+'〜'+m2t(t2m(b.time)+bkDur(b))+' ・ 対象 '+membersOf(b.clientId).length+'名 ・ 担当 '+(b.staffIds.map(staffName).join("/")||"未設定")+' ・ '+tg+'</div></div>';
+      });
+      startBl.forEach(function(b){
+        h+='<div class="slot-blk"><span>🚫 '+esc(b.label||"ブロック")+'（'+b.time+'〜'+m2t(t2m(b.time)+(Number(b.duration)||sSlot()))+'）</span><button class="del" onclick="delBlock(\''+b.id+'\')">✕</button></div>';
       });
     }
     h+='</div></div>';
   });
   return h;
 }
+function blockForm(ds,time){
+  openModal('<h2>時間をブロック</h2><div class="lead">移動・休憩などで予約を受けられない時間を確保します。</div>'
+    +'<div class="row-2"><div><label>開始</label><input type="time" id="blkTime" value="'+time+'"></div><div><label>長さ（分）</label><input type="number" inputmode="numeric" id="blkDur" value="'+sSlot()+'" step="15"></div></div>'
+    +'<label>種類</label><select id="blkLabel"><option>移動</option><option>休憩</option><option>準備</option><option>その他</option></select>'
+    +'<input type="hidden" id="blkDate" value="'+ds+'">'
+    +'<button class="btn primary" onclick="saveBlock()">ブロックする</button><button class="btn ghost" onclick="closeModal()">キャンセル</button>');
+}
+function saveBlock(){
+  if(!DB.blocks) DB.blocks=[];
+  DB.blocks.push({id:uid(),date:document.getElementById("blkDate").value,time:document.getElementById("blkTime").value,duration:Number(document.getElementById("blkDur").value)||sSlot(),label:document.getElementById("blkLabel").value});
+  saveDB(); closeModal(); render(); toast("ブロックしました");
+}
+function delBlock(id){ DB.blocks=(DB.blocks||[]).filter(function(b){return b.id!==id;}); saveDB(); render(); toast("解除しました"); }
 
 function renderCustomers(){
   var h='<div class="sec-title">顧客先（区分）と 利用者</div>';
@@ -509,7 +532,7 @@ var rc={};  // 受付中の一時状態
 function receptionWizard(preset){
   preset=preset||{};
   rc={ channel:"電話", clientId:"", newClient:false, kind:"個人", staffIds:[],
-       f:{ date:preset.date||ymd(current), time:preset.time||"13:00", dur:sSlot(), menu:"", price:"", travel:"", wish:"", note:"", clName:"", rules:"" } };
+       f:{ date:preset.date||ymd(current), time:preset.time||"13:00", dur:sSlot(), buffer:"", menu:"", price:"", travel:"", wish:"", note:"", clName:"", rules:"" } };
   drawReception();
 }
 function drawReception(){
@@ -544,7 +567,8 @@ function drawReception(){
   }
   // ③ 日程
   h+='<label><span class="stepnum">③</span>日程</label><div class="row-2"><input type="date" id="rcDate" value="'+esc(rc.f.date)+'"><input type="time" id="rcTime" value="'+esc(rc.f.time)+'"></div>'
-    +'<label>所要時間（分・空き枠の計算に使用）</label><input type="number" inputmode="numeric" id="rcDur" value="'+esc(rc.f.dur)+'" step="15" placeholder="60">';
+    +'<div class="row-2"><div><label>所要時間（分）</label><input type="number" inputmode="numeric" id="rcDur" value="'+esc(rc.f.dur)+'" step="15" placeholder="60"></div>'
+    +'<div><label>終了後の移動・休憩（分）</label><input type="number" inputmode="numeric" id="rcBuffer" value="'+esc(rc.f.buffer)+'" step="15" placeholder="0"></div></div>';
   // ④ 担当
   h+='<label><span class="stepnum">④</span>担当（複数可）</label><div class="chips">'+staffChips+'</div>';
   // ⑤ 内容（任意・個人/リピートで便利）
@@ -559,7 +583,7 @@ function drawReception(){
 function rcSet(k,v){ rc[k]=v; rcCapture(); drawReception(); }
 function rcStaff(id){ var i=rc.staffIds.indexOf(id); if(i>=0) rc.staffIds.splice(i,1); else rc.staffIds.push(id); rcCapture(); drawReception(); }
 function rcCapture(){ // 入力中の値を保持（再描画で消えないように）
-  var map={rcDate:"date",rcTime:"time",rcDur:"dur",rcMenu:"menu",rcPrice:"price",rcTravel:"travel",rcWish:"wish",rcNote:"note",rcClName:"clName",rcRules:"rules"};
+  var map={rcDate:"date",rcTime:"time",rcDur:"dur",rcBuffer:"buffer",rcMenu:"menu",rcPrice:"price",rcTravel:"travel",rcWish:"wish",rcNote:"note",rcClName:"clName",rcRules:"rules"};
   Object.keys(map).forEach(function(id){var e=document.getElementById(id); if(e) rc.f[map[id]]=e.value;});
 }
 function rcSearchRun(q){
@@ -591,6 +615,9 @@ function rcConfirm(){
   var b={id:uid(),date:rc.f.date,time:rc.f.time,duration:Number(rc.f.dur)||sSlot(),clientId:clientId,channel:rc.channel,staffIds:rc.staffIds.slice(),
     travel:Number(rc.f.travel)||0,note:rc.f.note||"",wish:rc.f.wish||"",status:"plan"};
   DB.bookings.push(b);
+  // 終了後の移動・休憩を自動ブロック
+  var buf=Number(rc.f.buffer)||0;
+  if(buf>0){ if(!DB.blocks) DB.blocks=[]; DB.blocks.push({id:uid(),date:b.date,time:m2t(t2m(b.time)+(Number(b.duration)||sSlot())),duration:buf,label:"移動"}); }
   // 内容が入っていれば実績の下書きとして保存（個人/リピート向け）
   var menu=(rc.f.menu||"").trim(), price=Number(rc.f.price)||0;
   if(rc.memberId && (menu||price)){ DB.records.push({id:uid(),bookingId:b.id,memberId:rc.memberId,staffId:rc.staffIds[0]||"",menu:menu,amount:price,photoBefore:"",photoAfter:"",paid:false}); }
@@ -619,8 +646,9 @@ function openBooking(bid){
   var h='<h2>'+esc(cl.name)+' <span class="kindtag">'+esc(cl.kind)+'</span></h2><div class="lead">'+b.date+' '+b.time+(b.channel?' ・ 受付 '+esc(b.channel):'')+'</div>';
   if(cl.rules) h+='<div class="rulebox">⚠ ルール：'+esc(cl.rules)+'</div>';
   if(b.wish) h+='<div style="font-size:13px;margin:6px 0">ご希望：'+esc(b.wish)+'</div>';
-  h+='<div class="row-2"><div><label>所要時間（分）</label><input type="number" inputmode="numeric" id="bkDur" value="'+(b.duration||sSlot())+'" step="15"></div>'
-    +'<div><label>出張交通費（円）</label><input type="number" inputmode="numeric" id="bkTravel" value="'+(b.travel||"")+'" placeholder="0"></div></div>';
+  h+='<div class="row-2"><div><label>開始時刻</label><input type="time" id="bkTime" value="'+esc(b.time)+'"></div>'
+    +'<div><label>所要時間（分）</label><input type="number" inputmode="numeric" id="bkDur" value="'+(b.duration||sSlot())+'" step="15"></div></div>'
+    +'<label>出張交通費（円）</label><input type="number" inputmode="numeric" id="bkTravel" value="'+(b.travel||"")+'" placeholder="0">';
   h+='<div style="font-size:13px;color:var(--muted);margin:10px 0 6px">利用者ごとに 施術・金額・担当・写真 を入力</div>'
     +(rows||'<div class="empty">この顧客先に利用者が未登録です。<button class="btn primary" onclick="closeModal();go(\'customers\')">顧客タブで追加</button></div>')
     +(ms.length?'<button class="btn primary" onclick="saveRecords(\''+bid+'\')">完了として保存</button>':'')
@@ -640,6 +668,7 @@ function saveRecords(bid){
     if(amount>0||menu||bf||af){ DB.records.push({id:uid(),bookingId:bid,memberId:mid,staffId:stEl?stEl.value:"",menu:menu,amount:amount,photoBefore:bf||"",photoAfter:af||"",paid:ex?ex.paid:false}); any=true; }
   });
   var b=DB.bookings.find(function(x){return x.id===bid;});
+  var tmEl=document.getElementById("bkTime"); if(tmEl&&tmEl.value) b.time=tmEl.value;
   var tvEl=document.getElementById("bkTravel"); if(tvEl) b.travel=Number(tvEl.value)||0;
   var duEl=document.getElementById("bkDur"); if(duEl) b.duration=Number(duEl.value)||sSlot();
   b.status=(any||b.travel)?"done":"plan";
@@ -762,7 +791,7 @@ function bizForm(){
     +'<div class="sec-title" style="margin-left:0">カレンダー（時間枠）</div>'
     +'<div class="row-2"><div><label>営業開始（時）</label><input type="number" inputmode="numeric" id="bOpen" value="'+sOpen()+'" min="0" max="23"></div>'
     +'<div><label>営業終了（時）</label><input type="number" inputmode="numeric" id="bClose" value="'+sClose()+'" min="1" max="24"></div></div>'
-    +'<label>1枠の長さ（分）</label><select id="bSlot"><option value="30"'+(sSlot()===30?" selected":"")+'>30分</option><option value="60"'+(sSlot()===60?" selected":"")+'>60分</option><option value="90"'+(sSlot()===90?" selected":"")+'>90分</option><option value="120"'+(sSlot()===120?" selected":"")+'>120分</option></select>'
+    +'<label>1枠の長さ（分）</label><select id="bSlot"><option value="15"'+(sSlot()===15?" selected":"")+'>15分</option><option value="30"'+(sSlot()===30?" selected":"")+'>30分</option><option value="60"'+(sSlot()===60?" selected":"")+'>60分</option><option value="90"'+(sSlot()===90?" selected":"")+'>90分</option><option value="120"'+(sSlot()===120?" selected":"")+'>120分</option></select>'
     +'<button class="btn primary" onclick="saveBiz()">保存</button><button class="btn ghost" onclick="closeModal()">キャンセル</button>');
 }
 function saveBiz(){ var v=gv("bName"); if(!v){toast("名称を入力してください");return;}
