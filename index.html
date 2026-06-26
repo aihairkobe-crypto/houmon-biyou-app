@@ -153,6 +153,7 @@
 <nav class="tabs" id="tabs" style="display:none">
   <button data-tab="today" class="on" onclick="go('today')"><span class="ic">📅</span>予約</button>
   <button data-tab="customers" onclick="go('customers')"><span class="ic">👥</span>顧客</button>
+  <button data-tab="map" onclick="go('map')"><span class="ic">📍</span>地図</button>
   <button data-tab="summary" onclick="go('summary')"><span class="ic">📊</span>売上</button>
   <button data-tab="settings" onclick="go('settings')"><span class="ic">⚙️</span>設定</button>
 </nav>
@@ -226,7 +227,7 @@ function shiftDay(n){ current.setDate(current.getDate()+n); render(); }
 function shiftMonth(n){ current.setDate(1); current.setMonth(current.getMonth()+n); render(); }
 function pickDay(dstr){ current=new Date(dstr+"T00:00:00"); render(); }
 function go(t){ tab=t; document.querySelectorAll("nav.tabs button").forEach(function(b){b.classList.toggle("on", b.dataset.tab===t);});
-  document.getElementById("dateNav").style.visibility=(t==="today")?"visible":"hidden"; render(); }
+  document.getElementById("dateNav").style.visibility=(t==="today"||t==="map")?"visible":"hidden"; render(); }
 function toast(m){ var t=document.getElementById("toast"); t.textContent=m; t.classList.add("show"); setTimeout(function(){t.classList.remove("show");},1700); }
 function openModal(h){ document.getElementById("modal").innerHTML=h; document.getElementById("modalBg").classList.add("open"); }
 function closeModal(){ document.getElementById("modalBg").classList.remove("open"); }
@@ -263,6 +264,7 @@ function render(){
   document.getElementById("dLabel").textContent=fmtDate(current);
   if(tab==="today") renderToday();
   else if(tab==="customers") renderCustomers();
+  else if(tab==="map") renderMap();
   else if(tab==="summary") renderSummary();
   else renderSettings();
 }
@@ -386,6 +388,79 @@ function renderSummary(){
 }
 function bars(obj,fn,total){ var keys=Object.keys(obj).sort(function(a,b){return obj[b]-obj[a];}); if(!keys.length) return ''; var max=Math.max.apply(null,keys.map(function(k){return obj[k];}));
   return '<div class="card">'+keys.map(function(k){var p=max?Math.round(obj[k]/max*100):0; return '<div class="sum-bar"><span class="nm">'+esc(fn(k))+'</span><span class="track"><span class="fill" style="width:'+p+'%"></span></span><span class="am">'+yen(obj[k])+'</span></div>';}).join("")+'</div>'; }
+
+/* ============================================================
+   地図（住所の可視化・動線）：Leaflet + OpenStreetMap（無料・APIキー不要）
+   住所→座標はNominatim(OSM)で変換しclientにキャッシュ
+   ============================================================ */
+var _map=null, mapMode="all", _geocoding=false;
+function ensureLeaflet(cb){
+  if(window.L){ cb(); return; }
+  var css=document.createElement("link"); css.rel="stylesheet"; css.href="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.css"; document.head.appendChild(css);
+  var js=document.createElement("script"); js.src="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.js"; js.onload=cb; js.onerror=function(){toast("地図ライブラリの読み込みに失敗（ネット接続を確認）");}; document.head.appendChild(js);
+}
+function clientAddress(cl){
+  if(cl.address) return cl.address;
+  var m=membersOf(cl.id).find(function(x){return x.address;}); // 個人など：利用者の住所を使う
+  return m?m.address:"";
+}
+function todayClientIds(){
+  var ds=ymd(current);
+  return bookingsOfDay(ds).sort(function(a,b){return a.time.localeCompare(b.time);}).map(function(b){return b.clientId;});
+}
+function renderMap(){
+  var withAddr=DB.clients.filter(function(c){return clientAddress(c);});
+  var geocoded=withAddr.filter(function(c){return c.lat!=null;});
+  var pending=withAddr.filter(function(c){return c.lat==null && !c.geoFail;});
+  var h='<div style="display:flex;gap:6px;margin-bottom:10px">'
+    +'<button class="chip'+(mapMode==="all"?" sel":"")+'" onclick="mapSet(\'all\')">全顧客</button>'
+    +'<button class="chip'+(mapMode==="today"?" sel":"")+'" onclick="mapSet(\'today\')">今日の訪問（'+fmtDate(current)+'）</button></div>';
+  h+='<div id="map" style="height:62vh;min-height:320px;border:1px solid var(--line);border-radius:var(--radius);overflow:hidden;background:var(--bg)"></div>';
+  h+='<div style="font-size:12px;color:var(--muted);margin-top:8px" id="mapStatus">登録住所 '+withAddr.length+'件 / 地図化済 '+geocoded.length+'件'+(pending.length?' / 未変換 '+pending.length+'件':'')+'</div>';
+  if(pending.length) h+='<button class="btn primary" onclick="geocodeMissing()">住所を地図化する（'+pending.length+'件）</button>';
+  h+='<div style="font-size:11px;color:var(--hint);margin-top:8px">※ 住所はOpenStreetMapの変換サービスで座標化します。番地まで入れると精度が上がります。今日の訪問は時間順に番号＋ルート線で表示されます。</div>';
+  document.getElementById("view").innerHTML=h;
+  ensureLeaflet(initMap);
+}
+function mapSet(m){ mapMode=m; render(); }
+function initMap(){
+  var el=document.getElementById("map"); if(!el) return;
+  if(_map){ try{_map.remove();}catch(e){} _map=null; }
+  _map=L.map("map",{scrollWheelZoom:true});
+  L.tileLayer("https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png",{maxZoom:19,attribution:"© OpenStreetMap"}).addTo(_map);
+  var list, ordered=false;
+  if(mapMode==="today"){ var ids=todayClientIds(); list=ids.map(function(id){return clientOf(id);}).filter(function(c){return c&&c.lat!=null;}); ordered=true; }
+  else { list=DB.clients.filter(function(c){return c.lat!=null;}); }
+  if(!list.length){ _map.setView([35.0,135.0],9); return; }
+  var pts=[], i=0;
+  list.forEach(function(c){
+    i++;
+    var icon = ordered ? L.divIcon({className:"",html:'<div style="background:#1d9e75;color:#fff;width:24px;height:24px;border-radius:50%;display:flex;align-items:center;justify-content:center;font-size:12px;font-weight:600;border:2px solid #fff;box-shadow:0 1px 3px rgba(0,0,0,.4)">'+i+'</div>',iconSize:[24,24],iconAnchor:[12,12]}) : null;
+    var mk = icon? L.marker([c.lat,c.lng],{icon:icon}) : L.marker([c.lat,c.lng]);
+    var bk = bookingsOfDay(ymd(current)).find(function(b){return b.clientId===c.id;});
+    mk.addTo(_map).bindPopup('<b>'+esc(c.name)+'</b>（'+esc(c.kind)+'）<br>'+esc(clientAddress(c))+(bk?'<br>本日 '+bk.time+'〜':''));
+    pts.push([c.lat,c.lng]);
+  });
+  if(ordered && pts.length>1) L.polyline(pts,{color:"#1d9e75",weight:3,opacity:.7,dashArray:"6 6"}).addTo(_map);
+  if(pts.length===1) _map.setView(pts[0],14); else _map.fitBounds(pts,{padding:[30,30]});
+  setTimeout(function(){ if(_map) _map.invalidateSize(); },200);
+}
+function geocodeMissing(){
+  if(_geocoding) return; _geocoding=true;
+  var list=DB.clients.filter(function(c){return clientAddress(c) && c.lat==null && !c.geoFail; });
+  var idx=0, ok=0;
+  function step(){
+    if(idx>=list.length){ _geocoding=false; saveDB(); toast("地図化 "+ok+"件 完了"); render(); return; }
+    var c=list[idx]; var st=document.getElementById("mapStatus"); if(st) st.textContent="変換中… "+(idx+1)+"/"+list.length+"（"+c.name+"）";
+    var q=encodeURIComponent(clientAddress(c));
+    fetch("https://nominatim.openstreetmap.org/search?format=json&limit=1&countrycodes=jp&accept-language=ja&q="+q)
+      .then(function(r){return r.json();})
+      .then(function(a){ if(a&&a[0]){ c.lat=parseFloat(a[0].lat); c.lng=parseFloat(a[0].lon); ok++; } else { c.geoFail=true; } })
+      .catch(function(){ c.geoFail=true; })
+      .then(function(){ idx++; setTimeout(step,1100); }); // Nominatim礼儀：1秒以上あける
+  }
+  step();
+}
 
 function renderSettings(){
   var modeTxt = DB.settings.mode==="org"?"組織（スタッフ管理あり）":"フリーランス（シンプル）";
@@ -616,7 +691,7 @@ function saveClient(clId){
   var name=document.getElementById("clName").value.trim(); if(!name){toast("名称を入力してください");return;}
   var data={kind:document.getElementById("clKind").value,name:name,address:document.getElementById("clAddr").value,phone:document.getElementById("clPhone").value,
     billing:document.getElementById("clBill").value,payMethod:document.getElementById("clPay").value,rules:document.getElementById("clRules").value};
-  if(clId){ var c=clientOf(clId); for(var k in data) c[k]=data[k]; }
+  if(clId){ var c=clientOf(clId); if(c.address!==data.address){ c.lat=null; c.lng=null; c.geoFail=false; } for(var k in data) c[k]=data[k]; } // 住所変更で座標キャッシュをクリア
   else { data.id=uid(); data.note=""; DB.clients.push(data); }
   saveDB(); closeModal(); go("customers"); toast(clId?"更新しました":"顧客先を追加しました");
 }
