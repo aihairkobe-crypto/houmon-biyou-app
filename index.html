@@ -558,7 +558,7 @@ var rc={};  // 受付中の一時状態
 function receptionWizard(preset){
   preset=preset||{};
   rc={ channel:"電話", clientId:"", newClient:false, kind:"個人", staffIds:[],
-       f:{ date:preset.date||ymd(current), time:preset.time||"13:00", dur:sSlot(), buffer:"", menu:"", price:"", travel:"", wish:"", note:"", clName:"", addr:"", rules:"" } };
+       f:{ date:preset.date||ymd(current), time:preset.time||"13:00", dur:sSlot(), buffer:"", menu:"", price:"", travel:"", wish:"", note:"", clName:"", addr:"", phone:"", email:"", rules:"" } };
   drawReception();
 }
 function drawReception(){
@@ -589,6 +589,8 @@ function drawReception(){
       +'<div style="font-size:12px;color:var(--muted);margin-top:6px">'+(rc.kind==="個人"?"個人：お客様ご本人を1名登録（家族は後で追加可）":rc.kind==="病院"?"病院：施設としてまとめて登録＋ルール欄あり":rc.kind==="施設"?"施設：まとめて多人数。利用者は後で追加":"その他")+'</div>'
       +'<label>'+(rc.kind==="個人"?"お名前":"施設・病院名")+'</label><input id="rcClName" value="'+esc(rc.f.clName)+'" placeholder="'+(rc.kind==="個人"?"山田 花子":"○○園 / ○○病院")+'">'
       +'<label>住所（地図に表示・動線に使用）</label><input id="rcAddr" value="'+esc(rc.f.addr)+'" placeholder="神戸市中央区○○1-2-3">'
+      +'<div class="row-2"><div><label>電話番号</label><input type="tel" id="rcPhone" value="'+esc(rc.f.phone)+'" placeholder="090-0000-0000"></div>'
+      +'<div><label>メール</label><input type="email" id="rcEmail" value="'+esc(rc.f.email)+'" placeholder="例：a@example.com"></div></div>'
       +(rc.kind==="個人"?'':'<label>ルール・注意（任意）</label><input id="rcRules" value="'+esc(rc.f.rules)+'" placeholder="受付記帳・検温・指定エリア 等">')
       +'</div>';
   }
@@ -610,7 +612,7 @@ function drawReception(){
 function rcSet(k,v){ rc[k]=v; rcCapture(); drawReception(); }
 function rcStaff(id){ var i=rc.staffIds.indexOf(id); if(i>=0) rc.staffIds.splice(i,1); else rc.staffIds.push(id); rcCapture(); drawReception(); }
 function rcCapture(){ // 入力中の値を保持（再描画で消えないように）
-  var map={rcDate:"date",rcTime:"time",rcDur:"dur",rcBuffer:"buffer",rcMenu:"menu",rcPrice:"price",rcTravel:"travel",rcWish:"wish",rcNote:"note",rcClName:"clName",rcAddr:"addr",rcRules:"rules"};
+  var map={rcDate:"date",rcTime:"time",rcDur:"dur",rcBuffer:"buffer",rcMenu:"menu",rcPrice:"price",rcTravel:"travel",rcWish:"wish",rcNote:"note",rcClName:"clName",rcAddr:"addr",rcPhone:"phone",rcEmail:"email",rcRules:"rules"};
   Object.keys(map).forEach(function(id){var e=document.getElementById(id); if(e) rc.f[map[id]]=e.value;});
 }
 function rcSearchRun(q){
@@ -633,7 +635,7 @@ function rcConfirm(){
     var nm=(rc.f.clName||"").trim();
     if(!nm){toast((rc.kind==="個人"?"お名前":"施設・病院名")+"を入力してください");return;}
     clientId=uid();
-    DB.clients.push({id:clientId,kind:rc.kind,name:nm,address:(rc.f.addr||"").trim(),phone:"",billing:(rc.kind==="個人"?"個人":"施設一括"),payMethod:(rc.kind==="個人"?"現金":"施設一括"),rules:rc.f.rules||"",note:""});
+    DB.clients.push({id:clientId,kind:rc.kind,name:nm,address:(rc.f.addr||"").trim(),phone:(rc.f.phone||"").trim(),email:(rc.f.email||"").trim(),billing:(rc.kind==="個人"?"個人":"施設一括"),payMethod:(rc.kind==="個人"?"現金":"施設一括"),rules:rc.f.rules||"",note:""});
     if(rc.kind==="個人"){ // 本人を利用者として登録
       var mid=uid(); DB.members.push({id:mid,clientId:clientId,name:nm,menu:(rc.f.menu||"").trim(),price:Number(rc.f.price)||0,staffId:rc.staffIds[0]||""}); rc.memberId=mid;
     }
@@ -737,7 +739,7 @@ function clientForm(clId){
     +'<label>区分</label><select id="clKind">'+kindOpts(c.kind)+'</select>'
     +'<label>名称（個人ならお名前）</label><input id="clName" value="'+esc(c.name||"")+'" placeholder="○○園 / 山田 花子">'
     +'<label>住所</label><input id="clAddr" value="'+esc(c.address||"")+'">'
-    +'<label>電話</label><input id="clPhone" type="tel" value="'+esc(c.phone||"")+'">'
+    +'<div class="row-2"><div><label>電話</label><input id="clPhone" type="tel" value="'+esc(c.phone||"")+'"></div><div><label>メール</label><input id="clEmail" type="email" value="'+esc(c.email||"")+'"></div></div>'
     +'<div class="row-2"><div><label>請求先</label><select id="clBill">'+billOpts(c.billing)+'</select></div><div><label>支払方法</label><select id="clPay">'+payOpts(c.payMethod)+'</select></div></div>'
     +'<label>ルール・注意（病院・施設で重要）</label><textarea id="clRules" placeholder="受付記帳・検温・指定エリア・面会時間 等">'+esc(c.rules||"")+'</textarea>'
     +'<button class="btn primary" onclick="saveClient('+(clId?'\''+clId+'\'':'null')+')">保存</button>'
@@ -746,7 +748,7 @@ function clientForm(clId){
 }
 function saveClient(clId){
   var name=document.getElementById("clName").value.trim(); if(!name){toast("名称を入力してください");return;}
-  var data={kind:document.getElementById("clKind").value,name:name,address:document.getElementById("clAddr").value,phone:document.getElementById("clPhone").value,
+  var data={kind:document.getElementById("clKind").value,name:name,address:document.getElementById("clAddr").value,phone:document.getElementById("clPhone").value,email:document.getElementById("clEmail").value,
     billing:document.getElementById("clBill").value,payMethod:document.getElementById("clPay").value,rules:document.getElementById("clRules").value};
   if(clId){ var c=clientOf(clId); if(c.address!==data.address){ c.lat=null; c.lng=null; c.geoFail=false; } for(var k in data) c[k]=data[k]; } // 住所変更で座標キャッシュをクリア
   else { data.id=uid(); data.note=""; DB.clients.push(data); }
@@ -782,7 +784,7 @@ function memberForm(clId,mid){
     +'<label>お名前</label><input id="mName" value="'+esc(m.name||"")+'">'
     +'<label>フリガナ</label><input id="mKana" value="'+esc(m.kana||"")+'">'
     +'<div class="row-2"><div><label>性別</label><select id="mGender">'+genderOpts(m.gender)+'</select></div><div><label>生年月日 <span style="color:var(--accent-text)">'+ageTxt+'</span></label><input type="date" id="mBirth" value="'+esc(m.birth||"")+'"></div></div>'
-    +'<div class="sec-title">連絡先</div><label>電話</label><input type="tel" id="mPhone" value="'+esc(m.phone||"")+'"><label>住所</label><input id="mAddr" value="'+esc(m.address||"")+'">'
+    +'<div class="sec-title">連絡先</div><div class="row-2"><div><label>電話</label><input type="tel" id="mPhone" value="'+esc(m.phone||"")+'"></div><div><label>メール</label><input type="email" id="mEmail" value="'+esc(m.email||"")+'"></div></div><label>住所</label><input id="mAddr" value="'+esc(m.address||"")+'">'
     +'<div class="sec-title">担当・周期</div><label>担当（半固定：通常この人。予約ごと変更可）</label><select id="mStaff">'+staffOptsHtml(m.staffId)+'</select>'
     +'<div class="row-2"><div><label>来店周期（週）</label><input type="number" inputmode="numeric" id="mCycle" value="'+(m.cycleWeeks||"")+'" placeholder="4"></div><div><label>&nbsp;</label><div style="font-size:13px;padding:11px 0;color:var(--accent-text)">'+(due?"次回目安 "+due:'<span style="color:var(--hint)">履歴で表示</span>')+'</div></div></div>'
     +'<div class="sec-title">施術（受付・入力時に自動表示）</div><label>定番メニュー</label><input id="mMenu" value="'+esc(m.menu||"")+'"><label>通常価格（円）</label><input type="number" inputmode="numeric" id="mPrice" value="'+(m.price||"")+'">'
@@ -799,7 +801,7 @@ function memberForm(clId,mid){
 function gv(id){var e=document.getElementById(id);return e?e.value.trim():"";}
 function saveMember(clId,mid){
   var name=gv("mName"); if(!name){toast("お名前を入力してください");return;}
-  var data={name:name,kana:gv("mKana"),gender:gv("mGender"),birth:gv("mBirth"),phone:gv("mPhone"),address:gv("mAddr"),staffId:gv("mStaff"),
+  var data={name:name,kana:gv("mKana"),gender:gv("mGender"),birth:gv("mBirth"),phone:gv("mPhone"),email:gv("mEmail"),address:gv("mAddr"),staffId:gv("mStaff"),
     cycleWeeks:Number(gv("mCycle"))||0,menu:gv("mMenu"),price:Number(gv("mPrice"))||0,consent:gv("mConsent"),care:gv("mCare"),emergency:gv("mEmg"),note:gv("mNote")};
   if(photoBuf.mem!==undefined) data.photo=photoBuf.mem;
   if(mid){ var m=memberOf(mid); for(var k in data) m[k]=data[k]; }
