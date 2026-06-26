@@ -391,6 +391,11 @@ function renderCustomers(){
   DB.clients.forEach(function(cl){
     var ms=membersOf(cl.id);
     h+='<div class="client-block"><div class="fn"><span>'+esc(cl.name)+' <span class="kindtag">'+esc(cl.kind)+'</span></span><button class="edit" onclick="clientForm(\''+cl.id+'\')">編集</button></div>';
+    var ci=[];
+    if(cl.address) ci.push((cl.lat!=null?'📍 ':'')+esc(cl.address));
+    if(cl.phone) ci.push('☎ '+esc(cl.phone));
+    if(cl.email) ci.push('✉ '+esc(cl.email));
+    if(ci.length) h+='<div style="font-size:12px;color:var(--muted);margin-top:3px;line-height:1.7">'+ci.join('　・　')+'</div>';
     if(cl.rules) h+='<div class="rulebox">⚠ ルール：'+esc(cl.rules)+'</div>';
     ms.forEach(function(m){
       var sub=[]; if(m.staffId) sub.push("担当 "+esc(staffName(m.staffId))); if(m.menu) sub.push(esc(m.menu)+(m.price?" "+yen(m.price):"")); else if(m.price) sub.push(yen(m.price));
