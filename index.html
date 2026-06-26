@@ -452,7 +452,8 @@ function todayClientIds(){
 function renderMap(){
   var withAddr=DB.clients.filter(function(c){return clientAddress(c);});
   var geocoded=withAddr.filter(function(c){return c.lat!=null;});
-  var pending=withAddr.filter(function(c){return c.lat==null && !c.geoFail;});
+  var notYet=withAddr.filter(function(c){return c.lat==null;});      // 未変換＋失敗を含む
+  var failed=withAddr.filter(function(c){return c.lat==null && c.geoFail;});
   var h='<div style="display:flex;gap:6px;margin-bottom:8px">'
     +'<button class="chip'+(mapMode==="all"?" sel":"")+'" onclick="mapSet(\'all\')">全顧客</button>'
     +'<button class="chip'+(mapMode==="today"?" sel":"")+'" onclick="mapSet(\'today\')">今日の訪問（'+fmtDate(current)+'）</button></div>';
@@ -461,9 +462,10 @@ function renderMap(){
     +'<button class="chip'+(mapStyle==="light"?" sel":"")+'" onclick="mapSetStyle(\'light\')">シンプル</button>'
     +'<button class="chip'+(mapStyle==="osm"?" sel":"")+'" onclick="mapSetStyle(\'osm\')">標準</button></div>';
   h+='<div id="map" style="height:64vh;min-height:340px;border:1px solid var(--line);border-radius:var(--radius);overflow:hidden;background:var(--bg)"></div>';
-  h+='<div style="font-size:12px;color:var(--muted);margin-top:8px" id="mapStatus">登録住所 '+withAddr.length+'件 / 地図化済 '+geocoded.length+'件'+(pending.length?' / 未変換 '+pending.length+'件':'')+'</div>';
-  if(pending.length) h+='<button class="btn primary" onclick="geocodeMissing()">住所を地図化する（'+pending.length+'件）</button>';
-  h+='<div style="font-size:11px;color:var(--hint);margin-top:8px">※ 住所はOpenStreetMapの変換サービスで座標化します。番地まで入れると精度が上がります。今日の訪問は時間順に番号＋ルート線で表示されます。</div>';
+  h+='<div style="font-size:12px;color:var(--muted);margin-top:8px" id="mapStatus">登録住所 '+withAddr.length+'件 / 地図化済 '+geocoded.length+'件'+(notYet.length?' / 未変換 '+notYet.length+'件':'')+'</div>';
+  if(notYet.length) h+='<button class="btn primary" onclick="geocodeMissing()">住所を地図化する（'+notYet.length+'件）</button>';
+  if(failed.length) h+='<div style="font-size:12px;color:var(--muted);margin-top:6px">'+failed.map(function(c){return esc(c.name);}).join("、")+' は地図に出せませんでした（住所が大まかすぎる等）。市区町村まで入れると表示されます。</div>';
+  h+='<div style="font-size:11px;color:var(--hint);margin-top:8px">※ 住所はOpenStreetMapの変換サービスで座標化します。番地まで入れると精度が上がります。ピンは「全顧客」で全件、「今日の訪問」はその日の訪問先のみ表示されます。</div>';
   document.getElementById("view").innerHTML=h;
   ensureLeaflet(initMap);
 }
@@ -494,19 +496,35 @@ function initMap(){
   if(pts.length===1) _map.setView(pts[0],15); else _map.fitBounds(pts,{padding:[40,40]});
   setTimeout(function(){ if(_map) _map.invalidateSize(); },200);
 }
+/* 住所を段階的にゆるめる：番地そのまま → 市区町村 → 都道府県。伏字・全角空白も吸収 */
+function cleanAddr(a){ return (a||"").replace(/[○〇◯＊*×△▲▽▼□■◇◆　]+/g," ").replace(/\s+/g," ").trim(); }
+function coarseAddr(a){ var m=cleanAddr(a).match(/^.*?[市区町村]/); return m? m[0].trim() : ""; }
+function prefAddr(a){ var m=cleanAddr(a).match(/^.*?[都道府県]/); return m? m[0].trim() : ""; }
+function geoAttempts(addr){ var l=[cleanAddr(addr),coarseAddr(addr),prefAddr(addr)].filter(Boolean); return l.filter(function(v,i){return l.indexOf(v)===i;}); }
+function geocodeOne(q){
+  return fetch("https://nominatim.openstreetmap.org/search?format=json&limit=1&countrycodes=jp&accept-language=ja&q="+encodeURIComponent(q))
+    .then(function(r){return r.json();}).then(function(a){ return (a&&a[0])? {lat:parseFloat(a[0].lat),lng:parseFloat(a[0].lon)} : null; })
+    .catch(function(){ return null; });
+}
+/* 1件を段階フォールバックで座標化（どれかで必ず立てる） */
+function geocodeClient(c){
+  var tries=geoAttempts(clientAddress(c)), i=0;
+  function next(){
+    if(i>=tries.length){ c.geoFail=true; return Promise.resolve(false); }
+    return geocodeOne(tries[i++]).then(function(r){ if(r){ c.lat=r.lat; c.lng=r.lng; c.geoFail=false; return true; } return next(); });
+  }
+  return next();
+}
+/* 保存時に裏で自動座標化（ユーザー操作不要） */
+function autoGeocode(c){ if(!c||!clientAddress(c)||c.lat!=null) return; geocodeClient(c).then(function(ok){ if(ok){ saveDB(); if(tab==="map") render(); } }); }
 function geocodeMissing(){
   if(_geocoding) return; _geocoding=true;
-  var list=DB.clients.filter(function(c){return clientAddress(c) && c.lat==null && !c.geoFail; });
+  var list=DB.clients.filter(function(c){return clientAddress(c) && c.lat==null; }); // 失敗分も再試行
   var idx=0, ok=0;
   function step(){
-    if(idx>=list.length){ _geocoding=false; saveDB(); toast("地図化 "+ok+"件 完了"); render(); return; }
-    var c=list[idx]; var st=document.getElementById("mapStatus"); if(st) st.textContent="変換中… "+(idx+1)+"/"+list.length+"（"+c.name+"）";
-    var q=encodeURIComponent(clientAddress(c));
-    fetch("https://nominatim.openstreetmap.org/search?format=json&limit=1&countrycodes=jp&accept-language=ja&q="+q)
-      .then(function(r){return r.json();})
-      .then(function(a){ if(a&&a[0]){ c.lat=parseFloat(a[0].lat); c.lng=parseFloat(a[0].lon); ok++; } else { c.geoFail=true; } })
-      .catch(function(){ c.geoFail=true; })
-      .then(function(){ idx++; setTimeout(step,1100); }); // Nominatim礼儀：1秒以上あける
+    if(idx>=list.length){ _geocoding=false; saveDB(); toast("地図に反映しました（"+ok+"件）"); render(); return; }
+    var c=list[idx]; var st=document.getElementById("mapStatus"); if(st) st.textContent="反映中… "+(idx+1)+"/"+list.length;
+    geocodeClient(c).then(function(r){ if(r) ok++; idx++; setTimeout(step,1100); }); // Nominatim礼儀：1秒以上あける
   }
   step();
 }
@@ -651,7 +669,7 @@ function rcConfirm(){
   // 内容が入っていれば実績の下書きとして保存（個人/リピート向け）
   var menu=(rc.f.menu||"").trim(), price=Number(rc.f.price)||0;
   if(rc.memberId && (menu||price)){ DB.records.push({id:uid(),bookingId:b.id,memberId:rc.memberId,staffId:rc.staffIds[0]||"",menu:menu,amount:price,photoBefore:"",photoAfter:"",paid:false}); }
-  if(saveDB()){ closeModal(); current=new Date(b.date+"T00:00:00"); go("today"); toast("予約を受け付けました"); }
+  if(saveDB()){ closeModal(); current=new Date(b.date+"T00:00:00"); go("today"); toast("予約を受け付けました"); autoGeocode(clientOf(clientId)); }
 }
 
 /* ============================================================
@@ -751,9 +769,11 @@ function saveClient(clId){
   var name=document.getElementById("clName").value.trim(); if(!name){toast("名称を入力してください");return;}
   var data={kind:document.getElementById("clKind").value,name:name,address:document.getElementById("clAddr").value,phone:document.getElementById("clPhone").value,email:document.getElementById("clEmail").value,
     billing:document.getElementById("clBill").value,payMethod:document.getElementById("clPay").value,rules:document.getElementById("clRules").value};
-  if(clId){ var c=clientOf(clId); if(c.address!==data.address){ c.lat=null; c.lng=null; c.geoFail=false; } for(var k in data) c[k]=data[k]; } // 住所変更で座標キャッシュをクリア
-  else { data.id=uid(); data.note=""; DB.clients.push(data); }
+  var saved;
+  if(clId){ saved=clientOf(clId); if(saved.address!==data.address){ saved.lat=null; saved.lng=null; saved.geoFail=false; } for(var k in data) saved[k]=data[k]; } // 住所変更で座標キャッシュをクリア
+  else { data.id=uid(); data.note=""; DB.clients.push(data); saved=data; }
   saveDB(); closeModal(); go("customers"); toast(clId?"更新しました":"顧客先を追加しました");
+  autoGeocode(saved); // 住所があれば裏で自動的に地図化
 }
 function delClient(clId){
   if(confirm("この顧客先と、利用者・予約もすべて削除します。よろしいですか？")){
