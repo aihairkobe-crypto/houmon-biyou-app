@@ -501,22 +501,45 @@ function initMap(){
   if(pts.length===1) _map.setView(pts[0],15); else _map.fitBounds(pts,{padding:[40,40]});
   setTimeout(function(){ if(_map) _map.invalidateSize(); },200);
 }
-/* 住所を段階的にゆるめる：番地そのまま → 市区町村 → 都道府県。伏字・全角空白も吸収 */
+/* 伏字・全角空白を吸収 */
 function cleanAddr(a){ return (a||"").replace(/[○〇◯＊*×△▲▽▼□■◇◆　]+/g," ").replace(/\s+/g," ").trim(); }
-function coarseAddr(a){ var m=cleanAddr(a).match(/^.*?[市区町村]/); return m? m[0].trim() : ""; }
-function prefAddr(a){ var m=cleanAddr(a).match(/^.*?[都道府県]/); return m? m[0].trim() : ""; }
-function geoAttempts(addr){ var l=[cleanAddr(addr),coarseAddr(addr),prefAddr(addr)].filter(Boolean); return l.filter(function(v,i){return l.indexOf(v)===i;}); }
+/* 都道府県＋市＋区まで抽出（政令市の区も保持＝北区を中央区に落とさない） */
+function adminAddr(a){
+  a=cleanAddr(a);
+  var pref=(a.match(/^.{2,4}?[都道府県]/)||[""])[0];
+  var rest=a.slice(pref.length);
+  var city=(rest.match(/^.*?[市郡]/)||[""])[0];
+  var after=rest.slice(city.length);
+  var ward=(city.slice(-1)==="市")? (after.match(/^.*?区/)||[""])[0] : (rest.match(/^.*?区/)||[""])[0];
+  return { ward:(pref+city+ward), city:(pref+city||pref+(rest.match(/^.*?区/)||[""])[0]), pref:pref };
+}
+/* 段階フォールバック：番地そのまま → 末尾(部屋/号/番地)を順に削る → 市＋区 → 市 → 都道府県 */
+function geoAttempts(addr){
+  var a=cleanAddr(addr); if(!a) return [];
+  var set=[a], cur=a, g=0;
+  while(g++<6){
+    var nx=cur.replace(/[\s,，、]*([-‐－ｰ]\s*)?\d+\s*(号室|号館|号|室|Ｆ|F|階|丁目|番地|番)?\s*$/,"").trim();
+    if(nx && nx!==cur && nx.length>=3){ set.push(nx); cur=nx; } else break;
+  }
+  var ad=adminAddr(a);
+  [ad.ward, ad.city, ad.pref].forEach(function(v){ if(v) set.push(v); });
+  return set.filter(function(v,i){ return v && set.indexOf(v)===i; });
+}
 function geocodeOne(q){
   return fetch("https://nominatim.openstreetmap.org/search?format=json&limit=1&countrycodes=jp&accept-language=ja&q="+encodeURIComponent(q))
     .then(function(r){return r.json();}).then(function(a){ return (a&&a[0])? {lat:parseFloat(a[0].lat),lng:parseFloat(a[0].lon)} : null; })
     .catch(function(){ return null; });
 }
-/* 1件を段階フォールバックで座標化（どれかで必ず立てる） */
+/* 1件を段階フォールバックで座標化。full以外で当たったら geoApprox=true（おおよそ） */
 function geocodeClient(c){
   var tries=geoAttempts(clientAddress(c)), i=0;
   function next(){
     if(i>=tries.length){ c.geoFail=true; return Promise.resolve(false); }
-    return geocodeOne(tries[i++]).then(function(r){ if(r){ c.lat=r.lat; c.lng=r.lng; c.geoFail=false; return true; } return next(); });
+    var used=i; i++;
+    return geocodeOne(tries[used]).then(function(r){
+      if(r){ c.lat=r.lat; c.lng=r.lng; c.geoFail=false; c.geoApprox=(used>0); return true; }
+      return next();
+    });
   }
   return next();
 }
