@@ -61,6 +61,8 @@
   .slot-bk .bn{font-weight:600; font-size:14px;}
   .slot-bk .bm{font-size:12px; color:var(--muted);}
   .slot-cont{border-left:3px solid var(--accent-soft); padding:6px 12px; color:var(--hint); font-size:12px;}
+  .maplabel{background:rgba(255,255,255,.92) !important; border:1px solid var(--line) !important; border-radius:6px !important; box-shadow:0 1px 3px rgba(0,0,0,.18) !important; font-size:12px !important; font-weight:500; color:#1f2624 !important; padding:2px 7px !important;}
+  .maplabel::before{display:none !important;}
   .slot-blk{background:#f1efe8; border:1px dashed #b4b2a9; border-radius:var(--radius-sm); padding:9px 12px; font-size:13px; color:#5f5e5a; display:flex; justify-content:space-between; align-items:center;}
   .slot-blk .del{background:none; border:none; color:var(--hint); font-size:16px; padding:2px 6px;}
 
@@ -426,7 +428,13 @@ function bars(obj,fn,total){ var keys=Object.keys(obj).sort(function(a,b){return
    地図（住所の可視化・動線）：Leaflet + OpenStreetMap（無料・APIキー不要）
    住所→座標はNominatim(OSM)で変換しclientにキャッシュ
    ============================================================ */
-var _map=null, mapMode="all", _geocoding=false;
+var _map=null, mapMode="all", mapStyle="voyager", _geocoding=false;
+var MAP_TILES={
+  voyager:{url:"https://{s}.basemaps.cartocdn.com/rastertiles/voyager/{z}/{x}/{y}{r}.png", attr:"© OpenStreetMap © CARTO", sub:"abcd", max:20},
+  light:{url:"https://{s}.basemaps.cartocdn.com/light_all/{z}/{x}/{y}{r}.png", attr:"© OpenStreetMap © CARTO", sub:"abcd", max:20},
+  osm:{url:"https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png", attr:"© OpenStreetMap", sub:"abc", max:19}
+};
+function mapSetStyle(s){ mapStyle=s; render(); }
 function ensureLeaflet(cb){
   if(window.L){ cb(); return; }
   var css=document.createElement("link"); css.rel="stylesheet"; css.href="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.css"; document.head.appendChild(css);
@@ -445,10 +453,14 @@ function renderMap(){
   var withAddr=DB.clients.filter(function(c){return clientAddress(c);});
   var geocoded=withAddr.filter(function(c){return c.lat!=null;});
   var pending=withAddr.filter(function(c){return c.lat==null && !c.geoFail;});
-  var h='<div style="display:flex;gap:6px;margin-bottom:10px">'
+  var h='<div style="display:flex;gap:6px;margin-bottom:8px">'
     +'<button class="chip'+(mapMode==="all"?" sel":"")+'" onclick="mapSet(\'all\')">全顧客</button>'
     +'<button class="chip'+(mapMode==="today"?" sel":"")+'" onclick="mapSet(\'today\')">今日の訪問（'+fmtDate(current)+'）</button></div>';
-  h+='<div id="map" style="height:62vh;min-height:320px;border:1px solid var(--line);border-radius:var(--radius);overflow:hidden;background:var(--bg)"></div>';
+  h+='<div style="display:flex;gap:6px;margin-bottom:10px;font-size:13px"><span style="color:var(--muted);align-self:center;font-size:12px">地図：</span>'
+    +'<button class="chip'+(mapStyle==="voyager"?" sel":"")+'" onclick="mapSetStyle(\'voyager\')">見やすい</button>'
+    +'<button class="chip'+(mapStyle==="light"?" sel":"")+'" onclick="mapSetStyle(\'light\')">シンプル</button>'
+    +'<button class="chip'+(mapStyle==="osm"?" sel":"")+'" onclick="mapSetStyle(\'osm\')">標準</button></div>';
+  h+='<div id="map" style="height:64vh;min-height:340px;border:1px solid var(--line);border-radius:var(--radius);overflow:hidden;background:var(--bg)"></div>';
   h+='<div style="font-size:12px;color:var(--muted);margin-top:8px" id="mapStatus">登録住所 '+withAddr.length+'件 / 地図化済 '+geocoded.length+'件'+(pending.length?' / 未変換 '+pending.length+'件':'')+'</div>';
   if(pending.length) h+='<button class="btn primary" onclick="geocodeMissing()">住所を地図化する（'+pending.length+'件）</button>';
   h+='<div style="font-size:11px;color:var(--hint);margin-top:8px">※ 住所はOpenStreetMapの変換サービスで座標化します。番地まで入れると精度が上がります。今日の訪問は時間順に番号＋ルート線で表示されます。</div>';
@@ -460,22 +472,26 @@ function initMap(){
   var el=document.getElementById("map"); if(!el) return;
   if(_map){ try{_map.remove();}catch(e){} _map=null; }
   _map=L.map("map",{scrollWheelZoom:true});
-  L.tileLayer("https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png",{maxZoom:19,attribution:"© OpenStreetMap"}).addTo(_map);
+  var tl=MAP_TILES[mapStyle]||MAP_TILES.voyager;
+  L.tileLayer(tl.url,{maxZoom:tl.max,subdomains:tl.sub,attribution:tl.attr}).addTo(_map);
   var list, ordered=false;
   if(mapMode==="today"){ var ids=todayClientIds(); list=ids.map(function(id){return clientOf(id);}).filter(function(c){return c&&c.lat!=null;}); ordered=true; }
   else { list=DB.clients.filter(function(c){return c.lat!=null;}); }
   if(!list.length){ _map.setView([35.0,135.0],9); return; }
-  var pts=[], i=0;
+  var pts=[], i=0, label=ordered || list.length<=14; // ピンが少なければ名前ラベルを常時表示
   list.forEach(function(c){
     i++;
-    var icon = ordered ? L.divIcon({className:"",html:'<div style="background:#1d9e75;color:#fff;width:24px;height:24px;border-radius:50%;display:flex;align-items:center;justify-content:center;font-size:12px;font-weight:600;border:2px solid #fff;box-shadow:0 1px 3px rgba(0,0,0,.4)">'+i+'</div>',iconSize:[24,24],iconAnchor:[12,12]}) : null;
-    var mk = icon? L.marker([c.lat,c.lng],{icon:icon}) : L.marker([c.lat,c.lng]);
+    var color = c.kind==="個人"?"#185fa5":c.kind==="病院"?"#a32d2d":"#1d9e75";
+    var inner = ordered? i : "";
+    var icon = L.divIcon({className:"",html:'<div style="background:'+color+';color:#fff;width:26px;height:26px;border-radius:50% 50% 50% 0;transform:rotate(-45deg);display:flex;align-items:center;justify-content:center;border:2px solid #fff;box-shadow:0 1px 4px rgba(0,0,0,.4)"><span style="transform:rotate(45deg);font-size:12px;font-weight:600">'+inner+'</span></div>',iconSize:[26,26],iconAnchor:[13,24],popupAnchor:[0,-22]});
+    var mk = L.marker([c.lat,c.lng],{icon:icon});
     var bk = bookingsOfDay(ymd(current)).find(function(b){return b.clientId===c.id;});
     mk.addTo(_map).bindPopup('<b>'+esc(c.name)+'</b>（'+esc(c.kind)+'）<br>'+esc(clientAddress(c))+(bk?'<br>本日 '+bk.time+'〜':''));
+    if(label) mk.bindTooltip((ordered?i+'. ':'')+esc(c.name),{permanent:true,direction:"right",offset:[8,-8],className:"maplabel"});
     pts.push([c.lat,c.lng]);
   });
-  if(ordered && pts.length>1) L.polyline(pts,{color:"#1d9e75",weight:3,opacity:.7,dashArray:"6 6"}).addTo(_map);
-  if(pts.length===1) _map.setView(pts[0],14); else _map.fitBounds(pts,{padding:[30,30]});
+  if(ordered && pts.length>1) L.polyline(pts,{color:"#1d9e75",weight:4,opacity:.8}).addTo(_map);
+  if(pts.length===1) _map.setView(pts[0],15); else _map.fitBounds(pts,{padding:[40,40]});
   setTimeout(function(){ if(_map) _map.invalidateSize(); },200);
 }
 function geocodeMissing(){
@@ -542,7 +558,7 @@ var rc={};  // 受付中の一時状態
 function receptionWizard(preset){
   preset=preset||{};
   rc={ channel:"電話", clientId:"", newClient:false, kind:"個人", staffIds:[],
-       f:{ date:preset.date||ymd(current), time:preset.time||"13:00", dur:sSlot(), buffer:"", menu:"", price:"", travel:"", wish:"", note:"", clName:"", rules:"" } };
+       f:{ date:preset.date||ymd(current), time:preset.time||"13:00", dur:sSlot(), buffer:"", menu:"", price:"", travel:"", wish:"", note:"", clName:"", addr:"", rules:"" } };
   drawReception();
 }
 function drawReception(){
@@ -572,6 +588,7 @@ function drawReception(){
       +'<label style="margin-top:0">区分</label><div class="chips">'+kindChips+'</div>'
       +'<div style="font-size:12px;color:var(--muted);margin-top:6px">'+(rc.kind==="個人"?"個人：お客様ご本人を1名登録（家族は後で追加可）":rc.kind==="病院"?"病院：施設としてまとめて登録＋ルール欄あり":rc.kind==="施設"?"施設：まとめて多人数。利用者は後で追加":"その他")+'</div>'
       +'<label>'+(rc.kind==="個人"?"お名前":"施設・病院名")+'</label><input id="rcClName" value="'+esc(rc.f.clName)+'" placeholder="'+(rc.kind==="個人"?"山田 花子":"○○園 / ○○病院")+'">'
+      +'<label>住所（地図に表示・動線に使用）</label><input id="rcAddr" value="'+esc(rc.f.addr)+'" placeholder="神戸市中央区○○1-2-3">'
       +(rc.kind==="個人"?'':'<label>ルール・注意（任意）</label><input id="rcRules" value="'+esc(rc.f.rules)+'" placeholder="受付記帳・検温・指定エリア 等">')
       +'</div>';
   }
@@ -593,7 +610,7 @@ function drawReception(){
 function rcSet(k,v){ rc[k]=v; rcCapture(); drawReception(); }
 function rcStaff(id){ var i=rc.staffIds.indexOf(id); if(i>=0) rc.staffIds.splice(i,1); else rc.staffIds.push(id); rcCapture(); drawReception(); }
 function rcCapture(){ // 入力中の値を保持（再描画で消えないように）
-  var map={rcDate:"date",rcTime:"time",rcDur:"dur",rcBuffer:"buffer",rcMenu:"menu",rcPrice:"price",rcTravel:"travel",rcWish:"wish",rcNote:"note",rcClName:"clName",rcRules:"rules"};
+  var map={rcDate:"date",rcTime:"time",rcDur:"dur",rcBuffer:"buffer",rcMenu:"menu",rcPrice:"price",rcTravel:"travel",rcWish:"wish",rcNote:"note",rcClName:"clName",rcAddr:"addr",rcRules:"rules"};
   Object.keys(map).forEach(function(id){var e=document.getElementById(id); if(e) rc.f[map[id]]=e.value;});
 }
 function rcSearchRun(q){
@@ -616,7 +633,7 @@ function rcConfirm(){
     var nm=(rc.f.clName||"").trim();
     if(!nm){toast((rc.kind==="個人"?"お名前":"施設・病院名")+"を入力してください");return;}
     clientId=uid();
-    DB.clients.push({id:clientId,kind:rc.kind,name:nm,address:"",phone:"",billing:(rc.kind==="個人"?"個人":"施設一括"),payMethod:(rc.kind==="個人"?"現金":"施設一括"),rules:rc.f.rules||"",note:""});
+    DB.clients.push({id:clientId,kind:rc.kind,name:nm,address:(rc.f.addr||"").trim(),phone:"",billing:(rc.kind==="個人"?"個人":"施設一括"),payMethod:(rc.kind==="個人"?"現金":"施設一括"),rules:rc.f.rules||"",note:""});
     if(rc.kind==="個人"){ // 本人を利用者として登録
       var mid=uid(); DB.members.push({id:mid,clientId:clientId,name:nm,menu:(rc.f.menu||"").trim(),price:Number(rc.f.price)||0,staffId:rc.staffIds[0]||""}); rc.memberId=mid;
     }
