@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1">
-<title>訪問美容 楽々アプリ（クラウド版・STEP1）</title>
+<title>訪問美容 楽々アプリ（クラウド版・STEP2）</title>
 <style>
   :root{ --accent:#1d9e75; --accent-soft:#e7f5ee; --accent-text:#147a59; --line:#e5e7e6; --bg:#f4f6f5; --surface:#fff; --text:#1f2624; --muted:#6b7572; --hint:#9aa39f; --danger:#c0392b; --radius:14px; }
   *{box-sizing:border-box;}
@@ -27,6 +27,8 @@
   .msg.ok{background:var(--accent-soft); color:var(--accent-text);}
   .ent{display:flex; justify-content:space-between; align-items:center; padding:9px 0; border-top:1px solid var(--line); font-size:14px;}
   .ent .who{font-size:11px; color:var(--hint);}
+  .cl-row{background:var(--surface); border:1px solid var(--line); border-radius:10px; padding:11px 13px; margin-bottom:7px; font-size:15px; cursor:pointer;}
+  .cl-row:active{background:var(--bg);}
   .code{font-family:monospace; font-size:12px; background:var(--bg); padding:3px 7px; border-radius:6px; word-break:break-all;}
   .muted{color:var(--muted); font-size:13px;}
   .sec{font-size:13px; font-weight:700; color:var(--muted); margin:18px 4px 8px;}
@@ -161,17 +163,13 @@ async function renderHome(){
     '<h1>ようこそ、'+esc(PROFILE.name)+' さん</h1>'+
     '<div class="sub"><span class="tag '+(isOwner?"":"member")+'">'+(isOwner?"運営（経営者）":"メンバー")+'</span></div>'+
     (isOwner?('<button class="btn ghost" onclick="toggleInvite()">👥 メンバーを招待する</button><div id="inviteBox"></div>'):"")+
-    '<div class="card">'+
-      '<div class="sec" style="margin-top:0;">売上テスト入力（権限の確認用）</div>'+
-      '<div class="muted">'+(isOwner?"運営は<b>全メンバーの記録</b>が見えます。":"メンバーは<b>自分の記録だけ</b>見えます。")+'</div>'+
-      '<div class="row" style="margin-top:10px;"><input id="lbl" placeholder="内容（例：カット）"><input id="amt" type="number" placeholder="金額" style="max-width:110px;"></div>'+
-      '<button class="btn primary" onclick="addEntry()">追加</button>'+
-      '<div id="m"></div>'+
-      '<div id="list" style="margin-top:8px;"></div>'+
-    '</div>'+
-    '<button class="btn danger" onclick="doSignOut()">ログアウト</button>'+
-    '<div class="muted" style="text-align:center;margin-top:10px;">STEP1：土台の動作確認用です。<br>本番の予約・顧客・売上は次のSTEPで載せます。</div>';
-  loadEntries();
+    '<div class="sec">顧客・施設（組織で共有）</div>'+
+    '<div class="row" style="gap:8px;"><button class="btn primary" onclick="openClientForm(null,\'個人\')">＋ 個人</button><button class="btn primary" onclick="openClientForm(null,\'施設\')">＋ 施設・訪問先</button></div>'+
+    '<div id="cform"></div>'+
+    '<div id="clientsBox" style="margin-top:10px;"><div class="muted">読み込み中…</div></div>'+
+    '<button class="btn danger" onclick="doSignOut()" style="margin-top:20px;">ログアウト</button>'+
+    '<div class="muted" style="text-align:center;margin-top:10px;">STEP2：顧客・施設をクラウドで共有（次は予約・売上）。</div>';
+  loadClients();
 }
 function toggleInvite(){
   var b=el("inviteBox"); if(!b) return;
@@ -180,26 +178,69 @@ function toggleInvite(){
     '<div style="font-size:12px;color:var(--hint);margin-top:8px;">組織コード</div>'+
     '<div class="code" style="margin-top:3px;">'+esc(PROFILE.org_id)+'</div></div>';
 }
-async function addEntry(){
-  var lbl=el("lbl").value.trim(), amt=Number(el("amt").value)||0;
-  if(!lbl){ showMsg("内容を入力してください"); return; }
-  var r = await sb.from("entries").insert({ org_id:PROFILE.org_id, owner_uid:ME.id, label:lbl, amount:amt });
-  if(r.error){ showMsg("追加エラー："+esc(r.error.message)); return; }
-  el("lbl").value=""; el("amt").value=""; el("m").innerHTML=""; loadEntries();
-}
-async function loadEntries(){
-  var r = await sb.from("entries").select("*").order("created_at",{ascending:false});
-  var box=el("list"); if(!box) return;
+// ===== 顧客・施設（組織で共有） =====
+var CL=[];
+async function loadClients(){
+  var r = await sb.from("clients").select("*").order("created_at",{ascending:true});
+  var box=el("clientsBox"); if(!box) return;
   if(r.error){ box.innerHTML='<div class="msg err">読み込みエラー：'+esc(r.error.message)+'</div>'; return; }
-  var rows=r.data||[];
-  if(!rows.length){ box.innerHTML='<div class="muted" style="padding:10px 0;">まだ記録がありません。</div>'; return; }
-  // 担当名（同じ組織のプロフィールは閲覧可）
-  var profs = await sb.from("profiles").select("id,name");
-  var nameOf={}; (profs.data||[]).forEach(function(p){ nameOf[p.id]=p.name; });
-  box.innerHTML = rows.map(function(e){
-    return '<div class="ent"><span>'+esc(e.label)+'　¥'+(e.amount||0).toLocaleString()+
-      '<div class="who">担当：'+esc(nameOf[e.owner_uid]||"?")+'</div></span></div>';
-  }).join("");
+  CL = r.data||[];
+  if(!CL.length){ box.innerHTML='<div class="muted" style="padding:12px 0;">まだ登録がありません。上の「＋」から追加してください。</div>'; return; }
+  var groups=[["施設","🏢 施設・訪問先"],["病院","🏥 病院"],["個人","🧑 個人"]];
+  var h="";
+  groups.forEach(function(g){
+    var items=CL.filter(function(c){return (c.kind||"個人")===g[0];});
+    if(!items.length) return;
+    h+='<div class="sec" style="font-size:13px;">'+g[1]+'（'+items.length+'）</div>';
+    items.forEach(function(c){
+      h+='<div class="cl-row" onclick="openClientForm(\''+c.id+'\')"><b>'+esc(c.name)+'</b>'+
+        (c.address?'<div class="muted" style="font-size:12px;margin-top:2px;">📍 '+esc(c.address)+'</div>':"")+
+        (c.rules?'<div style="font-size:12px;color:#c0392b;margin-top:2px;">⚠️ '+esc(c.rules)+'</div>':"")+'</div>';
+    });
+  });
+  box.innerHTML=h;
+}
+function openClientForm(id, presetKind){
+  var c = id ? (CL.find(function(x){return x.id===id;})||{}) : {kind:presetKind||"個人"};
+  var box=el("cform"); if(!box) return;
+  box.innerHTML='<div class="card">'+
+    '<div class="sec" style="margin-top:0;">'+(id?"顧客・施設を編集":"顧客・施設を追加")+'</div>'+
+    '<div style="font-size:12px;color:var(--hint);">区分</div><div class="seg-wrap" id="cf_kind" style="margin:3px 0 8px;">'+
+      ["個人","施設","病院"].map(function(k){return '<button class="seg'+(k===(c.kind||"個人")?" on":"")+'" onclick="cfPickKind(this)">'+k+'</button>';}).join("")+'</div>'+
+    '<input id="cf_name" value="'+esc(c.name||"")+'" placeholder="名前（例：〇〇苑 / 山田 花子）">'+
+    '<input id="cf_addr" value="'+esc(c.address||"")+'" placeholder="住所（例：兵庫県神戸市…）" style="margin-top:6px;">'+
+    '<input id="cf_phone" value="'+esc(c.phone||"")+'" placeholder="電話（任意）" style="margin-top:6px;">'+
+    '<input id="cf_rules" value="'+esc(c.rules||"")+'" placeholder="注意・ルール（例：13時以降 / EV使用可）" style="margin-top:6px;">'+
+    '<div id="m"></div>'+
+    '<button class="btn primary" onclick="saveClientForm(\''+(id||"")+'\')" style="margin-top:8px;">保存</button>'+
+    (id?'<button class="btn danger" onclick="delClient2(\''+id+'\')">削除</button>':"")+
+    '<button class="btn ghost" onclick="el(\'cform\').innerHTML=\'\'">キャンセル</button>'+
+    '</div>';
+  box.scrollIntoView({behavior:"smooth",block:"nearest"});
+}
+function cfPickKind(elm){
+  var p=elm.parentNode;
+  Array.prototype.forEach.call(p.children,function(c){c.classList.remove("on");});
+  elm.classList.add("on");
+}
+async function saveClientForm(id){
+  var name=el("cf_name").value.trim();
+  if(!name){ showMsg("名前を入力してください"); return; }
+  var kEl=document.querySelector("#cf_kind .seg.on");
+  var kind=kEl?kEl.textContent:"個人";
+  var data={ org_id:PROFILE.org_id, kind:kind, name:name,
+    address:el("cf_addr").value.trim(), phone:el("cf_phone").value.trim(),
+    rules:el("cf_rules").value.trim(), billing:(kind==="個人"?"個別":"一括") };
+  var r = id ? await sb.from("clients").update(data).eq("id",id)
+             : await sb.from("clients").insert(data);
+  if(r.error){ showMsg("保存エラー："+esc(r.error.message)); return; }
+  el("cform").innerHTML=""; loadClients();
+}
+async function delClient2(id){
+  if(!confirm("この顧客・施設を削除します。よろしいですか？")) return;
+  var r = await sb.from("clients").delete().eq("id",id);
+  if(r.error){ showMsg("削除エラー："+esc(r.error.message)); return; }
+  el("cform").innerHTML=""; loadClients();
 }
 
 async function doSignOut(){ await sb.auth.signOut(); ME=null; PROFILE=null; renderAuth(); }
