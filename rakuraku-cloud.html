@@ -1,0 +1,199 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1">
+<title>訪問美容 楽々アプリ（クラウド版・STEP1）</title>
+<style>
+  :root{ --accent:#1d9e75; --accent-soft:#e7f5ee; --accent-text:#147a59; --line:#e5e7e6; --bg:#f4f6f5; --surface:#fff; --text:#1f2624; --muted:#6b7572; --hint:#9aa39f; --danger:#c0392b; --radius:14px; }
+  *{box-sizing:border-box;}
+  body{margin:0; font-family:-apple-system,"Hiragino Sans",sans-serif; background:var(--bg); color:var(--text);}
+  .wrap{max-width:480px; margin:0 auto; padding:18px 16px 40px;}
+  h1{font-size:20px; text-align:center; margin:18px 0 4px;}
+  .sub{text-align:center; color:var(--muted); font-size:13px; margin-bottom:18px;}
+  .card{background:var(--surface); border:1px solid var(--line); border-radius:var(--radius); padding:16px; margin-bottom:12px;}
+  label{display:block; font-size:13px; color:var(--muted); margin:10px 0 4px;}
+  input{width:100%; padding:11px 12px; border:1px solid var(--line); border-radius:10px; font-size:15px;}
+  .btn{display:block; width:100%; padding:12px; border:none; border-radius:12px; font-size:15px; font-weight:600; margin-top:12px; cursor:pointer;}
+  .btn.primary{background:var(--accent); color:#fff;}
+  .btn.ghost{background:var(--surface); border:1px solid var(--line); color:var(--text);}
+  .btn.danger{background:#fbeaea; color:var(--danger);}
+  .row{display:flex; gap:8px;}
+  .row .btn{margin-top:0;}
+  .tag{display:inline-block; font-size:12px; padding:2px 10px; border-radius:14px; background:var(--accent-soft); color:var(--accent-text); font-weight:600;}
+  .tag.member{background:#eef1f0; color:var(--muted);}
+  .msg{font-size:13px; padding:9px 12px; border-radius:10px; margin-top:10px;}
+  .msg.err{background:#fbeaea; color:var(--danger);}
+  .msg.ok{background:var(--accent-soft); color:var(--accent-text);}
+  .ent{display:flex; justify-content:space-between; align-items:center; padding:9px 0; border-top:1px solid var(--line); font-size:14px;}
+  .ent .who{font-size:11px; color:var(--hint);}
+  .code{font-family:monospace; font-size:12px; background:var(--bg); padding:3px 7px; border-radius:6px; word-break:break-all;}
+  .muted{color:var(--muted); font-size:13px;}
+  .sec{font-size:13px; font-weight:700; color:var(--muted); margin:18px 4px 8px;}
+  .seg-wrap{display:flex; background:var(--bg); border-radius:12px; padding:3px; margin-bottom:12px;}
+  .seg{flex:1; border:none; background:none; padding:10px; border-radius:9px; font-size:15px; font-weight:700; color:var(--muted); cursor:pointer;}
+  .seg.on{background:var(--surface); color:var(--accent-text); box-shadow:0 1px 3px rgba(0,0,0,.1);}
+  .warn{background:#fff7e6; border:1px solid #f0d9a8; color:#8a6d2f; font-size:13px; line-height:1.6; padding:10px 12px; border-radius:10px; margin-top:10px;}
+</style>
+</head>
+<body>
+<div class="wrap" id="app"><div class="card">読み込み中…</div></div>
+
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+<script>
+/* ===== 接続設定（このプロジェクト専用） ===== */
+var SUPABASE_URL = "https://dhgjaxhhdyxplnmubmvg.supabase.co";
+var SUPABASE_KEY = "sb_publishable_l1en0JjWFODzDm5VtnvpHg_fZDfmJ4K";
+var sb = supabase.createClient(SUPABASE_URL, SUPABASE_KEY);
+
+var APP = document.getElementById("app");
+var ME = null;       // auth user
+var PROFILE = null;  // {id, org_id, name, role}
+
+function esc(s){ return (s==null?"":String(s)).replace(/[&<>"]/g,function(c){return {"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;"}[c];}); }
+function el(id){ return document.getElementById(id); }
+
+/* ===== 起動：セッション確認 → 画面振り分け ===== */
+async function boot(){
+  var s = await sb.auth.getSession();
+  ME = s.data.session ? s.data.session.user : null;
+  if(!ME){ renderAuth(); return; }
+  await loadProfile();
+  if(!PROFILE){ renderOnboard(); return; }
+  renderHome();
+}
+async function loadProfile(){
+  var r = await sb.from("profiles").select("*").eq("id", ME.id).maybeSingle();
+  PROFILE = r.data || null;
+}
+
+/* ===== ① ログイン / 新規登録（タブで切替） ===== */
+function setAuthMode(m){ var e=el("email"),p=el("pw"); if(e)window._authEmail=e.value; if(p)window._authPw=p.value; window._authMode=m; renderAuth(); }
+function renderAuth(){
+  var mode = window._authMode || "signin";
+  var signup = (mode==="signup");
+  APP.innerHTML =
+    '<h1>訪問美容 楽々アプリ</h1><div class="sub">クラウド版（STEP1）</div>'+
+    '<div class="card">'+
+    '<div class="seg-wrap">'+
+      '<button class="seg'+(signup?"":" on")+'" onclick="setAuthMode(\'signin\')">ログイン</button>'+
+      '<button class="seg'+(signup?" on":"")+'" onclick="setAuthMode(\'signup\')">新規登録</button>'+
+    '</div>'+
+    '<div style="font-size:13px;color:var(--muted);margin-bottom:4px;">'+(signup?"はじめての方。登録後に「組織を作る／参加する」を選びます。":"アカウントをお持ちの方。")+'</div>'+
+    '<label>メールアドレス</label><input id="email" type="email" autocomplete="username" placeholder="you@example.com" value="'+esc(window._authEmail||"")+'">'+
+    '<label>パスワード</label><input id="pw" type="password" autocomplete="'+(signup?"new-password":"current-password")+'" placeholder="6文字以上" value="'+esc(window._authPw||"")+'">'+
+    (signup?'<div class="warn">⚠️ この<b>メールとパスワード</b>は、次回からのログインに必要です。<br>必ずメモや写真などで控えてください（忘れると入れなくなります）。</div>':'')+
+    '<button class="btn primary" onclick="'+(signup?"doSignUp()":"doSignIn()")+'">'+(signup?"この内容で登録する":"ログイン")+'</button>'+
+    '<div id="m"></div>'+
+    '</div>'+
+    '<div class="muted" style="text-align:center;">運営の方：新規登録 → 組織を作成。<br>メンバー：新規登録 → 組織コードで参加。</div>';
+}
+function showMsg(html, kind){ var m=el("m"); if(m) m.innerHTML='<div class="msg '+(kind||"err")+'">'+html+'</div>'; }
+async function doSignUp(){
+  var email=el("email").value.trim(), pw=el("pw").value;
+  if(!email||pw.length<6){ showMsg("メールと6文字以上のパスワードを入力してください"); return; }
+  showMsg("登録中…","ok");
+  var r = await sb.auth.signUp({ email:email, password:pw });
+  if(r.error){ showMsg("登録エラー："+esc(r.error.message)); return; }
+  if(!r.data.session){ showMsg("⚠️ メール確認が「オン」のため、このまま進めません。<br>Supabaseで <b>メール確認をオフ</b> にするか、運営が <b>Add user（Auto Confirm）</b> でアカウントを作ってください。"); return; }
+  ME = r.data.user; PROFILE=null; renderOnboard();
+}
+async function doSignIn(){
+  var email=el("email").value.trim(), pw=el("pw").value;
+  if(!email||!pw){ showMsg("メールとパスワードを入力してください"); return; }
+  showMsg("ログイン中…","ok");
+  var r = await sb.auth.signInWithPassword({ email:email, password:pw });
+  if(r.error){ showMsg("ログインエラー："+esc(r.error.message)); return; }
+  ME = r.data.user; await loadProfile();
+  if(!PROFILE) renderOnboard(); else renderHome();
+}
+
+/* ===== ② 初回オンボーディング（組織を作る / 参加する） ===== */
+function renderOnboard(){
+  APP.innerHTML =
+    '<h1>はじめての設定</h1><div class="sub">'+esc(ME.email)+'</div>'+
+    '<div class="card">'+
+    '<label>お名前（表示名）</label><input id="nm" placeholder="例）板谷">'+
+    '<div class="sec">どちらかを選んでください</div>'+
+    '<div class="card" style="background:var(--accent-soft);border-color:#cfe9dd;">'+
+      '<b>🏢 組織を作る（運営になる）</b>'+
+      '<label>組織名</label><input id="orgname" placeholder="例）i hair">'+
+      '<button class="btn primary" onclick="createOrg()">この組織を作って始める</button>'+
+    '</div>'+
+    '<div class="card">'+
+      '<b>👥 組織に参加する（メンバー）</b>'+
+      '<label>組織コード（運営からもらう）</label><input id="orgcode" placeholder="xxxxxxxx-xxxx-...">'+
+      '<button class="btn ghost" onclick="joinOrg()">参加する</button>'+
+    '</div>'+
+    '<div id="m"></div>'+
+    '<button class="btn danger" onclick="doSignOut()">ログアウト</button>'+
+    '</div>';
+}
+async function createOrg(){
+  var nm=el("nm").value.trim(), on=el("orgname").value.trim();
+  if(!nm){ showMsg("お名前を入力してください"); return; }
+  showMsg("作成中…","ok");
+  var r = await sb.rpc("create_org_and_join", { org_name:on, display_name:nm });
+  if(r.error){ showMsg("組織作成エラー："+esc(r.error.message)); return; }
+  await loadProfile();
+  if(!PROFILE){ showMsg("作成後の読み込みに失敗しました"); return; }
+  renderHome();
+}
+async function joinOrg(){
+  var nm=el("nm").value.trim(), code=el("orgcode").value.trim();
+  if(!nm||!code){ showMsg("お名前と組織コードを入力してください"); return; }
+  showMsg("参加中…","ok");
+  var r = await sb.rpc("join_org", { code:code, display_name:nm });
+  if(r.error){ showMsg("参加エラー（コードが正しいか確認）："+esc(r.error.message)); return; }
+  await loadProfile();
+  if(!PROFILE){ showMsg("参加後の読み込みに失敗しました"); return; }
+  renderHome();
+}
+
+/* ===== ③ ホーム（役割で見え方が変わる） ===== */
+async function renderHome(){
+  var isOwner = PROFILE.role==="owner";
+  APP.innerHTML =
+    '<h1>ようこそ、'+esc(PROFILE.name)+' さん</h1>'+
+    '<div class="sub"><span class="tag '+(isOwner?"":"member")+'">'+(isOwner?"運営（経営者）":"メンバー")+'</span></div>'+
+    (isOwner?('<div class="card"><div class="muted">メンバー招待用の<b>組織コード</b>（メンバーに渡してください）</div><div class="code" style="margin-top:6px;">'+esc(PROFILE.org_id)+'</div></div>'):"")+
+    '<div class="card">'+
+      '<div class="sec" style="margin-top:0;">売上テスト入力（権限の確認用）</div>'+
+      '<div class="muted">'+(isOwner?"運営は<b>全メンバーの記録</b>が見えます。":"メンバーは<b>自分の記録だけ</b>見えます。")+'</div>'+
+      '<div class="row" style="margin-top:10px;"><input id="lbl" placeholder="内容（例：カット）"><input id="amt" type="number" placeholder="金額" style="max-width:110px;"></div>'+
+      '<button class="btn primary" onclick="addEntry()">追加</button>'+
+      '<div id="m"></div>'+
+      '<div id="list" style="margin-top:8px;"></div>'+
+    '</div>'+
+    '<button class="btn danger" onclick="doSignOut()">ログアウト</button>'+
+    '<div class="muted" style="text-align:center;margin-top:10px;">STEP1：土台の動作確認用です。<br>本番の予約・顧客・売上は次のSTEPで載せます。</div>';
+  loadEntries();
+}
+async function addEntry(){
+  var lbl=el("lbl").value.trim(), amt=Number(el("amt").value)||0;
+  if(!lbl){ showMsg("内容を入力してください"); return; }
+  var r = await sb.from("entries").insert({ org_id:PROFILE.org_id, owner_uid:ME.id, label:lbl, amount:amt });
+  if(r.error){ showMsg("追加エラー："+esc(r.error.message)); return; }
+  el("lbl").value=""; el("amt").value=""; el("m").innerHTML=""; loadEntries();
+}
+async function loadEntries(){
+  var r = await sb.from("entries").select("*").order("created_at",{ascending:false});
+  var box=el("list"); if(!box) return;
+  if(r.error){ box.innerHTML='<div class="msg err">読み込みエラー：'+esc(r.error.message)+'</div>'; return; }
+  var rows=r.data||[];
+  if(!rows.length){ box.innerHTML='<div class="muted" style="padding:10px 0;">まだ記録がありません。</div>'; return; }
+  // 担当名（同じ組織のプロフィールは閲覧可）
+  var profs = await sb.from("profiles").select("id,name");
+  var nameOf={}; (profs.data||[]).forEach(function(p){ nameOf[p.id]=p.name; });
+  box.innerHTML = rows.map(function(e){
+    return '<div class="ent"><span>'+esc(e.label)+'　¥'+(e.amount||0).toLocaleString()+
+      '<div class="who">担当：'+esc(nameOf[e.owner_uid]||"?")+'</div></span></div>';
+  }).join("");
+}
+
+async function doSignOut(){ await sb.auth.signOut(); ME=null; PROFILE=null; renderAuth(); }
+
+boot();
+</script>
+</body>
+</html>
