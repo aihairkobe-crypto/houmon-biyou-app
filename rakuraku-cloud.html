@@ -113,20 +113,24 @@ function renderOnboard(){
   APP.innerHTML =
     '<h1>はじめての設定</h1><div class="sub">'+esc(ME.email)+'</div>'+
     '<div class="card">'+
-    '<label>お名前（表示名）</label><input id="nm" placeholder="例）板谷">'+
-    '<div class="sec">どちらかを選んでください</div>'+
-    '<div class="card" style="background:var(--accent-soft);border-color:#cfe9dd;">'+
-      '<b>🏢 組織を作る（運営になる）</b>'+
-      '<label>組織名</label><input id="orgname" placeholder="例）i hair">'+
-      '<button class="btn primary" onclick="createOrg()">この組織を作って始める</button>'+
+    '<label>お名前（表示名）</label><input id="nm" placeholder="例）高村">'+
+    // メンバー＝主たる導線（運営からコードをもらって参加）
+    '<div class="card" style="background:var(--accent-soft);border-color:#cfe9dd;margin-top:14px;">'+
+      '<b>👥 組織に参加する</b>'+
+      '<div style="font-size:12px;color:var(--muted);margin:2px 0 6px;">運営からもらった<b>組織コード</b>を入力してください。</div>'+
+      '<label>組織コード</label><input id="orgcode" placeholder="xxxxxxxx-xxxx-...">'+
+      '<button class="btn primary" onclick="joinOrg()">この組織に参加する</button>'+
     '</div>'+
-    '<div class="card">'+
-      '<b>👥 組織に参加する（メンバー）</b>'+
-      '<label>組織コード（運営からもらう）</label><input id="orgcode" placeholder="xxxxxxxx-xxxx-...">'+
-      '<button class="btn ghost" onclick="joinOrg()">参加する</button>'+
-    '</div>'+
+    // 運営＝最初の登録のときだけ（控えめに折りたたみ）
+    '<details style="margin-top:10px;"><summary style="font-size:13px;color:var(--muted);cursor:pointer;padding:4px;">＋ 新しく組織を作る（運営の方・いちばん最初の登録）</summary>'+
+      '<div class="card" style="margin-top:8px;">'+
+        '<div style="font-size:12px;color:var(--muted);margin-bottom:6px;">※ 既にある組織に入る方は上の「参加」を使ってください。</div>'+
+        '<label>組織名</label><input id="orgname" placeholder="例）i hair">'+
+        '<button class="btn ghost" onclick="createOrg()">この組織を作って運営になる</button>'+
+      '</div>'+
+    '</details>'+
     '<div id="m"></div>'+
-    '<button class="btn danger" onclick="doSignOut()">ログアウト</button>'+
+    '<button class="btn danger" onclick="doSignOut()" style="margin-top:14px;">ログアウト</button>'+
     '</div>';
 }
 async function createOrg(){
@@ -156,7 +160,7 @@ async function renderHome(){
   APP.innerHTML =
     '<h1>ようこそ、'+esc(PROFILE.name)+' さん</h1>'+
     '<div class="sub"><span class="tag '+(isOwner?"":"member")+'">'+(isOwner?"運営（経営者）":"メンバー")+'</span></div>'+
-    (isOwner?('<div class="card"><div class="muted">メンバー招待用の<b>組織コード</b>（メンバーに渡してください）</div><div class="code" style="margin-top:6px;">'+esc(PROFILE.org_id)+'</div></div>'):"")+
+    (isOwner?('<button class="btn ghost" onclick="toggleInvite()">👥 メンバーを招待する</button><div id="inviteBox"></div>'):"")+
     '<div class="card">'+
       '<div class="sec" style="margin-top:0;">売上テスト入力（権限の確認用）</div>'+
       '<div class="muted">'+(isOwner?"運営は<b>全メンバーの記録</b>が見えます。":"メンバーは<b>自分の記録だけ</b>見えます。")+'</div>'+
@@ -168,6 +172,13 @@ async function renderHome(){
     '<button class="btn danger" onclick="doSignOut()">ログアウト</button>'+
     '<div class="muted" style="text-align:center;margin-top:10px;">STEP1：土台の動作確認用です。<br>本番の予約・顧客・売上は次のSTEPで載せます。</div>';
   loadEntries();
+}
+function toggleInvite(){
+  var b=el("inviteBox"); if(!b) return;
+  if(b.innerHTML){ b.innerHTML=""; return; }
+  b.innerHTML='<div class="card"><div class="muted">新しいメンバーを追加する時に、その人の<b>ログイン情報（メール・パスワード）</b>と、下の<b>組織コード</b>を渡してください。メンバーはログイン後にこのコードで参加します。</div>'+
+    '<div style="font-size:12px;color:var(--hint);margin-top:8px;">組織コード</div>'+
+    '<div class="code" style="margin-top:3px;">'+esc(PROFILE.org_id)+'</div></div>';
 }
 async function addEntry(){
   var lbl=el("lbl").value.trim(), amt=Number(el("amt").value)||0;
