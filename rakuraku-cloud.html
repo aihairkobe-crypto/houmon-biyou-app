@@ -18,6 +18,9 @@
   .chk-wrap{display:flex; flex-wrap:wrap; gap:6px; margin-top:3px;}
   .chk{display:inline-flex; align-items:center; gap:5px; padding:8px 12px; border:1px solid var(--line); border-radius:10px; font-size:14px; background:var(--surface); cursor:pointer;}
   .chk input{width:auto;}
+  .price-row{display:flex; gap:6px; margin-top:6px; align-items:center;}
+  .price-row .cf_pname{flex:2;} .price-row .cf_pprice{flex:1;}
+  .price-row .px{flex:0 0 38px; height:42px; border:1px solid var(--line); background:var(--surface); border-radius:10px; color:var(--muted); font-size:18px; cursor:pointer;}
   .btn{display:block; width:100%; padding:12px; border:none; border-radius:12px; font-size:15px; font-weight:600; margin-top:12px; cursor:pointer;}
   .btn.primary{background:var(--accent); color:#fff;}
   .btn.ghost{background:var(--surface); border:1px solid var(--line); color:var(--text);}
@@ -210,9 +213,12 @@ async function loadClients(){
     if(!items.length) return;
     h+='<div class="sec" style="font-size:13px;">'+g[1]+'（'+items.length+'）</div>';
     items.forEach(function(c){
+      var pl=Array.isArray(c.price_list)?c.price_list:[];
+      var plTxt=pl.map(function(p){return esc(p.name)+" ¥"+(p.price||0).toLocaleString();}).join(" / ");
       h+='<div class="cl-row" onclick="openClientForm(\''+c.id+'\')"><b>'+esc(c.name)+'</b>'+
         (c.address?'<div class="muted" style="font-size:12px;margin-top:2px;">📍 '+esc(c.address)+'</div>':"")+
-        (c.rules?'<div style="font-size:12px;color:#c0392b;margin-top:2px;">⚠️ '+esc(c.rules)+'</div>':"")+'</div>';
+        (c.rules?'<div style="font-size:12px;color:#c0392b;margin-top:2px;">⚠️ '+esc(c.rules)+'</div>':"")+
+        (plTxt?'<div class="muted" style="font-size:12px;margin-top:2px;">💴 '+plTxt+'</div>':"")+'</div>';
     });
   });
   box.innerHTML=h;
@@ -228,6 +234,9 @@ function openClientForm(id, presetKind){
     '<input id="cf_addr" value="'+esc(c.address||"")+'" placeholder="住所（例：兵庫県神戸市…）" style="margin-top:6px;">'+
     '<input id="cf_phone" value="'+esc(c.phone||"")+'" placeholder="電話（任意）" style="margin-top:6px;">'+
     '<input id="cf_rules" value="'+esc(c.rules||"")+'" placeholder="注意・ルール（例：13時以降 / EV使用可）" style="margin-top:6px;">'+
+    '<div style="font-size:12px;color:var(--hint);margin-top:10px;">料金表（メニュー・値段）</div>'+
+    '<div id="cf_prices">'+ (Array.isArray(c.price_list)&&c.price_list.length ? c.price_list.map(function(p){return cfPriceRow(p.name,p.price);}).join("") : cfPriceRow("","")) +'</div>'+
+    '<button class="btn ghost" onclick="cfAddPriceRow()" style="margin-top:4px;padding:8px;font-size:14px;">＋ メニューを追加</button>'+
     '<div id="m"></div>'+
     '<button class="btn primary" onclick="saveClientForm(\''+(id||"")+'\')" style="margin-top:8px;">保存</button>'+
     (id?'<button class="btn danger" onclick="delClient2(\''+id+'\')">削除</button>':"")+
@@ -240,6 +249,26 @@ function cfPickKind(elm){
   Array.prototype.forEach.call(p.children,function(c){c.classList.remove("on");});
   elm.classList.add("on");
 }
+function cfPriceRow(name, price){
+  return '<div class="price-row">'+
+    '<input class="cf_pname" value="'+esc(name||"")+'" placeholder="メニュー（例：カット）">'+
+    '<input class="cf_pprice" type="number" value="'+(price!=null&&price!==""?price:"")+'" placeholder="円">'+
+    '<button class="px" onclick="this.parentNode.remove()">×</button>'+
+    '</div>';
+}
+function cfAddPriceRow(){
+  var box=el("cf_prices"); if(!box) return;
+  box.insertAdjacentHTML("beforeend", cfPriceRow("",""));
+}
+function collectPrices(){
+  var rows=document.querySelectorAll("#cf_prices .price-row"), out=[];
+  Array.prototype.forEach.call(rows,function(r){
+    var n=r.querySelector(".cf_pname").value.trim();
+    var p=Number(r.querySelector(".cf_pprice").value)||0;
+    if(n) out.push({name:n, price:p});
+  });
+  return out;
+}
 async function saveClientForm(id){
   var name=el("cf_name").value.trim();
   if(!name){ showMsg("名前を入力してください"); return; }
@@ -247,7 +276,8 @@ async function saveClientForm(id){
   var kind=kEl?kEl.textContent:"個人";
   var data={ org_id:PROFILE.org_id, kind:kind, name:name,
     address:el("cf_addr").value.trim(), phone:el("cf_phone").value.trim(),
-    rules:el("cf_rules").value.trim(), billing:(kind==="個人"?"個別":"一括") };
+    rules:el("cf_rules").value.trim(), billing:(kind==="個人"?"個別":"一括"),
+    price_list:collectPrices() };
   var r = id ? await sb.from("clients").update(data).eq("id",id)
              : await sb.from("clients").insert(data);
   if(r.error){ showMsg("保存エラー："+esc(r.error.message)); return; }
