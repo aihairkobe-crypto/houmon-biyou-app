@@ -388,7 +388,7 @@ function bkDateLabel(d){
 function openBookingStart(){
   var box=el("bform"); if(!box) return;
   box.innerHTML='<div class="card">'+
-    '<div class="sec" style="margin-top:0;">予約を作る（相手を選ぶ）</div>'+
+    '<div class="sec" style="margin-top:0;">予約する施設・お客様を選ぶ</div>'+
     '<input id="bkSearch" placeholder="🔍 名前で探す（施設・お客様）" oninput="renderBkPick()">'+
     '<button class="btn ghost" onclick="bkNewClient()" style="color:var(--accent-text);border-color:var(--accent);margin-top:8px;">➕ 新しい顧客・施設を登録して予約</button>'+
     '<div id="bkPick" style="margin-top:8px;"></div>'+
