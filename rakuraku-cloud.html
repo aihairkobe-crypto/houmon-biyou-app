@@ -23,6 +23,9 @@
   .price-row .px{flex:0 0 38px; height:42px; border:1px solid var(--line); background:var(--surface); border-radius:10px; color:var(--muted); font-size:18px; cursor:pointer;}
   .dash-row{display:flex; justify-content:space-between; align-items:center; padding:7px 0; border-top:1px solid #cbe7da; font-size:14px;}
   .mbtn{width:34px; height:34px; border:1px solid #cbe7da; background:var(--surface); border-radius:9px; font-size:18px; color:var(--accent-text); cursor:pointer;}
+  .ba-row{border:1px solid var(--line); border-radius:10px; padding:9px 11px; margin-bottom:7px; background:var(--surface);}
+  .ba-row.on{border-color:var(--accent); background:var(--accent-soft);}
+  .ba-row .chk{border:none; background:none; padding:0; font-size:15px;}
   .btn{display:block; width:100%; padding:12px; border:none; border-radius:12px; font-size:15px; font-weight:600; margin-top:12px; cursor:pointer;}
   .btn.primary{background:var(--accent); color:#fff;}
   .btn.ghost{background:var(--surface); border:1px solid var(--line); color:var(--text);}
@@ -528,8 +531,9 @@ async function loadRecords(){
   RC.forEach(function(rec){
     if(rec.date!==lastDate){ h+='<div class="sec" style="font-size:13px;">📅 '+esc(bkDateLabel(rec.date))+'</div>'; lastDate=rec.date; }
     total += rec.amount||0;
+    var who=rec.member_name ? (esc(clientName(rec.client_id))+' ／ '+esc(rec.member_name)) : esc(clientName(rec.client_id));
     h+='<div class="cl-row" onclick="openRecordForm(\''+rec.id+'\')">'+
-      '<b>'+esc(clientName(rec.client_id))+'</b>　¥'+(rec.amount||0).toLocaleString()+
+      '<b>'+who+'</b>　¥'+(rec.amount||0).toLocaleString()+
       '<div class="muted" style="font-size:12px;margin-top:2px;">✂️ '+esc(rec.menu||"（メニュー未記入）")+'　👤 '+esc(memberName(rec.staff_id))+'</div>'+
       (rec.note?'<div class="muted" style="font-size:12px;">📝 '+esc(rec.note)+'</div>':"")+'</div>';
   });
@@ -543,8 +547,98 @@ function recordFromBooking(bid){
   // 本人が担当に入っていなければ（運営が代理入力など）先頭の担当を既定に。
   var inTeam = b.staff_ids && b.staff_ids.indexOf(ME.id)>=0;
   var staff = inTeam ? ME.id : ((b.staff_ids&&b.staff_ids.length)?b.staff_ids[0]:ME.id);
-  openRecordForm(null, { booking_id:b.id, client_id:b.client_id, staff_id:staff, date:b.date });
+  var c=CL.find(function(x){return x.id===b.client_id;});
   el("bform").innerHTML="";
+  if(c && (c.kind==="施設"||c.kind==="病院")){    // 施設は「その日対応した人」をまとめて入力
+    openFacilityBatch(b.client_id, { date:b.date, staff_id:staff, booking_id:b.id });
+  } else {                                          // 個人は1件ずつ
+    openRecordForm(null, { booking_id:b.id, client_id:b.client_id, staff_id:staff, date:b.date });
+  }
+}
+// ===== 施設の「その日の売上まとめ入力」 =====
+async function openFacilityBatch(clientId, opts){
+  opts=opts||{};
+  var box=el("rform"); if(!box) return;
+  var c=CL.find(function(x){return x.id===clientId;})||{};
+  var iso=opts.date||todayISO();
+  window._batch={ clientId:clientId, bookingId:opts.booking_id||null };
+  box.innerHTML='<div class="card"><div class="muted">名簿を読み込み中…</div></div>';
+  box.scrollIntoView({behavior:"smooth",block:"nearest"});
+  var r=await sb.from("members_t").select("*").eq("client_id",clientId).order("created_at",{ascending:true});
+  var roster=r.error?[]:(r.data||[]);
+  var pl=Array.isArray(c.price_list)?c.price_list:[];
+  var staffOpts=MEMBERS.map(function(m){ return '<option value="'+m.id+'"'+(m.id===(opts.staff_id||ME.id)?" selected":"")+'>'+esc(m.name)+'</option>'; }).join("");
+  var rowsHtml=roster.map(function(m){ return batchRow(m, pl); }).join("");
+  box.innerHTML='<div class="card">'+
+    '<div class="sec" style="margin-top:0;">'+esc(c.name)+'　'+esc(bkDateLabel(iso))+'</div>'+
+    '<div class="muted" style="font-size:12px;margin-bottom:8px;">その日 <b>対応した人だけ</b> にチェックを入れて、まとめて保存します。休みの人は外してOK。</div>'+
+    '<div class="row" style="gap:8px;">'+
+      '<div style="flex:1;"><div style="font-size:12px;color:var(--hint);">担当（あなた）</div><select id="ba_staff">'+staffOpts+'</select></div>'+
+      '<div style="flex:1;"><div style="font-size:12px;color:var(--hint);">日付</div><input id="ba_date" type="date" value="'+esc(iso)+'"></div>'+
+    '</div>'+
+    '<div id="ba_rows" style="margin-top:10px;">'+ (rowsHtml||'<div class="muted" style="font-size:12px;">名簿が空です。下の「＋利用者を追加」から。</div>') +'</div>'+
+    '<button class="btn ghost" onclick="batchAddPerson()" style="color:var(--accent-text);border-color:var(--accent);margin-top:6px;">➕ その場で利用者を追加</button>'+
+    '<div id="m"></div>'+
+    '<button class="btn primary" onclick="saveBatch()" style="margin-top:8px;">まとめて保存</button>'+
+    '<button class="btn ghost" onclick="el(\'rform\').innerHTML=\'\'">キャンセル</button>'+
+    '</div>';
+  box.scrollIntoView({behavior:"smooth",block:"nearest"});
+}
+function batchRow(m, pl){
+  var menuOpts='<option value="">（メニュー）</option>'+pl.map(function(p){
+    return '<option value="'+esc(p.name)+'" data-price="'+(p.price||0)+'">'+esc(p.name)+' ¥'+(p.price||0).toLocaleString()+'</option>';
+  }).join("");
+  return '<div class="ba-row" data-mid="'+(m.id||"")+'" data-name="'+esc(m.name)+'">'+
+    '<label class="chk"><input type="checkbox" class="ba_chk" onchange="batchToggle(this)"> <b>'+esc(m.name)+'</b></label>'+
+    '<div class="ba-detail" style="display:none;margin-top:8px;">'+
+      '<select class="ba_menu" onchange="batchMenu(this)">'+menuOpts+'</select>'+
+      '<input class="ba_amount" type="number" placeholder="金額（円）" style="margin-top:6px;">'+
+    '</div></div>';
+}
+function batchToggle(chk){
+  var row=chk.closest(".ba-row"); if(!row) return;
+  row.querySelector(".ba-detail").style.display=chk.checked?"block":"none";
+  row.classList.toggle("on", chk.checked);
+}
+function batchMenu(sel){
+  var opt=sel.options[sel.selectedIndex]; if(!opt) return;
+  var row=sel.closest(".ba-row");
+  var price=opt.getAttribute("data-price");
+  if(price!=null && price!=="") row.querySelector(".ba_amount").value=price;
+  var chk=row.querySelector(".ba_chk"); if(!chk.checked){ chk.checked=true; batchToggle(chk); }
+}
+async function batchAddPerson(){
+  var name=prompt("追加する利用者名を入力してください");
+  if(!name||!name.trim()) return; name=name.trim();
+  var keep=confirm("この方を名簿にも残しますか？\n（OK＝名簿に残す / キャンセル＝今回だけ）");
+  var mid="";
+  if(keep){
+    var r=await sb.from("members_t").insert({ org_id:PROFILE.org_id, client_id:window._batch.clientId, name:name }).select().single();
+    if(r.error){ showMsg("追加エラー："+esc(r.error.message)); return; }
+    mid=r.data.id;
+  }
+  var c=CL.find(function(x){return x.id===window._batch.clientId;})||{};
+  var pl=Array.isArray(c.price_list)?c.price_list:[];
+  var tmp=document.createElement("div"); tmp.innerHTML=batchRow({id:mid,name:name}, pl);
+  var node=tmp.firstChild; el("ba_rows").appendChild(node);
+  var chk=node.querySelector(".ba_chk"); chk.checked=true; batchToggle(chk);
+}
+async function saveBatch(){
+  var staff=el("ba_staff").value||ME.id, date=el("ba_date").value;
+  var rows=document.querySelectorAll("#ba_rows .ba-row"), payload=[];
+  Array.prototype.forEach.call(rows,function(row){
+    if(!row.querySelector(".ba_chk").checked) return;
+    payload.push({ org_id:PROFILE.org_id, client_id:window._batch.clientId,
+      booking_id:window._batch.bookingId||null,
+      member_id:row.getAttribute("data-mid")||null,
+      member_name:row.getAttribute("data-name")||"",
+      staff_id:staff, menu:row.querySelector(".ba_menu").value.trim(),
+      amount:Number(row.querySelector(".ba_amount").value)||0, date:date });
+  });
+  if(!payload.length){ showMsg("その日 対応した人にチェックを入れてください"); return; }
+  var r=await sb.from("records").insert(payload);
+  if(r.error){ showMsg("保存エラー："+esc(r.error.message)); return; }
+  el("rform").innerHTML=""; toast("💴 "+payload.length+"件の売上を記録しました"); loadRecords();
 }
 function menuOptionsFor(clientId, selMenu){
   var c=CL.find(function(x){return x.id===clientId;});
@@ -567,6 +661,7 @@ function openRecordForm(id, prefill){
   }).join("");
   box.innerHTML='<div class="card">'+
     '<div class="sec" style="margin-top:0;">'+(id?"売上を編集":"売上を記録")+'</div>'+
+    (rec.member_name?'<div class="muted" style="font-size:13px;margin-bottom:6px;">👤 利用者：<b>'+esc(rec.member_name)+'</b></div>':"")+
     '<input type="hidden" id="rf_booking" value="'+esc(rec.booking_id||"")+'">'+
     '<div style="font-size:12px;color:var(--hint);">日付</div>'+
     '<input id="rf_date" type="date" value="'+esc(rec.date||iso)+'">'+
