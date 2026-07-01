@@ -302,12 +302,54 @@ function openClientForm(id, presetKind){
     '<div style="font-size:12px;color:var(--hint);margin-top:10px;">料金表（メニュー・値段）</div>'+
     '<div id="cf_prices">'+ (Array.isArray(c.price_list)&&c.price_list.length ? c.price_list.map(function(p){return cfPriceRow(p.name,p.price);}).join("") : cfPriceRow("","")) +'</div>'+
     '<button class="btn ghost" onclick="cfAddPriceRow()" style="margin-top:4px;padding:8px;font-size:14px;">＋ メニューを追加</button>'+
+    ((id && (c.kind==="施設"||c.kind==="病院"))
+      ? '<div style="font-size:12px;color:var(--hint);margin-top:14px;">利用者（入居者）リスト</div>'+
+        '<div class="muted" style="font-size:11px;margin:2px 4px 4px;">この施設で対応する方を登録します。売上を記録するとき、ここから選べます。</div>'+
+        '<div id="cf_members"><div class="muted" style="font-size:12px;">読み込み中…</div></div>'
+      : "")+
     '<div id="m"></div>'+
     '<button class="btn primary" onclick="saveClientForm(\''+(id||"")+'\')" style="margin-top:8px;">保存</button>'+
     (id?'<button class="btn danger" onclick="delClient2(\''+id+'\')">削除</button>':"")+
     '<button class="btn ghost" onclick="el(\'cform\').innerHTML=\'\'">キャンセル</button>'+
+    ((!id)?'<div class="muted" style="font-size:11px;text-align:center;margin-top:6px;">※ 施設の「利用者リスト」は、保存したあと編集画面で登録できます。</div>':"")+
     '</div>';
+  if(id && (c.kind==="施設"||c.kind==="病院")) loadClientMembers(id);
   box.scrollIntoView({behavior:"smooth",block:"nearest"});
+}
+// 施設の利用者（入居者）リスト
+async function loadClientMembers(clientId){
+  var box=el("cf_members"); if(!box) return;
+  var r=await sb.from("members_t").select("*").eq("client_id",clientId).order("created_at",{ascending:true});
+  if(r.error){ box.innerHTML='<div class="msg err">読み込みエラー：'+esc(r.error.message)+'</div>'; return; }
+  var rows=r.data||[];
+  var list=rows.map(function(m){
+    return '<div class="price-row" style="align-items:center;">'+
+      '<input class="cf_pname" value="'+esc(m.name)+'" onchange="cmRename(\''+m.id+'\',this.value)">'+
+      '<button class="px" onclick="cmDel(\''+m.id+'\',\''+clientId+'\')">×</button>'+
+      '</div>';
+  }).join("");
+  box.innerHTML=(rows.length?list:'<div class="muted" style="font-size:12px;padding:4px 0;">まだ利用者が登録されていません。</div>')+
+    '<div class="price-row" style="margin-top:8px;">'+
+      '<input id="cm_name" class="cf_pname" placeholder="利用者名（例：田中 花子）">'+
+      '<button class="mini" style="margin-top:0;flex:0 0 auto;" onclick="cmAdd(\''+clientId+'\')">追加</button>'+
+    '</div>';
+}
+async function cmAdd(clientId){
+  var name=el("cm_name").value.trim();
+  if(!name){ showMsg("利用者名を入力してください"); return; }
+  var r=await sb.from("members_t").insert({ org_id:PROFILE.org_id, client_id:clientId, name:name });
+  if(r.error){ showMsg("追加エラー："+esc(r.error.message)); return; }
+  loadClientMembers(clientId);
+}
+async function cmRename(id, name){
+  name=(name||"").trim(); if(!name) return;
+  await sb.from("members_t").update({name:name}).eq("id",id);
+}
+async function cmDel(id, clientId){
+  if(!confirm("この利用者を削除しますか？")) return;
+  var r=await sb.from("members_t").delete().eq("id",id);
+  if(r.error){ showMsg("削除エラー："+esc(r.error.message)); return; }
+  loadClientMembers(clientId);
 }
 function cfPickKind(elm){
   var p=elm.parentNode;
