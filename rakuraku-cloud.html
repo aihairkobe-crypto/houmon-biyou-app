@@ -201,6 +201,7 @@ function renderTab(){
 /* ===== 予約・売上の紐付けヘルパ ===== */
 function clientById(id){ return CL.find(function(x){return x.id===id;}); }
 function clientName(id){ var c=clientById(id); return c?c.name:"（未設定）"; }
+function recordWho(r){ if(r.client_id){ return r.member_name?(esc(clientName(r.client_id))+' ／ '+esc(r.member_name)):esc(clientName(r.client_id)); } return r.member_name?esc(r.member_name):"その場のお客様"; }
 function isFacility(c){ return c && (c.kind==="施設"||c.kind==="病院"); }
 function recordsForBooking(bid){ return RC.filter(function(r){return r.booking_id===bid;}); }
 
@@ -214,7 +215,8 @@ function firstRunGuide(){
     '<div class="guide-step"><span class="gnum">2</span><div><b>予約を作る</b><div class="muted">訪問の予定を入れます（あとで直接記録でもOK）。</div></div></div>'+
     '<div class="guide-step"><span class="gnum">3</span><div><b>売上を記録</b><div class="muted">施術したら金額を記録。売上に自動集計。</div></div></div>'+
     '<button class="btn primary" onclick="startAddClient(\'施設\')" style="margin-top:14px;">① まず 顧客・施設を登録する →</button>'+
-    '<button class="btn ghost" onclick="switchTab(\'clients\')">あとで自分で進める</button>'+
+    '<div class="muted" style="text-align:center;font-size:12px;margin-top:12px;">決まったお客様がいない方は</div>'+
+    '<button class="btn ghost accent" onclick="openQuickRecord()">🏃 登録せず 今すぐ売上だけ記録</button>'+
     '</div>';
 }
 function renderToday(){
@@ -227,7 +229,7 @@ function renderToday(){
   var html='<div class="card" style="background:var(--accent-soft);border-color:#cbe7da;display:flex;justify-content:space-between;align-items:center;">'+
       '<div><div class="hint" style="margin:0;">'+esc(dateLabel(tISO))+'</div><div style="font-weight:700;font-size:15px;">今月の売上</div></div>'+
       '<div class="amt" style="font-size:20px;">'+yen(sumM)+'</div></div>';
-  html+='<button class="btn primary" onclick="openPicker(\'recWith\',{title:\'だれの売上を記録しますか？\',allowNew:true})">＋ 今日の売上を記録</button>';
+  html+='<button class="btn primary" onclick="openPicker(\'recWith\',{title:\'だれの売上を記録しますか？\',allowNew:true,allowQuick:true})">＋ 今日の売上を記録</button>';
   html+='<div class="sec">今日の訪問</div>';
   if(!todays.length){ html+='<div class="list-empty">今日の予約はありません。<br>上のボタンで直接記録もできます。</div>'; }
   else {
@@ -321,7 +323,7 @@ function renderSales(){
   var lastD="";
   recs.forEach(function(r){
     if(r.date!==lastD){ html+='<div class="sec">📅 '+esc(dateLabel(r.date))+'</div>'; lastD=r.date; }
-    var who=r.member_name?(esc(clientName(r.client_id))+' ／ '+esc(r.member_name)):esc(clientName(r.client_id));
+    var who=recordWho(r);
     html+='<div class="item" onclick="openRecordForm(\''+r.id+'\')"><div class="top">'+
       '<div><div class="name">'+who+'</div>'+
         '<div class="meta">✂️ '+esc(r.menu||"（メニュー未記入）")+(r.note?'　📝 '+esc(r.note):"")+'</div></div>'+
@@ -335,7 +337,8 @@ function salesMonth(d){ SALES_MONTH=shiftMonth(SALES_MONTH||curMonth(),d); rende
 function openPicker(onpickFn, opts){
   opts=opts||{}; window._pickFn=onpickFn; window._pickNew=!!opts.allowNew;
   var body='<div class="sheet-title">'+esc(opts.title||"施設・お客様を選ぶ")+'</div>'+
-    '<input id="pkSearch" placeholder="🔍 名前で探す" oninput="renderPickList()">'+
+    (opts.allowQuick?'<button class="btn ghost accent" onclick="quickFromPicker()">🏃 登録せず サッと記録</button>':"")+
+    '<input id="pkSearch" placeholder="🔍 名前で探す" oninput="renderPickList()" style="margin-top:'+(opts.allowQuick?"8px":"0")+';">'+
     (opts.allowNew?'<button class="btn ghost accent" onclick="pickNew()">➕ 新しい顧客・施設を登録</button>':"")+
     '<div id="pkList" style="margin-top:8px;"></div>'+
     '<button class="btn ghost" onclick="closeSheet()">閉じる</button>';
@@ -368,6 +371,32 @@ async function pickNew(){
 }
 function bkWith(id){ openBookingForm(null,{client_id:id}); }
 function recWith(id){ var c=clientById(id); if(isFacility(c)) openFacilityBatch(id,{date:todayISO()}); else openRecordForm(null,{client_id:id,date:todayISO()}); }
+function quickFromPicker(){ closeSheet(); openQuickRecord(); }
+
+/* ===== 登録せず サッと売上記録（決まった顧客がいない人向け） ===== */
+function openQuickRecord(prefill){
+  prefill=prefill||{};
+  var body='<div class="sheet-title">サッと売上記録</div>'+
+    '<div class="muted" style="margin-bottom:8px;">顧客登録なしで、その場の売上を記録します。</div>'+
+    '<div class="hint">日付</div><input id="qr_date" type="date" value="'+esc(prefill.date||todayISO())+'">'+
+    '<div class="hint" style="margin-top:8px;">お客様名（任意）</div><input id="qr_name" placeholder="例：〇〇様（空欄でもOK）">'+
+    '<div class="hint" style="margin-top:8px;">メニュー</div><input id="qr_menu" placeholder="例：カット">'+
+    '<div class="hint" style="margin-top:8px;">金額（円）</div><input id="qr_amount" type="number" placeholder="0">'+
+    '<div class="hint" style="margin-top:8px;">メモ</div><input id="qr_note" placeholder="任意">'+
+    '<div id="m"></div>'+
+    '<button class="btn primary" onclick="saveQuick()">保存</button>'+
+    '<button class="btn ghost" onclick="closeSheet()">キャンセル</button>';
+  openSheet(body);
+}
+async function saveQuick(){
+  var data={ org_id:PROFILE.org_id, client_id:null, booking_id:null, member_id:null,
+    member_name:el("qr_name").value.trim()||null, staff_id:ME.id,
+    menu:el("qr_menu").value.trim(), amount:Number(el("qr_amount").value)||0,
+    note:el("qr_note").value.trim(), date:el("qr_date").value };
+  var r=await sb.from("records").insert(data);
+  if(r.error){ showMsg("保存エラー："+esc(r.error.message)); return; }
+  closeSheet(); toast("💴 売上を記録しました"); await reloadRecords();
+}
 
 /* ===== 予約フォーム ===== */
 function openBookingForm(id, prefill){
