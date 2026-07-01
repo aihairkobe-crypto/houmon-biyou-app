@@ -187,10 +187,11 @@ async function renderHome(){
     '<div id="recordsBox" style="margin-top:10px;"><div class="muted">読み込み中…</div></div>'+
     '<button class="btn ghost" onclick="doSignOut()" style="margin-top:26px;color:var(--hint);font-weight:500;">ログアウト</button>'+
     '<div class="muted" style="text-align:center;margin-top:10px;">STEP2：顧客・予約・売上をクラウドで共有。</div>';
-  loadMembers();
-  loadClients();
-  loadBookings();
-  loadRecords();
+  await loadMembers();
+  await loadClients();
+  await loadBookings();
+  await loadRecords();
+  renderDashboard();
 }
 // 組織のメンバー名簿（担当選択に使う）
 var MEMBERS=[];
@@ -350,7 +351,7 @@ async function loadBookings(){
   var box=el("bookingsBox"); if(!box) return;
   if(r.error){ box.innerHTML='<div class="msg err">読み込みエラー：'+esc(r.error.message)+'</div>'; return; }
   BK = r.data||[];
-  if(!BK.length){ box.innerHTML='<div class="muted" style="padding:12px 0;">まだ予約がありません。上の「＋予約を追加」から。</div>'; return; }
+  if(!BK.length){ box.innerHTML='<div class="muted" style="padding:12px 0;">まだ予約がありません。上の「＋予約を追加」から。</div>'; renderDashboard(); return; }
   var h="", lastDate="";
   BK.forEach(function(b){
     if(b.date!==lastDate){ h+='<div class="sec" style="font-size:13px;">📅 '+esc(bkDateLabel(b.date))+'</div>'; lastDate=b.date; }
@@ -433,7 +434,7 @@ async function loadRecords(){
   var box=el("recordsBox"); if(!box) return;
   if(r.error){ box.innerHTML='<div class="msg err">読み込みエラー：'+esc(r.error.message)+'</div>'; return; }
   RC = r.data||[];
-  if(!RC.length){ box.innerHTML='<div class="muted" style="padding:12px 0;">まだ売上がありません。</div>'; return; }
+  if(!RC.length){ box.innerHTML='<div class="muted" style="padding:12px 0;">まだ売上がありません。</div>'; renderDashboard(); return; }
   var h="", lastDate="", total=0;
   RC.forEach(function(rec){
     if(rec.date!==lastDate){ h+='<div class="sec" style="font-size:13px;">📅 '+esc(bkDateLabel(rec.date))+'</div>'; lastDate=rec.date; }
