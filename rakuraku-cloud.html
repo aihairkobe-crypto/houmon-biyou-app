@@ -144,7 +144,7 @@ function setAuthMode(mmode){ var e=el("email"),p=el("pw"),n=el("nm"); if(e)windo
 function renderAuth(){
   var mode=window._am||"signin", su=(mode==="signup");
   APP.innerHTML='<div class="center-narrow">'+
-    '<h1 class="brand">訪問美容 楽々アプリ</h1><div class="sub" style="text-align:center;margin-bottom:16px;">あなた専用の予約・売上ノート</div>'+
+    '<h1 class="brand">訪問美容 楽々アプリ</h1><div class="sub" style="text-align:center;margin-bottom:16px;">予約・顧客・売上まで、これひとつ。<br>訪問美容のためのオールインワン</div>'+
     '<div class="card">'+
     '<div class="seg-wrap" style="margin-bottom:12px;">'+
       '<button class="seg'+(su?"":" on")+'" onclick="setAuthMode(\'signin\')">ログイン</button>'+
@@ -210,14 +210,30 @@ function startAddClient(kind){ TAB="clients"; renderApp(); openClientForm(null, 
 function firstRunGuide(){
   return '<div class="card" style="background:var(--accent-soft);border-color:#cbe7da;">'+
     '<div style="font-weight:700;font-size:17px;">ようこそ！🎉</div>'+
-    '<div class="muted" style="margin:4px 0 12px;">このアプリは「登録 → 予約 → 売上」の3ステップで使います。</div>'+
+    '<div class="muted" style="margin:4px 0 12px;">訪問美容の<b>予約・顧客・売上</b>を、これひとつで管理できます。<br>使い方は「登録 → 予約 → 売上」の3ステップ。</div>'+
     '<div class="guide-step"><span class="gnum">1</span><div><b>顧客・施設を登録</b><div class="muted">よく行く施設や、お客様を先に登録します。</div></div></div>'+
     '<div class="guide-step"><span class="gnum">2</span><div><b>予約を作る</b><div class="muted">訪問の予定を入れます（あとで直接記録でもOK）。</div></div></div>'+
     '<div class="guide-step"><span class="gnum">3</span><div><b>売上を記録</b><div class="muted">施術したら金額を記録。売上に自動集計。</div></div></div>'+
     '<button class="btn primary" onclick="startAddClient(\'施設\')" style="margin-top:14px;">① まず 顧客・施設を登録する →</button>'+
-    '<div class="muted" style="text-align:center;font-size:12px;margin-top:12px;">決まったお客様がいない方は</div>'+
-    '<button class="btn ghost accent" onclick="openQuickRecord()">🏃 その場でサッと記録</button>'+
+    '<div class="muted" style="text-align:center;font-size:12px;margin-top:12px;">どんなアプリか先に見たい方は</div>'+
+    '<button class="btn ghost accent" onclick="loadSample()">🚀 まず使ってみる（サンプルで試す）</button>'+
     '</div>';
+}
+async function loadSample(){
+  var org=PROFILE.org_id;
+  // 施設（料金表つき）＋利用者名簿
+  var f=await sb.from("clients").insert({ org_id:org, kind:"施設", name:"（例）さくら苑", address:"神戸市〇〇区…", rules:"13時以降・P1台", billing:"一括", price_list:[{name:"カット",price:2500},{name:"顔剃り",price:1000}] }).select().single();
+  if(f.error){ toast("サンプル追加に失敗しました"); return; }
+  var fid=f.data.id;
+  await sb.from("members_t").insert([{org_id:org,client_id:fid,name:"（例）田中 花子"},{org_id:org,client_id:fid,name:"（例）山本 太郎"}]);
+  // 個人
+  await sb.from("clients").insert({ org_id:org, kind:"個人", name:"（例）鈴木 一郎", address:"神戸市〇〇区…", billing:"個別", price_list:[{name:"カット",price:3500}] });
+  // 今日の予約
+  var bk=await sb.from("bookings").insert({ org_id:org, client_id:fid, date:todayISO(), time:"10:00", duration:90, staff_ids:[ME.id], memo:"（サンプル予約）" }).select().single();
+  // 売上1件
+  await sb.from("records").insert({ org_id:org, client_id:fid, booking_id:(bk.data?bk.data.id:null), member_name:"（例）田中 花子", staff_id:ME.id, menu:"カット", amount:2500, date:todayISO() });
+  await loadAll(); TAB="today"; renderApp();
+  toast("🚀 サンプルを入れました。設定→リセットで消せます");
 }
 function renderToday(){
   var v=el("view"); var tISO=todayISO();
