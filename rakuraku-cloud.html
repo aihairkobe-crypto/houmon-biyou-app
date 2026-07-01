@@ -337,7 +337,7 @@ function salesMonth(d){ SALES_MONTH=shiftMonth(SALES_MONTH||curMonth(),d); rende
 function openPicker(onpickFn, opts){
   opts=opts||{}; window._pickFn=onpickFn; window._pickNew=!!opts.allowNew;
   var body='<div class="sheet-title">'+esc(opts.title||"施設・お客様を選ぶ")+'</div>'+
-    (opts.allowQuick?'<button class="btn ghost accent" onclick="quickFromPicker()">🏃 登録せず サッと記録</button>':"")+
+    (opts.allowQuick?'<button class="btn ghost accent" onclick="quickFromPicker()">🏃 選ばずにサッと記録</button>':"")+
     '<input id="pkSearch" placeholder="🔍 名前で探す" oninput="renderPickList()" style="margin-top:'+(opts.allowQuick?"8px":"0")+';">'+
     (opts.allowNew?'<button class="btn ghost accent" onclick="pickNew()">➕ 新しい顧客・施設を登録</button>':"")+
     '<div id="pkList" style="margin-top:8px;"></div>'+
