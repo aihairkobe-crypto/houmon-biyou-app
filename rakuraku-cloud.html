@@ -45,6 +45,8 @@
   .seg{flex:1; border:none; background:none; padding:10px; border-radius:9px; font-size:15px; font-weight:700; color:var(--muted); cursor:pointer;}
   .seg.on{background:var(--surface); color:var(--accent-text); box-shadow:0 1px 3px rgba(0,0,0,.1);}
   .warn{background:#fff7e6; border:1px solid #f0d9a8; color:#8a6d2f; font-size:13px; line-height:1.6; padding:10px 12px; border-radius:10px; margin-top:10px;}
+  .toast{position:fixed; left:50%; bottom:24px; transform:translateX(-50%) translateY(10px); background:#1f2624; color:#fff; font-size:14px; font-weight:600; padding:11px 18px; border-radius:22px; box-shadow:0 4px 16px rgba(0,0,0,.25); opacity:0; transition:opacity .25s, transform .25s; pointer-events:none; z-index:9999; max-width:90%;}
+  .toast.show{opacity:1; transform:translateX(-50%) translateY(0);}
 </style>
 </head>
 <body>
@@ -192,6 +194,7 @@ async function renderHome(){
   await loadBookings();
   await loadRecords();
   renderDashboard();
+  subscribeRealtime();
 }
 // 組織のメンバー名簿（担当選択に使う）
 var MEMBERS=[];
@@ -528,7 +531,40 @@ async function delRecord(id){
   el("rform").innerHTML=""; loadRecords();
 }
 
-async function doSignOut(){ await sb.auth.signOut(); ME=null; PROFILE=null; renderAuth(); }
+// ===== トースト（画面下に一瞬出るお知らせ） =====
+var toastTimer=null;
+function toast(msg){
+  var t=el("toast");
+  if(!t){ t=document.createElement("div"); t.id="toast"; t.className="toast"; document.body.appendChild(t); }
+  t.textContent=msg; t.classList.add("show");
+  clearTimeout(toastTimer);
+  toastTimer=setTimeout(function(){ t.classList.remove("show"); }, 2600);
+}
+
+// ===== 自動更新（Realtime：他端末の変更を即反映） =====
+var RT=null, rtTimer=null, rtLabels={};
+function subscribeRealtime(){
+  if(RT||!PROFILE) return;                         // 二重購読を防ぐ
+  RT = sb.channel("org-"+PROFILE.org_id)
+    .on("postgres_changes",{event:"*",schema:"public",table:"bookings"},function(){ rtBump("予約"); })
+    .on("postgres_changes",{event:"*",schema:"public",table:"records"}, function(){ rtBump("売上"); })
+    .on("postgres_changes",{event:"*",schema:"public",table:"clients"}, function(){ rtBump("顧客"); })
+    .subscribe();
+}
+function rtBump(label){
+  rtLabels[label]=1;
+  clearTimeout(rtTimer);
+  rtTimer=setTimeout(function(){                    // 連続変更をまとめて1回だけ処理
+    if(rtLabels["顧客"]) loadClients();
+    if(rtLabels["予約"]) loadBookings();
+    if(rtLabels["売上"]) loadRecords();
+    var names=Object.keys(rtLabels).join("・"); rtLabels={};
+    if(el("app").querySelector("#bookingsBox")) toast("🔔 "+names+"が更新されました");
+  }, 400);
+}
+function unsubscribeRealtime(){ if(RT){ sb.removeChannel(RT); RT=null; } }
+
+async function doSignOut(){ unsubscribeRealtime(); await sb.auth.signOut(); ME=null; PROFILE=null; renderAuth(); }
 
 boot();
 </script>
