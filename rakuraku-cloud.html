@@ -380,7 +380,7 @@ function openBookingForm(id){
   var box=el("bform"); if(!box) return;
   var today=new Date(); var iso=today.getFullYear()+"-"+String(today.getMonth()+1).padStart(2,"0")+"-"+String(today.getDate()).padStart(2,"0");
   // 顧客の選択肢
-  var clientOpts='<option value="">（顧客を選択）</option>'+CL.map(function(c){
+  var clientOpts='<option value="">（顧客を選択）</option><option value="__new__">➕ その場で新規登録…</option>'+CL.map(function(c){
     return '<option value="'+c.id+'"'+(c.id===b.client_id?" selected":"")+'>'+esc(c.name)+'</option>';
   }).join("");
   // 担当（メンバー）チェックボックス
@@ -398,7 +398,7 @@ function openBookingForm(id){
       '<div style="flex:1;"><div style="font-size:12px;color:var(--hint);">所要(分)</div><input id="bf_dur" type="number" step="15" value="'+(b.duration||60)+'"></div>'+
     '</div>'+
     '<div style="font-size:12px;color:var(--hint);margin-top:8px;">顧客・施設</div>'+
-    '<select id="bf_client">'+clientOpts+'</select>'+
+    '<select id="bf_client" onchange="bfClientChange(this)">'+clientOpts+'</select>'+
     '<div style="font-size:12px;color:var(--hint);margin-top:8px;">担当（複数選択可）</div>'+
     '<div class="chk-wrap">'+(staffChecks||'<span class="muted">メンバーがいません</span>')+'</div>'+
     '<input id="bf_memo" value="'+esc(b.memo||"")+'" placeholder="メモ（任意）" style="margin-top:8px;">'+
@@ -473,7 +473,7 @@ function openRecordForm(id, prefill){
   var rec = id ? (RC.find(function(x){return x.id===id;})||{}) : (prefill||{});
   var box=el("rform"); if(!box) return;
   var today=new Date(); var iso=today.getFullYear()+"-"+String(today.getMonth()+1).padStart(2,"0")+"-"+String(today.getDate()).padStart(2,"0");
-  var clientOpts='<option value="">（顧客を選択）</option>'+CL.map(function(c){
+  var clientOpts='<option value="">（顧客を選択）</option><option value="__new__">➕ その場で新規登録…</option>'+CL.map(function(c){
     return '<option value="'+c.id+'"'+(c.id===rec.client_id?" selected":"")+'>'+esc(c.name)+'</option>';
   }).join("");
   var staffOpts=MEMBERS.map(function(m){
@@ -485,7 +485,7 @@ function openRecordForm(id, prefill){
     '<div style="font-size:12px;color:var(--hint);">日付</div>'+
     '<input id="rf_date" type="date" value="'+esc(rec.date||iso)+'">'+
     '<div style="font-size:12px;color:var(--hint);margin-top:8px;">顧客・施設</div>'+
-    '<select id="rf_client" onchange="rfClientChange()">'+clientOpts+'</select>'+
+    '<select id="rf_client" onchange="rfClientChange(this)">'+clientOpts+'</select>'+
     '<div style="font-size:12px;color:var(--hint);margin-top:8px;">担当</div>'+
     '<select id="rf_staff">'+staffOpts+'</select>'+
     '<div style="font-size:12px;color:var(--hint);margin-top:8px;">メニュー（料金表から選ぶと金額が入ります）</div>'+
@@ -501,9 +501,29 @@ function openRecordForm(id, prefill){
     '</div>';
   box.scrollIntoView({behavior:"smooth",block:"nearest"});
 }
-function rfClientChange(){
+async function rfClientChange(sel){
+  if(sel && sel.value==="__new__"){ await quickAddClient(sel); }
   var cid=el("rf_client").value;
   el("rf_menusel").innerHTML=menuOptionsFor(cid, "");
+}
+function bfClientChange(sel){
+  if(sel && sel.value==="__new__"){ quickAddClient(sel); }
+}
+// その場で顧客・施設を追加して、その選択肢を選ぶ（顧客は組織共有なので登録して紐づける）
+async function quickAddClient(sel){
+  var name=prompt("新しい顧客・施設の名前を入力してください");
+  if(!name||!name.trim()){ sel.value=""; return null; }
+  name=name.trim();
+  var kind=confirm("施設・訪問先ですか？\n（OK＝施設 / キャンセル＝個人）")?"施設":"個人";
+  var r=await sb.from("clients").insert({ org_id:PROFILE.org_id, kind:kind, name:name,
+    billing:(kind==="個人"?"個別":"一括") }).select().single();
+  if(r.error){ showMsg("追加エラー："+esc(r.error.message)); sel.value=""; return null; }
+  await loadClients();                       // 一覧とCLを更新
+  var opt=document.createElement("option");  // このselectにも即反映して選択
+  opt.value=r.data.id; opt.textContent=name;
+  sel.appendChild(opt); sel.value=r.data.id;
+  toast("🆕 「"+name+"」を登録しました");
+  return r.data.id;
 }
 function rfMenuChange(){
   var sel=el("rf_menusel"); var opt=sel.options[sel.selectedIndex];
