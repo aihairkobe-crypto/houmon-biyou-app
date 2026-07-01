@@ -38,6 +38,7 @@
   .ent .who{font-size:11px; color:var(--hint);}
   .cl-row{background:var(--surface); border:1px solid var(--line); border-radius:10px; padding:11px 13px; margin-bottom:7px; font-size:15px; cursor:pointer;}
   .cl-row:active{background:var(--bg);}
+  .mini{margin-top:8px; padding:7px 12px; border:1px solid var(--accent); background:var(--accent-soft); color:var(--accent-text); border-radius:9px; font-size:13px; font-weight:600; cursor:pointer;}
   .code{font-family:monospace; font-size:12px; background:var(--bg); padding:3px 7px; border-radius:6px; word-break:break-all;}
   .muted{color:var(--muted); font-size:13px;}
   .sec{font-size:13px; font-weight:700; color:var(--muted); margin:18px 4px 8px;}
@@ -180,7 +181,7 @@ async function renderHome(){
     '<div id="cform"></div>'+
     '<div id="clientsBox" style="margin-top:10px;"><div class="muted">読み込み中…</div></div>'+
     '<div class="sec">予約'+(isOwner?"（全員分）":"（自分の担当分）")+'</div>'+
-    '<button class="btn primary" onclick="openBookingForm(null)">＋ 予約を追加</button>'+
+    '<button class="btn primary" onclick="openBookingStart()">＋ 予約を作る</button>'+
     '<div id="bform"></div>'+
     '<div id="bookingsBox" style="margin-top:10px;"><div class="muted">読み込み中…</div></div>'+
     '<div class="sec">売上・カルテ'+(isOwner?"（全員分）":"（自分の担当分）")+'</div>'+
@@ -274,7 +275,9 @@ async function loadClients(){
       h+='<div class="cl-row" onclick="openClientForm(\''+c.id+'\')"><b>'+esc(c.name)+'</b>'+
         (c.address?'<div class="muted" style="font-size:12px;margin-top:2px;">📍 '+esc(c.address)+'</div>':"")+
         (c.rules?'<div style="font-size:12px;color:#c0392b;margin-top:2px;">⚠️ '+esc(c.rules)+'</div>':"")+
-        (plTxt?'<div class="muted" style="font-size:12px;margin-top:2px;">💴 '+plTxt+'</div>':"")+'</div>';
+        (plTxt?'<div class="muted" style="font-size:12px;margin-top:2px;">💴 '+plTxt+'</div>':"")+
+        '<button class="mini" onclick="event.stopPropagation();openBookingForm(null,{client_id:\''+c.id+'\'})">📅 次回予約を入れる</button>'+
+        '</div>';
     });
   });
   box.innerHTML=h;
@@ -375,8 +378,43 @@ function bkDateLabel(d){
   var dt=new Date(+p[0],+p[1]-1,+p[2]);
   return (+p[1])+"月"+(+p[2])+"日（"+wk[dt.getDay()]+"）";
 }
-function openBookingForm(id){
-  var b = id ? (BK.find(function(x){return x.id===id;})||{}) : {};
+// 予約を作る入口（相手を選ぶ／探す／新規登録）
+function openBookingStart(){
+  var box=el("bform"); if(!box) return;
+  box.innerHTML='<div class="card">'+
+    '<div class="sec" style="margin-top:0;">予約を作る（相手を選ぶ）</div>'+
+    '<input id="bkSearch" placeholder="🔍 名前で探す（施設・お客様）" oninput="renderBkPick()">'+
+    '<button class="btn ghost" onclick="bkNewClient()" style="color:var(--accent-text);border-color:var(--accent);margin-top:8px;">➕ 新しい顧客・施設を登録して予約</button>'+
+    '<div id="bkPick" style="margin-top:8px;"></div>'+
+    '<button class="btn ghost" onclick="el(\'bform\').innerHTML=\'\'">閉じる</button>'+
+    '</div>';
+  renderBkPick();
+  box.scrollIntoView({behavior:"smooth",block:"nearest"});
+}
+function renderBkPick(){
+  var box=el("bkPick"); if(!box) return;
+  var q=(el("bkSearch")&&el("bkSearch").value.trim())||"";
+  var groups=[["施設","🏢 施設・訪問先"],["病院","🏥 病院"],["個人","🧑 個人"]];
+  var h="";
+  groups.forEach(function(g){
+    var items=CL.filter(function(c){return (c.kind||"個人")===g[0] && (!q||(c.name||"").indexOf(q)>=0);});
+    if(!items.length) return;
+    h+='<div class="sec" style="font-size:12px;">'+g[1]+'</div>';
+    items.forEach(function(c){
+      h+='<div class="cl-row" onclick="openBookingForm(null,{client_id:\''+c.id+'\'})"><b>'+esc(c.name)+'</b>'+
+        (c.address?'<div class="muted" style="font-size:12px;margin-top:2px;">📍 '+esc(c.address)+'</div>':"")+'</div>';
+    });
+  });
+  if(!h) h='<div class="muted" style="padding:10px 0;">見つかりません。上の「＋新しい顧客・施設を登録」から追加できます。</div>';
+  box.innerHTML=h;
+}
+async function bkNewClient(){
+  var tmp=document.createElement("select");      // quickAddClientを流用（ダミーselect）
+  var newId=await quickAddClient(tmp);
+  if(newId) openBookingForm(null,{client_id:newId});
+}
+function openBookingForm(id, prefill){
+  var b = id ? (BK.find(function(x){return x.id===id;})||{}) : (prefill||{});
   var box=el("bform"); if(!box) return;
   var today=new Date(); var iso=today.getFullYear()+"-"+String(today.getMonth()+1).padStart(2,"0")+"-"+String(today.getDate()).padStart(2,"0");
   // 顧客の選択肢
