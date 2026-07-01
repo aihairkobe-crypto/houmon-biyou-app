@@ -450,7 +450,10 @@ async function loadRecords(){
 }
 function recordFromBooking(bid){
   var b=BK.find(function(x){return x.id===bid;}); if(!b) return;
-  var staff=(b.staff_ids&&b.staff_ids.length)?b.staff_ids[0]:ME.id;
+  // 複数メンバーで訪問することがあるので、担当の初期値は「押した本人」。
+  // 本人が担当に入っていなければ（運営が代理入力など）先頭の担当を既定に。
+  var inTeam = b.staff_ids && b.staff_ids.indexOf(ME.id)>=0;
+  var staff = inTeam ? ME.id : ((b.staff_ids&&b.staff_ids.length)?b.staff_ids[0]:ME.id);
   openRecordForm(null, { booking_id:b.id, client_id:b.client_id, staff_id:staff, date:b.date });
   el("bform").innerHTML="";
 }
