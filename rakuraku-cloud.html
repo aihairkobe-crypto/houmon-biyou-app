@@ -174,6 +174,7 @@ async function renderHome(){
   APP.innerHTML =
     '<h1>ようこそ、'+esc(PROFILE.name)+' さん</h1>'+
     '<div class="sub"><span class="tag '+(isOwner?"":"member")+'">'+(isOwner?"運営（経営者）":"メンバー")+'</span></div>'+
+    '<div style="text-align:center;margin-bottom:12px;"><button class="mini" onclick="renderHome();window.scrollTo(0,0);" style="margin-top:0;">🏠 ホーム（最新に更新）</button></div>'+
     (isOwner?('<button class="btn ghost" onclick="toggleInvite()">👥 メンバーを招待する</button><div id="inviteBox"></div>'):"")+
     (isOwner?'<div id="dashBox"></div>':"")+
     '<div class="sec">顧客・施設（組織で共有）</div>'+
@@ -188,6 +189,10 @@ async function renderHome(){
     '<button class="btn primary" onclick="openRecordForm(null)">＋ 売上を記録</button>'+
     '<div id="rform"></div>'+
     '<div id="recordsBox" style="margin-top:10px;"><div class="muted">読み込み中…</div></div>'+
+    (isOwner?('<details style="margin-top:24px;"><summary style="cursor:pointer;color:var(--hint);font-size:13px;text-align:center;list-style:none;">⚙️ 設定・データ管理</summary>'+
+      '<button class="btn danger" onclick="resetAllData()" style="margin-top:12px;">🧹 データをすべてリセット</button>'+
+      '<div class="muted" style="font-size:12px;text-align:center;">テスト用データ（顧客・予約・売上）を全部消して、本番を始めるとき用。元に戻せません。</div>'+
+      '</details>'):"")+
     '<button class="btn ghost" onclick="doSignOut()" style="margin-top:26px;color:var(--hint);font-weight:500;">ログアウト</button>'+
     '<div class="muted" style="text-align:center;margin-top:10px;">STEP2：顧客・予約・売上をクラウドで共有。</div>';
   await loadMembers();
@@ -621,6 +626,23 @@ function rtBump(label){
   }, 400);
 }
 function unsubscribeRealtime(){ if(RT){ sb.removeChannel(RT); RT=null; } }
+
+// ===== データを全リセット（運営のみ・二重確認） =====
+async function resetAllData(){
+  if(!PROFILE || PROFILE.role!=="owner"){ toast("運営のみ実行できます"); return; }
+  if(!confirm("⚠️ この組織の【顧客・利用者・予約・売上・カルテ】を すべて削除します。\n元に戻せません。本当にリセットしますか？")) return;
+  if(!confirm("最終確認：本当に全部削除してよろしいですか？")) return;
+  var org=PROFILE.org_id, err=null;
+  // 子→親の順で削除（org単位）
+  var tables=["records","bookings","members_t","clients"];
+  for(var i=0;i<tables.length;i++){
+    var r=await sb.from(tables[i]).delete().eq("org_id",org);
+    if(r.error){ err=r.error.message; break; }
+  }
+  if(err){ showMsg("リセットエラー："+esc(err)); return; }
+  toast("🧹 データをリセットしました");
+  renderHome(); window.scrollTo(0,0);
+}
 
 async function doSignOut(){ unsubscribeRealtime(); await sb.auth.signOut(); ME=null; PROFILE=null; renderAuth(); }
 
