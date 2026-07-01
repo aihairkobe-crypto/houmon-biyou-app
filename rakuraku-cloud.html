@@ -178,11 +178,16 @@ async function renderHome(){
     '<button class="btn primary" onclick="openBookingForm(null)">＋ 予約を追加</button>'+
     '<div id="bform"></div>'+
     '<div id="bookingsBox" style="margin-top:10px;"><div class="muted">読み込み中…</div></div>'+
+    '<div class="sec">売上・カルテ'+(isOwner?"（全員分）":"（自分の担当分）")+'</div>'+
+    '<button class="btn primary" onclick="openRecordForm(null)">＋ 売上を記録</button>'+
+    '<div id="rform"></div>'+
+    '<div id="recordsBox" style="margin-top:10px;"><div class="muted">読み込み中…</div></div>'+
     '<button class="btn ghost" onclick="doSignOut()" style="margin-top:26px;color:var(--hint);font-weight:500;">ログアウト</button>'+
-    '<div class="muted" style="text-align:center;margin-top:10px;">STEP2：顧客・施設・予約をクラウドで共有。</div>';
+    '<div class="muted" style="text-align:center;margin-top:10px;">STEP2：顧客・予約・売上をクラウドで共有。</div>';
   loadMembers();
   loadClients();
   loadBookings();
+  loadRecords();
 }
 // 組織のメンバー名簿（担当選択に使う）
 var MEMBERS=[];
@@ -347,6 +352,7 @@ function openBookingForm(id){
     '<input id="bf_memo" value="'+esc(b.memo||"")+'" placeholder="メモ（任意）" style="margin-top:8px;">'+
     '<div id="m"></div>'+
     '<button class="btn primary" onclick="saveBookingForm(\''+(id||"")+'\')" style="margin-top:8px;">保存</button>'+
+    (id?'<button class="btn ghost" onclick="recordFromBooking(\''+id+'\')" style="color:var(--accent-text);border-color:var(--accent);">💴 この予約の売上をつける</button>':"")+
     (id?'<button class="btn danger" onclick="delBooking(\''+id+'\')">削除</button>':"")+
     '<button class="btn ghost" onclick="el(\'bform\').innerHTML=\'\'">キャンセル</button>'+
     '</div>';
@@ -370,6 +376,103 @@ async function delBooking(id){
   var r = await sb.from("bookings").delete().eq("id",id);
   if(r.error){ showMsg("削除エラー："+esc(r.error.message)); return; }
   el("bform").innerHTML=""; loadBookings();
+}
+
+// ===== 売上・カルテ（担当別に見える） =====
+var RC=[];
+async function loadRecords(){
+  var r = await sb.from("records").select("*").order("date",{ascending:false});
+  var box=el("recordsBox"); if(!box) return;
+  if(r.error){ box.innerHTML='<div class="msg err">読み込みエラー：'+esc(r.error.message)+'</div>'; return; }
+  RC = r.data||[];
+  if(!RC.length){ box.innerHTML='<div class="muted" style="padding:12px 0;">まだ売上がありません。</div>'; return; }
+  var h="", lastDate="", total=0;
+  RC.forEach(function(rec){
+    if(rec.date!==lastDate){ h+='<div class="sec" style="font-size:13px;">📅 '+esc(bkDateLabel(rec.date))+'</div>'; lastDate=rec.date; }
+    total += rec.amount||0;
+    h+='<div class="cl-row" onclick="openRecordForm(\''+rec.id+'\')">'+
+      '<b>'+esc(clientName(rec.client_id))+'</b>　¥'+(rec.amount||0).toLocaleString()+
+      '<div class="muted" style="font-size:12px;margin-top:2px;">✂️ '+esc(rec.menu||"（メニュー未記入）")+'　👤 '+esc(memberName(rec.staff_id))+'</div>'+
+      (rec.note?'<div class="muted" style="font-size:12px;">📝 '+esc(rec.note)+'</div>':"")+'</div>';
+  });
+  h='<div class="card" style="padding:10px 14px;font-weight:700;">合計　¥'+total.toLocaleString()+'</div>'+h;
+  box.innerHTML=h;
+}
+function recordFromBooking(bid){
+  var b=BK.find(function(x){return x.id===bid;}); if(!b) return;
+  var staff=(b.staff_ids&&b.staff_ids.length)?b.staff_ids[0]:ME.id;
+  openRecordForm(null, { booking_id:b.id, client_id:b.client_id, staff_id:staff, date:b.date });
+  el("bform").innerHTML="";
+}
+function menuOptionsFor(clientId, selMenu){
+  var c=CL.find(function(x){return x.id===clientId;});
+  var pl=(c&&Array.isArray(c.price_list))?c.price_list:[];
+  var opts='<option value="">（自由入力）</option>';
+  pl.forEach(function(p){
+    opts+='<option value="'+esc(p.name)+'" data-price="'+(p.price||0)+'"'+(p.name===selMenu?" selected":"")+'>'+esc(p.name)+' ¥'+(p.price||0).toLocaleString()+'</option>';
+  });
+  return opts;
+}
+function openRecordForm(id, prefill){
+  var rec = id ? (RC.find(function(x){return x.id===id;})||{}) : (prefill||{});
+  var box=el("rform"); if(!box) return;
+  var today=new Date(); var iso=today.getFullYear()+"-"+String(today.getMonth()+1).padStart(2,"0")+"-"+String(today.getDate()).padStart(2,"0");
+  var clientOpts='<option value="">（顧客を選択）</option>'+CL.map(function(c){
+    return '<option value="'+c.id+'"'+(c.id===rec.client_id?" selected":"")+'>'+esc(c.name)+'</option>';
+  }).join("");
+  var staffOpts=MEMBERS.map(function(m){
+    return '<option value="'+m.id+'"'+(m.id===(rec.staff_id||ME.id)?" selected":"")+'>'+esc(m.name)+'</option>';
+  }).join("");
+  box.innerHTML='<div class="card">'+
+    '<div class="sec" style="margin-top:0;">'+(id?"売上を編集":"売上を記録")+'</div>'+
+    '<input type="hidden" id="rf_booking" value="'+esc(rec.booking_id||"")+'">'+
+    '<div style="font-size:12px;color:var(--hint);">日付</div>'+
+    '<input id="rf_date" type="date" value="'+esc(rec.date||iso)+'">'+
+    '<div style="font-size:12px;color:var(--hint);margin-top:8px;">顧客・施設</div>'+
+    '<select id="rf_client" onchange="rfClientChange()">'+clientOpts+'</select>'+
+    '<div style="font-size:12px;color:var(--hint);margin-top:8px;">担当</div>'+
+    '<select id="rf_staff">'+staffOpts+'</select>'+
+    '<div style="font-size:12px;color:var(--hint);margin-top:8px;">メニュー（料金表から選ぶと金額が入ります）</div>'+
+    '<select id="rf_menusel" onchange="rfMenuChange()">'+menuOptionsFor(rec.client_id, rec.menu)+'</select>'+
+    '<input id="rf_menu" value="'+esc(rec.menu||"")+'" placeholder="メニュー（自由入力も可）" style="margin-top:6px;">'+
+    '<div style="font-size:12px;color:var(--hint);margin-top:8px;">金額（円）</div>'+
+    '<input id="rf_amount" type="number" value="'+(rec.amount||"")+'" placeholder="0">'+
+    '<input id="rf_note" value="'+esc(rec.note||"")+'" placeholder="メモ・カルテ（任意）" style="margin-top:8px;">'+
+    '<div id="m"></div>'+
+    '<button class="btn primary" onclick="saveRecordForm(\''+(id||"")+'\')" style="margin-top:8px;">保存</button>'+
+    (id?'<button class="btn danger" onclick="delRecord(\''+id+'\')">削除</button>':"")+
+    '<button class="btn ghost" onclick="el(\'rform\').innerHTML=\'\'">キャンセル</button>'+
+    '</div>';
+  box.scrollIntoView({behavior:"smooth",block:"nearest"});
+}
+function rfClientChange(){
+  var cid=el("rf_client").value;
+  el("rf_menusel").innerHTML=menuOptionsFor(cid, "");
+}
+function rfMenuChange(){
+  var sel=el("rf_menusel"); var opt=sel.options[sel.selectedIndex];
+  if(!opt||!opt.value) return;
+  el("rf_menu").value=opt.value;
+  var price=opt.getAttribute("data-price");
+  if(price!=null) el("rf_amount").value=price;
+}
+async function saveRecordForm(id){
+  var client=el("rf_client").value;
+  if(!client){ showMsg("顧客・施設を選択してください"); return; }
+  var data={ org_id:PROFILE.org_id, booking_id:el("rf_booking").value||null,
+    client_id:client, staff_id:el("rf_staff").value||ME.id,
+    menu:el("rf_menu").value.trim(), amount:Number(el("rf_amount").value)||0,
+    note:el("rf_note").value.trim(), date:el("rf_date").value };
+  var r = id ? await sb.from("records").update(data).eq("id",id)
+             : await sb.from("records").insert(data);
+  if(r.error){ showMsg("保存エラー："+esc(r.error.message)); return; }
+  el("rform").innerHTML=""; loadRecords();
+}
+async function delRecord(id){
+  if(!confirm("この売上・カルテを削除します。よろしいですか？")) return;
+  var r = await sb.from("records").delete().eq("id",id);
+  if(r.error){ showMsg("削除エラー："+esc(r.error.message)); return; }
+  el("rform").innerHTML=""; loadRecords();
 }
 
 async function doSignOut(){ await sb.auth.signOut(); ME=null; PROFILE=null; renderAuth(); }
