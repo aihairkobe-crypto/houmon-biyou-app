@@ -216,7 +216,7 @@ function firstRunGuide(){
     '<div class="guide-step"><span class="gnum">3</span><div><b>売上を記録</b><div class="muted">施術したら金額を記録。売上に自動集計。</div></div></div>'+
     '<button class="btn primary" onclick="startAddClient(\'施設\')" style="margin-top:14px;">① まず 顧客・施設を登録する →</button>'+
     '<div class="muted" style="text-align:center;font-size:12px;margin-top:12px;">決まったお客様がいない方は</div>'+
-    '<button class="btn ghost accent" onclick="openQuickRecord()">🏃 登録せず 今すぐ売上だけ記録</button>'+
+    '<button class="btn ghost accent" onclick="openQuickRecord()">🏃 その場でサッと記録</button>'+
     '</div>';
 }
 function renderToday(){
@@ -337,7 +337,7 @@ function salesMonth(d){ SALES_MONTH=shiftMonth(SALES_MONTH||curMonth(),d); rende
 function openPicker(onpickFn, opts){
   opts=opts||{}; window._pickFn=onpickFn; window._pickNew=!!opts.allowNew;
   var body='<div class="sheet-title">'+esc(opts.title||"施設・お客様を選ぶ")+'</div>'+
-    (opts.allowQuick?'<button class="btn ghost accent" onclick="quickFromPicker()">🏃 登録せず サッと記録</button>':"")+
+    (opts.allowQuick?'<button class="btn ghost accent" onclick="quickFromPicker()">🏃 その場でサッと記録</button>':"")+
     '<input id="pkSearch" placeholder="🔍 名前で探す" oninput="renderPickList()" style="margin-top:'+(opts.allowQuick?"8px":"0")+';">'+
     (opts.allowNew?'<button class="btn ghost accent" onclick="pickNew()">➕ 新しい顧客・施設を登録</button>':"")+
     '<div id="pkList" style="margin-top:8px;"></div>'+
@@ -376,8 +376,8 @@ function quickFromPicker(){ closeSheet(); openQuickRecord(); }
 /* ===== 登録せず サッと売上記録（決まった顧客がいない人向け） ===== */
 function openQuickRecord(prefill){
   prefill=prefill||{};
-  var body='<div class="sheet-title">サッと売上記録</div>'+
-    '<div class="muted" style="margin-bottom:8px;">顧客登録なしで、その場の売上を記録します。</div>'+
+  var body='<div class="sheet-title">その場でサッと記録</div>'+
+    '<div class="muted" style="margin-bottom:8px;">顧客を選ばずに、その場の売上を記録します。</div>'+
     '<div class="hint">日付</div><input id="qr_date" type="date" value="'+esc(prefill.date||todayISO())+'">'+
     '<div class="hint" style="margin-top:8px;">お客様名（任意）</div><input id="qr_name" placeholder="例：〇〇様（空欄でもOK）">'+
     '<div class="hint" style="margin-top:8px;">メニュー</div><input id="qr_menu" placeholder="例：カット">'+
