@@ -304,7 +304,7 @@ function openClientForm(id, presetKind){
     '<button class="btn ghost" onclick="cfAddPriceRow()" style="margin-top:4px;padding:8px;font-size:14px;">＋ メニューを追加</button>'+
     ((id && (c.kind==="施設"||c.kind==="病院"))
       ? '<div style="font-size:12px;color:var(--hint);margin-top:14px;">利用者（入居者）リスト</div>'+
-        '<div class="muted" style="font-size:11px;margin:2px 4px 4px;">この施設で対応する方を登録します。売上を記録するとき、ここから選べます。</div>'+
+        '<div class="muted" style="font-size:11px;margin:2px 4px 4px;">この施設の「いつもの名簿（候補）」です。毎回この全員ではなく、訪問ごとに“その日対応した人”を選んで売上をつけます。入退居があれば随時ここを直せます。</div>'+
         '<div id="cf_members"><div class="muted" style="font-size:12px;">読み込み中…</div></div>'
       : "")+
     '<div id="m"></div>'+
