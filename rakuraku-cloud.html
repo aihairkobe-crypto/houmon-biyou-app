@@ -21,6 +21,8 @@
   .price-row{display:flex; gap:6px; margin-top:6px; align-items:center;}
   .price-row .cf_pname{flex:2;} .price-row .cf_pprice{flex:1;}
   .price-row .px{flex:0 0 38px; height:42px; border:1px solid var(--line); background:var(--surface); border-radius:10px; color:var(--muted); font-size:18px; cursor:pointer;}
+  .dash-row{display:flex; justify-content:space-between; align-items:center; padding:7px 0; border-top:1px solid #cbe7da; font-size:14px;}
+  .mbtn{width:34px; height:34px; border:1px solid #cbe7da; background:var(--surface); border-radius:9px; font-size:18px; color:var(--accent-text); cursor:pointer;}
   .btn{display:block; width:100%; padding:12px; border:none; border-radius:12px; font-size:15px; font-weight:600; margin-top:12px; cursor:pointer;}
   .btn.primary{background:var(--accent); color:#fff;}
   .btn.ghost{background:var(--surface); border:1px solid var(--line); color:var(--text);}
@@ -170,6 +172,7 @@ async function renderHome(){
     '<h1>ようこそ、'+esc(PROFILE.name)+' さん</h1>'+
     '<div class="sub"><span class="tag '+(isOwner?"":"member")+'">'+(isOwner?"運営（経営者）":"メンバー")+'</span></div>'+
     (isOwner?('<button class="btn ghost" onclick="toggleInvite()">👥 メンバーを招待する</button><div id="inviteBox"></div>'):"")+
+    (isOwner?'<div id="dashBox"></div>':"")+
     '<div class="sec">顧客・施設（組織で共有）</div>'+
     '<div class="row" style="gap:8px;"><button class="btn primary" onclick="openClientForm(null,\'個人\')">＋ 個人</button><button class="btn primary" onclick="openClientForm(null,\'施設\')">＋ 施設・訪問先</button></div>'+
     '<div id="cform"></div>'+
@@ -196,6 +199,50 @@ async function loadMembers(){
   MEMBERS = r.error ? [] : (r.data||[]);
 }
 function memberName(uid){ var m=MEMBERS.find(function(x){return x.id===uid;}); return m?m.name:"?"; }
+// ===== 運営ダッシュボード（把握用の集計） =====
+function todayISO(){ var d=new Date(); return d.getFullYear()+"-"+String(d.getMonth()+1).padStart(2,"0")+"-"+String(d.getDate()).padStart(2,"0"); }
+function curMonth(){ var d=new Date(); return d.getFullYear()+"-"+String(d.getMonth()+1).padStart(2,"0"); }
+function shiftMonth(ym, delta){
+  var p=ym.split("-"); var d=new Date(+p[0], +p[1]-1+delta, 1);
+  return d.getFullYear()+"-"+String(d.getMonth()+1).padStart(2,"0");
+}
+function dashChangeMonth(delta){ window.DASH_MONTH=shiftMonth(window.DASH_MONTH||curMonth(), delta); renderDashboard(); }
+function renderDashboard(){
+  var box=el("dashBox"); if(!box) return;               // 運営のみ枠が存在
+  if(!PROFILE || PROFILE.role!=="owner") return;
+  var month=window.DASH_MONTH||curMonth();
+  var p=month.split("-"); var monthLabel=(+p[0])+"年"+(+p[1])+"月";
+  // 当月の売上をメンバー別に集計
+  var recs=RC.filter(function(r){ return (r.date||"").slice(0,7)===month; });
+  var byStaff={}, total=0;
+  recs.forEach(function(r){
+    var k=r.staff_id||"?"; if(!byStaff[k]) byStaff[k]={sum:0,cnt:0};
+    byStaff[k].sum+=r.amount||0; byStaff[k].cnt++; total+=r.amount||0;
+  });
+  var staffKeys=Object.keys(byStaff).sort(function(a,b){return byStaff[b].sum-byStaff[a].sum;});
+  var salesHtml = staffKeys.length ? staffKeys.map(function(k){
+    return '<div class="dash-row"><span>'+esc(memberName(k))+'　<span class="muted" style="font-size:12px;">'+byStaff[k].cnt+'件</span></span>'+
+      '<b>¥'+byStaff[k].sum.toLocaleString()+'</b></div>';
+  }).join("") : '<div class="muted" style="padding:6px 0;">この月の売上はまだありません。</div>';
+  // 今日のスケジュール（全員分）
+  var tISO=todayISO();
+  var today=BK.filter(function(b){ return b.date===tISO; }).sort(function(a,b){return (a.time||"").localeCompare(b.time||"");});
+  var schedHtml = today.length ? today.map(function(b){
+    var staff=(b.staff_ids||[]).map(memberName).join("・")||"担当未定";
+    return '<div class="dash-row"><span><b>'+esc(b.time||"--:--")+'</b>　'+esc(clientName(b.client_id))+'</span>'+
+      '<span class="muted" style="font-size:12px;">'+esc(staff)+'</span></div>';
+  }).join("") : '<div class="muted" style="padding:6px 0;">今日の予約はありません。</div>';
+  box.innerHTML='<div class="card" style="background:var(--accent-soft);border-color:#cbe7da;">'+
+    '<div class="dash-row" style="border:none;padding:0 0 6px;">'+
+      '<button class="mbtn" onclick="dashChangeMonth(-1)">‹</button>'+
+      '<div style="font-weight:700;">📊 '+esc(monthLabel)+' の集計</div>'+
+      '<button class="mbtn" onclick="dashChangeMonth(1)">›</button>'+
+    '</div>'+
+    '<div class="dash-row" style="border-top:1px solid #cbe7da;"><span style="font-weight:700;">売上合計</span><b style="font-size:18px;color:var(--accent-text);">¥'+total.toLocaleString()+'</b></div>'+
+    '<div style="font-size:12px;color:var(--muted);margin:8px 0 2px;">メンバー別</div>'+ salesHtml +
+    '<div style="font-size:12px;color:var(--muted);margin:10px 0 2px;">今日（'+bkDateLabel(tISO)+'）の予定</div>'+ schedHtml +
+    '</div>';
+}
 function toggleInvite(){
   var b=el("inviteBox"); if(!b) return;
   if(b.innerHTML){ b.innerHTML=""; return; }
@@ -315,6 +362,7 @@ async function loadBookings(){
       (b.memo?'<div class="muted" style="font-size:12px;">📝 '+esc(b.memo)+'</div>':"")+'</div>';
   });
   box.innerHTML=h;
+  renderDashboard();
 }
 function bkDateLabel(d){
   if(!d) return "日付未定";
@@ -397,6 +445,7 @@ async function loadRecords(){
   });
   h='<div class="card" style="padding:10px 14px;font-weight:700;">合計　¥'+total.toLocaleString()+'</div>'+h;
   box.innerHTML=h;
+  renderDashboard();
 }
 function recordFromBooking(bid){
   var b=BK.find(function(x){return x.id===bid;}); if(!b) return;
