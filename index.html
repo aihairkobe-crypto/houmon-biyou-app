@@ -390,7 +390,7 @@ async function delMove(id){
   closeSheet(); toast("🗑 削除しました"); await reloadTimeBlocks();
 }
 function newBookingAt(){ openPicker('bkAtPick',{title:'予約する施設・お客様を選ぶ',allowNew:true}); }
-function bkAtPick(id){ var a=window._newAt||{}; openBookingForm(null,{client_id:id, date:a.iso, time:a.t}); }
+function bkAtPick(id){ var a=window._newAt||{}; var c=clientById(id); if(isFacility(c)){ openFacilityBatch(id,{date:a.iso}); } else { openBookingForm(null,{client_id:id, date:a.iso, time:a.t}); } }
 function newRecordAt(){ openPicker('rcAtPick',{title:'だれの施術を記録しますか？',allowNew:true}); }
 function rcAtPick(id){ var a=window._newAt||{}; var c=clientById(id); if(isFacility(c)) openFacilityBatch(id,{date:a.iso}); else openRecordForm(null,{client_id:id, date:a.iso, time:a.t}); }
 
@@ -696,7 +696,7 @@ async function pickNewSave(fn){
   CL.push(r.data); toast("🆕 「"+name+"」を登録しました");
   closeSheet(); if(fn&&window[fn]) window[fn](r.data.id);
 }
-function bkWith(id){ openBookingForm(null,{client_id:id}); }
+function bkWith(id){ var c=clientById(id); if(isFacility(c)){ openFacilityBatch(id,{date:(window.PLAN_SEL||todayISO())}); } else { openBookingForm(null,{client_id:id}); } }
 function recWith(id){ var c=clientById(id); if(isFacility(c)) openFacilityBatch(id,{date:todayISO()}); else openRecordForm(null,{client_id:id,date:todayISO()}); }
 function quickFromPicker(){ closeSheet(); openQuickRecord(); }
 
