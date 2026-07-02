@@ -961,7 +961,11 @@ async function openFacilityBatch(clientId, opts){
   var hasRows=rowsHtml!=="";
   var body='<div class="sheet-title">'+esc(c.name)+'　'+esc(dateLabel(iso))+'</div>'+
     '<div class="muted" style="margin-bottom:8px;">この日に来る<b>利用者リストを入力</b>（毎回変わってOK）。<b>📋名簿を貼り付け</b>か「＋利用者を追加」で入れて、まとめて保存。保存分は履歴・領収書の元として残ります。</div>'+
-    '<div class="hint">日付</div><input id="ba_date" type="date" value="'+esc(iso)+'">'+
+    '<div class="hint">お客様情報（ここで直すと顧客に反映・地図にも使われます）</div>'+
+    '<input id="ba_caddr" value="'+esc(c.address||"")+'" placeholder="住所（例：神戸市中央区元町通5-7-4-202）">'+
+    '<input id="ba_cphone" value="'+esc(c.phone||"")+'" placeholder="電話（任意）" style="margin-top:6px;">'+
+    '<div class="row" style="margin-top:8px;"><div><div class="hint">日付</div><input id="ba_date" type="date" value="'+esc(iso)+'"></div>'+
+      '<div><div class="hint">時間</div><select id="ba_time">'+timeOptions(defHM())+'</select></div></div>'+
     (hasRows?'<div class="card" style="padding:10px 12px;margin-top:10px;">'+
       '<div class="row"><button class="btn ghost accent sm" onclick="batchCheckAll(true)">✓ 全員チェック</button>'+
         '<button class="btn ghost sm" onclick="batchCheckAll(false)">全員はずす</button></div>'+
@@ -1030,19 +1034,26 @@ async function batchAdd(){
   var node=tmp.firstChild; el("ba_rows").appendChild(node);
 }
 async function saveBatch(){
-  var date=el("ba_date").value; var rows=document.querySelectorAll("#ba_rows .ba-row"); var payload=[];
+  var date=el("ba_date").value; var time=(el("ba_time")?el("ba_time").value:""); var rows=document.querySelectorAll("#ba_rows .ba-row"); var payload=[];
   Array.prototype.forEach.call(rows,function(row){
     if(!row.querySelector(".ba_chk").checked) return;
     payload.push({ org_id:PROFILE.org_id, client_id:window._batch.clientId, booking_id:window._batch.bookingId||null,
       member_id:row.getAttribute("data-mid")||null, staff_id:ME.id,
       menu:row.querySelector(".ba_menu").value.trim(), amount:Number(row.querySelector(".ba_amount").value)||0, date:date,
       note:row.getAttribute("data-note")||"",
-      photos:recExtra({nm:row.getAttribute("data-name")||"", room:(row.querySelector(".ba_room")?row.querySelector(".ba_room").value.trim():"")}) });
+      photos:recExtra({nm:row.getAttribute("data-name")||"", room:(row.querySelector(".ba_room")?row.querySelector(".ba_room").value.trim():""), t:time}) });
   });
   if(!payload.length){ showMsg("その日 対応した人にチェックを入れてください"); return; }
   var r=await insertRecords(payload);
   if(r.error){ showMsg("保存エラー："+esc(r.error.message)); return; }
-  closeSheet(); toast("💴 "+payload.length+"件の施術を記録しました"); await reloadRecords();
+  // 施設のお客様情報（住所・電話）も反映。住所変更で地図の座標キャッシュを消す
+  if(el("ba_caddr")){
+    var oldC=clientById(window._batch.clientId)||{}; var newAddr=el("ba_caddr").value.trim();
+    var cu={ address:newAddr, phone:(el("ba_cphone")?el("ba_cphone").value.trim():"") };
+    if(newAddr!==(oldC.address||"")){ cu.lat=null; cu.lng=null; }
+    try{ await sb.from("clients").update(cu).eq("id",window._batch.clientId); }catch(e){}
+  }
+  closeSheet(); toast("💴 "+payload.length+"件の施術を記録しました"); await loadAll(); renderTab();
 }
 /* ===== 施設名簿をExcelからコピペで一括取り込み ===== */
 function priceOfMenu(pl, menu){ var f=(pl||[]).find(function(p){return p.name===menu;}); return f?f.price:null; }
