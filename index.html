@@ -312,8 +312,8 @@ function dayScheduleHtml(iso){
   timed.forEach(function(it){
     var m=hm2min(it.t), top=(m-top0)*ppm+PAD, hgt=Math.max(itDur(it)*ppm, 34);
     var isBk=it.kind==="bk";
-    var done=isBk?(it.b.status==="施術終了"):true;   // 本人が「施術終了」ボタンを押したら終了
-    var cls=isBk?(done?"fin":"plan"):"done";   // 予約:未=予定(緑)/済=施術終了(灰)、記録=灰
+    var done=isBk?(it.b.status==="施術終了"):(!!exRec(it.r).done);   // 予定=未/施術終了=済（予約・記録とも本人がボタンで切替）
+    var cls=done?"fin":"plan";   // 未=予定(緑)/済=施術終了(灰)
     var label=isBk?esc(clientName(it.b.client_id)):recordWho(it.r);
     var sub=isBk?(done?'✅ 施術終了':(it.b.duration?it.b.duration+'分':'予定')):(esc(it.r.menu||'')+(it.r.amount?'　'+yen(it.r.amount):''));
     var onclick=isBk?"openBookingForm('"+it.b.id+"')":"openRecordForm('"+it.r.id+"')";
@@ -405,11 +405,15 @@ function timelineItemHtml(it){
         '<button class="btn ghost sm" onclick="openBookingForm(\''+b.id+'\')">編集</button></div>'+
       '</div>';
   }
-  var r=it.r;
-  return '<div class="item" onclick="openRecordForm(\''+r.id+'\')"><div class="top">'+
-    '<div><div class="name">'+(exRec(r).t?esc(exRec(r).t)+'　':'')+recordWho(r)+'</div>'+
+  var r=it.r; var rfin=!!exRec(r).done;
+  return '<div class="item"><div class="top">'+
+    '<div style="cursor:pointer;" onclick="openRecordForm(\''+r.id+'\')"><div class="name">'+(exRec(r).t?esc(exRec(r).t)+'　':'')+recordWho(r)+'</div>'+
       '<div class="meta">✂️ '+esc(r.menu||"施術")+'　'+yen(r.amount)+(r.note?'　📝 '+esc(r.note):"")+'</div></div>'+
-    '<span class="pill done">記録済</span></div></div>';
+    '<span class="pill '+(rfin?"plan":"done")+'">'+(rfin?"施術終了":"予定")+'</span></div>'+
+    '<div class="row" style="margin-top:10px;">'+
+      '<button class="btn '+(rfin?"ghost":"primary")+' sm" onclick="toggleRecordDone(\''+r.id+'\')">'+(rfin?"↩ 予定に戻す":"✅ 施術終了")+'</button>'+
+      '<button class="btn ghost sm" onclick="openRecordForm(\''+r.id+'\')">編集</button></div>'+
+    '</div>';
 }
 
 /* ===== 予定タブ（カレンダー） ===== */
@@ -439,7 +443,8 @@ function renderPlan(){
   // 選択日のタイムスケジュール（時間軸で目視）
   html+='<div class="sec">'+esc(dateLabel(PLAN_SEL))+' の予定</div>';
   html+=dayScheduleHtml(PLAN_SEL);
-  html+='<button class="btn ghost accent" style="margin-top:10px;" onclick="showRouteMap(\''+PLAN_SEL+'\')">🗺 この日の動線を地図で見る</button>';
+  html+='<button class="btn ghost accent" style="margin-top:10px;" onclick="openMoveForm(null,{date:\''+PLAN_SEL+'\',duration:15})">🚗 移動を追加</button>';
+  html+='<button class="btn ghost accent" style="margin-top:8px;" onclick="showRouteMap(\''+PLAN_SEL+'\')">🗺 この日の動線を地図で見る</button>';
   html+='<div id="routeMap" style="display:none;margin-top:8px;"></div>';
   v.innerHTML=html;
 }
@@ -781,6 +786,16 @@ async function toggleBookingDone(id){
   b.status=ns;
   if(el("overlay")&&el("overlay").classList.contains("show")) closeSheet();
   toast(ns==="施術終了"?"✅ 施術終了にしました":"↩ 予定に戻しました"); renderTab();
+}
+/* 記録の施術終了トグル（予約と同じ挙動。photos.done で保持） */
+async function toggleRecordDone(id){
+  var r=RC.find(function(x){return x.id===id;}); if(!r) return;
+  var p=Object.assign({}, exRec(r)); var nd=!p.done; if(nd) p.done=true; else delete p.done;
+  var res=await updateRecord(id,{photos:p});
+  if(res.error){ showMsg("更新エラー："+esc(res.error.message)); toast("更新できませんでした"); return; }
+  r.photos=p;
+  if(el("overlay")&&el("overlay").classList.contains("show")) closeSheet();
+  toast(nd?"✅ 施術終了にしました":"↩ 予定に戻しました"); renderTab();
 }
 async function delBooking(id){
   if(!confirm("この予約を削除しますか？")) return;
