@@ -962,6 +962,15 @@ async function openFacilityBatch(clientId, opts){
   var body='<div class="sheet-title">'+esc(c.name)+'　'+esc(dateLabel(iso))+'</div>'+
     '<div class="muted" style="margin-bottom:8px;">その日 <b>対応した人だけ</b> にチェック → まとめて保存。'+(lastDate?'<br>（前回対応した方は自動でチェック済み）':'')+'</div>'+
     '<div class="hint">日付</div><input id="ba_date" type="date" value="'+esc(iso)+'">'+
+    (roster.length?'<div class="card" style="padding:10px 12px;margin-top:10px;">'+
+      '<div class="row"><button class="btn ghost accent sm" onclick="batchCheckAll(true)">✓ 全員チェック</button>'+
+        '<button class="btn ghost sm" onclick="batchCheckAll(false)">全員はずす</button></div>'+
+      '<div class="hint" style="margin-top:8px;">チェック中の全員に一括で</div>'+
+      '<div class="row" style="align-items:center;">'+
+        (pl.length?'<select id="ba_bulkmenu">'+batchMenuOptions(pl)+'</select>':'<input id="ba_bulkmenu" placeholder="メニュー">')+
+        '<input id="ba_bulkamt" type="number" placeholder="料金" style="flex:0 0 90px;">'+
+        '<button class="btn primary sm" style="flex:0 0 auto;" onclick="batchApplyAll()">適用</button></div>'+
+    '</div>':'')+
     '<div id="ba_rows" style="margin-top:10px;">'+(rowsHtml||'<div class="muted">名簿が空です。下の「＋利用者を追加」から。</div>')+'</div>'+
     '<button class="btn ghost accent" onclick="facilityBulkPaste()">📋 名簿を貼り付け（Excelからコピー）</button>'+
     '<button class="btn ghost accent" onclick="batchAdd()">➕ その場で利用者を追加</button>'+
@@ -985,6 +994,22 @@ function batchRow(m, pl, pre){
 }
 function batchToggle(chk){ var row=chk.closest(".ba-row"); row.querySelector(".ba-detail").style.display=chk.checked?"block":"none"; row.classList.toggle("on",chk.checked); }
 function batchMenu(sel){ var opt=sel.options[sel.selectedIndex]; if(!opt) return; var row=sel.closest(".ba-row"); var p=opt.getAttribute("data-price"); if(p!=null&&p!=="") row.querySelector(".ba_amount").value=p; var chk=row.querySelector(".ba_chk"); if(!chk.checked){ chk.checked=true; batchToggle(chk); } }
+function batchMenuOptions(pl){ return '<option value="">（メニュー）</option>'+pl.map(function(p){ return '<option value="'+esc(p.name)+'" data-price="'+(p.price||0)+'">'+esc(p.name)+' '+yen(p.price)+'</option>'; }).join(""); }
+/* 全員チェック / 解除 */
+function batchCheckAll(on){ Array.prototype.forEach.call(document.querySelectorAll("#ba_rows .ba-row"),function(row){ var chk=row.querySelector(".ba_chk"); chk.checked=on; batchToggle(chk); }); }
+/* チェック中の全員に、同じメニュー・料金を一括適用 */
+function batchApplyAll(){
+  var me=el("ba_bulkmenu"); var menu=me?me.value.trim():"";
+  var amtEl=el("ba_bulkamt"); var amt=(amtEl&&amtEl.value!=="")?Number(amtEl.value):null;
+  var price=null; if(me&&me.tagName==="SELECT"){ var o=me.options[me.selectedIndex]; if(o){ var p=o.getAttribute("data-price"); if(p!=null&&p!=="") price=Number(p); } }
+  var n=0;
+  Array.prototype.forEach.call(document.querySelectorAll("#ba_rows .ba-row"),function(row){ if(!row.querySelector(".ba_chk").checked) return; n++;
+    if(menu){ var ms=row.querySelector(".ba_menu"); if(ms) ms.value=menu; }
+    var aEl=row.querySelector(".ba_amount"); if(aEl){ if(amt!=null) aEl.value=amt; else if(price!=null) aEl.value=price; }
+  });
+  if(!n){ showMsg("先にチェックを入れてください（「✓ 全員チェック」でもOK）"); return; }
+  toast(n+"人に適用しました");
+}
 async function batchAdd(){
   var name=prompt("追加する利用者名を入力してください"); if(!name||!name.trim()) return; name=name.trim();
   var keep=confirm("この方を名簿にも残しますか？\n（OK＝名簿に残す / キャンセル＝今回だけ）");
