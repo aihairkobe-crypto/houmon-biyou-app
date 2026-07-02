@@ -58,6 +58,8 @@
   .sched-ev.plan{background:#eef1f0; color:var(--text); border-left:3px solid var(--muted);}
   .sched-ev.done{background:var(--accent-soft); color:var(--accent-text); border-left:3px solid var(--accent);}
   .sched-ev b{font-weight:700;}
+  .sched-now{position:absolute; left:44px; right:0; border-top:2px solid var(--danger); z-index:5; pointer-events:none;}
+  .sched-now-dot{position:absolute; left:-4px; top:-4px; width:7px; height:7px; border-radius:50%; background:var(--danger);}
   /* タブバー */
   .tabbar{position:fixed; left:0; right:0; bottom:0; z-index:60; background:var(--surface); border-top:1px solid var(--line); display:flex; max-width:480px; margin:0 auto;}
   .tabbar button{flex:1; border:none; background:none; padding:8px 0 10px; font-size:11px; color:var(--muted); cursor:pointer; display:flex; flex-direction:column; align-items:center; gap:2px;}
@@ -294,9 +296,10 @@ function dayScheduleHtml(iso){
   timed.forEach(function(it){ var m=hm2min(it.t); var sh=Math.floor(m/60); if(sh<startH)startH=sh; var eh=Math.ceil((m+itDur(it))/60); if(eh>endH)endH=eh; });
   if(endH<=startH) endH=startH+1;
   var hourH=48, ppm=hourH/60, top0=startH*60, PAD=8;
-  var h='<div class="muted" style="font-size:11px;margin:2px 0 4px;">空いた時間をタップすると、その時刻に追加できます</div>';
+  var h='<div class="muted" style="font-size:11px;margin:2px 0 4px;">空き時間をタップで追加　｜　<span style="color:var(--muted);">■</span>予定　<span style="color:var(--accent-text);">■</span>実施済'+(iso===todayISO()?'　<span style="color:var(--danger);">—</span>今':'')+'</div>';
   h+='<div class="sched" data-start="'+startH+'" style="height:'+((endH-startH)*hourH+PAD*2)+'px;" onclick="schedClick(event,\''+iso+'\')">';
   for(var hh=startH; hh<=endH; hh++){ var y=(hh-startH)*hourH+PAD; h+='<div class="sched-hline" style="top:'+y+'px;"></div><div class="sched-hlabel" style="top:'+y+'px;">'+pad(hh)+':00</div>'; }
+  if(iso===todayISO()){ var nm=(new Date()).getHours()*60+(new Date()).getMinutes(); if(nm>=top0 && nm<=endH*60){ var ny=(nm-top0)*ppm+PAD; h+='<div class="sched-now" style="top:'+ny+'px;"><span class="sched-now-dot"></span></div>'; } }
   timed.forEach(function(it){
     var m=hm2min(it.t), top=(m-top0)*ppm+PAD, hgt=Math.max(itDur(it)*ppm, 34);
     var isBk=it.kind==="bk";
