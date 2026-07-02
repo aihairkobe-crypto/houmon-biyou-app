@@ -752,23 +752,50 @@ function openQuickRecord(prefill){
   var body='<div class="sheet-title">施術をすぐ記録</div>'+
     '<div class="muted" style="margin-bottom:8px;">ここで入れた<b>お客様情報（住所など）も丸ごと登録</b>されます。あとから顧客タブでいつでも編集できます。</div>'+
     '<div class="hint">区分</div><div class="seg-wrap" id="qr_kind" style="margin-bottom:8px;">'+
-      ["在宅","施設","病院"].map(function(k){return '<button class="seg'+(k==="在宅"?" on":"")+'" onclick="cfKind(this)">'+k+'</button>';}).join("")+'</div>'+
+      ["在宅","施設","病院"].map(function(k){return '<button class="seg'+(k==="在宅"?" on":"")+'" onclick="qrKind(this)">'+k+'</button>';}).join("")+'</div>'+
     '<div class="row"><div><div class="hint">日付</div><input id="qr_date" type="date" value="'+esc(prefill.date||todayISO())+'"></div>'+
       '<div><div class="hint">時間</div><select id="qr_time">'+timeOptions(prefill.time||defHM())+'</select></div></div>'+
     '<div class="hint" style="margin-top:8px;">施術時間（分）</div><input id="qr_dur" type="number" step="5" value="'+(prefill.dur||60)+'">'+
-    '<div class="hint" style="margin-top:8px;">お客様名（任意）</div><input id="qr_name" placeholder="例：〇〇様（空欄でもOK）">'+
+    '<div class="hint" style="margin-top:8px;" id="qr_namehint">お客様名（任意）</div><input id="qr_name" placeholder="例：〇〇様（空欄でもOK）">'+
     '<div class="hint" style="margin-top:8px;">住所（地図に出す・任意）</div><input id="qr_addr" placeholder="例：神戸市中央区元町通5-7-4-202">'+
     '<div class="hint" style="margin-top:8px;">電話（任意）</div><input id="qr_phone" placeholder="任意">'+
     '<div class="hint" style="margin-top:8px;">注意・ルール（任意）</div><input id="qr_rules" placeholder="例：13時以降 / P1台">'+
-    '<div class="hint" style="margin-top:8px;">メニュー'+(STD_MENU.length?'（下のボタンをタップで料金も自動入力）':'')+'</div>'+
-    menuChipsHtml(null,"qr_menu","qr_amount")+
-    '<input id="qr_menu" placeholder="例：カット">'+
-    '<div class="hint" style="margin-top:8px;">料金（円）</div><input id="qr_amount" type="number" placeholder="0">'+
-    '<div class="hint" style="margin-top:8px;">メモ</div><input id="qr_note" placeholder="任意">'+
+    '<div id="qr_single">'+
+      '<div class="hint" style="margin-top:8px;">メニュー'+(STD_MENU.length?'（下のボタンをタップで料金も自動入力）':'')+'</div>'+
+      menuChipsHtml(null,"qr_menu","qr_amount")+
+      '<input id="qr_menu" placeholder="例：カット">'+
+      '<div class="hint" style="margin-top:8px;">料金（円）</div><input id="qr_amount" type="number" placeholder="0">'+
+      '<div class="hint" style="margin-top:8px;">メモ</div><input id="qr_note" placeholder="任意">'+
+    '</div>'+
+    '<div id="qr_facmode" style="display:none;"><div class="muted" style="margin-top:8px;">🏢 施設・病院は<b>次の画面で利用者リストを入力</b>します（Excel貼り付け・全員一括もOK）。上の名前に<b>施設名</b>を入れてください。</div></div>'+
     '<div id="m"></div>'+
-    '<button class="btn primary" onclick="saveQuick()">保存</button>'+
+    '<button class="btn primary" id="qr_savebtn" onclick="qrSubmit()">保存</button>'+
     '<button class="btn ghost" onclick="closeSheet()">キャンセル</button>';
   openSheet(body);
+}
+/* 区分切替：施設/病院なら団体（リスト）入力モードに */
+function qrKind(btn){
+  cfKind(btn);
+  var kind=btn.textContent; var fac=(kind==="施設"||kind==="病院");
+  if(el("qr_single")) el("qr_single").style.display=fac?"none":"block";
+  if(el("qr_facmode")) el("qr_facmode").style.display=fac?"block":"none";
+  if(el("qr_namehint")) el("qr_namehint").textContent=fac?(kind+"名（例：〇〇苑）"):"お客様名（任意）";
+  if(el("qr_savebtn")) el("qr_savebtn").textContent=fac?"🏢 団体入力へ進む":"保存";
+}
+async function qrSubmit(){
+  var kEl=document.querySelector("#qr_kind .seg.on"); var kind=kEl?kEl.textContent:"在宅";
+  if(kind==="施設"||kind==="病院"){ await qrToFacility(kind); } else { await saveQuick(); }
+}
+/* 施設名を確定→施設の団体入力（リスト）画面へ */
+async function qrToFacility(kind){
+  var name=el("qr_name").value.trim(); if(!name){ showMsg(kind+"名を入れてください"); return; }
+  var addr=el("qr_addr").value.trim(), phone=el("qr_phone").value.trim(), rules=el("qr_rules").value.trim();
+  var ex=CL.find(function(c){return (c.kind==="施設"||c.kind==="病院") && c.name===name;});
+  var clientId;
+  if(ex){ clientId=ex.id; var upd={}; if(addr)upd.address=addr; if(phone)upd.phone=phone; if(rules)upd.rules=rules; if(Object.keys(upd).length){ try{ await sb.from("clients").update(upd).eq("id",ex.id); }catch(e){} } }
+  else { var cr=await sb.from("clients").insert({org_id:PROFILE.org_id,kind:kind,name:name,address:addr,phone:phone,rules:rules,billing:"一括"}).select().single(); if(cr.error){ showMsg("登録エラー："+esc(cr.error.message)); return; } clientId=cr.data.id; }
+  await loadAll();
+  openFacilityBatch(clientId,{date:el("qr_date").value});
 }
 async function saveQuick(){
   var kEl=document.querySelector("#qr_kind .seg.on"); var kind=kEl?kEl.textContent:"在宅";
