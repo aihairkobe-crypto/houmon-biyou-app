@@ -620,12 +620,15 @@ function quickFromPicker(){ closeSheet(); openQuickRecord(); }
 function openQuickRecord(prefill){
   prefill=prefill||{};
   var body='<div class="sheet-title">施術をすぐ記録</div>'+
-    '<div class="muted" style="margin-bottom:8px;">お名前を入れると<b>顧客にも自動登録</b>されます。予定・売上にちゃんと積まれます。</div>'+
+    '<div class="muted" style="margin-bottom:8px;">ここで入れた<b>お客様情報（住所など）も丸ごと登録</b>されます。あとから顧客タブでいつでも編集できます。</div>'+
     '<div class="hint">区分</div><div class="seg-wrap" id="qr_kind" style="margin-bottom:8px;">'+
       ["在宅","施設","病院"].map(function(k){return '<button class="seg'+(k==="在宅"?" on":"")+'" onclick="cfKind(this)">'+k+'</button>';}).join("")+'</div>'+
     '<div class="row"><div><div class="hint">日付</div><input id="qr_date" type="date" value="'+esc(prefill.date||todayISO())+'"></div>'+
       '<div><div class="hint">時間</div><input id="qr_time" type="time" value="'+esc(prefill.time||nowHM())+'"></div></div>'+
     '<div class="hint" style="margin-top:8px;">お客様名（任意）</div><input id="qr_name" placeholder="例：〇〇様（空欄でもOK）">'+
+    '<div class="hint" style="margin-top:8px;">住所（地図に出す・任意）</div><input id="qr_addr" placeholder="例：神戸市〇〇区〇〇1-2-3">'+
+    '<div class="hint" style="margin-top:8px;">電話（任意）</div><input id="qr_phone" placeholder="任意">'+
+    '<div class="hint" style="margin-top:8px;">注意・ルール（任意）</div><input id="qr_rules" placeholder="例：13時以降 / P1台">'+
     '<div class="hint" style="margin-top:8px;">メニュー'+(STD_MENU.length?'（下のボタンをタップで料金も自動入力）':'')+'</div>'+
     menuChipsHtml(null,"qr_menu","qr_amount")+
     '<input id="qr_menu" placeholder="例：カット">'+
@@ -638,13 +641,19 @@ function openQuickRecord(prefill){
 }
 async function saveQuick(){
   var kEl=document.querySelector("#qr_kind .seg.on"); var kind=kEl?kEl.textContent:"在宅";
+  var ckind={"在宅":"個人","施設":"施設","病院":"病院"}[kind]||"個人";   // 区分→顧客の種別
   var name=el("qr_name").value.trim();
-  // 名前を入れたら顧客(個人)に自動登録。同名がいれば再利用して紐づける
+  var addr=el("qr_addr").value.trim(), phone=el("qr_phone").value.trim(), rules=el("qr_rules").value.trim();
+  // 名前を入れたら顧客に自動登録（住所・電話・注意も丸ごと）。同名がいれば再利用し、入れた情報は反映（手修正＝正）
   var clientId=null, created=false;
   if(name){
-    var ex=CL.find(function(c){return (c.kind||"個人")==="個人" && c.name===name;});
-    if(ex){ clientId=ex.id; }
-    else { var cr=await sb.from("clients").insert({org_id:PROFILE.org_id,kind:"個人",name:name,billing:"個別"}).select().single(); if(cr.error){ showMsg("顧客登録エラー："+esc(cr.error.message)); return; } clientId=cr.data.id; created=true; }
+    var ex=CL.find(function(c){return (c.kind||"個人")===ckind && c.name===name;});
+    if(ex){
+      clientId=ex.id;
+      var upd={}; if(addr)upd.address=addr; if(phone)upd.phone=phone; if(rules)upd.rules=rules;
+      if(Object.keys(upd).length){ try{ await sb.from("clients").update(upd).eq("id",ex.id); }catch(e){} }
+    }
+    else { var cr=await sb.from("clients").insert({org_id:PROFILE.org_id,kind:ckind,name:name,address:addr,phone:phone,rules:rules,billing:(ckind==="個人"?"個別":"一括")}).select().single(); if(cr.error){ showMsg("顧客登録エラー："+esc(cr.error.message)); return; } clientId=cr.data.id; created=true; }
   }
   var data={ org_id:PROFILE.org_id, client_id:clientId, booking_id:null, member_id:null, staff_id:ME.id,
     menu:el("qr_menu").value.trim(), amount:Number(el("qr_amount").value)||0,
