@@ -990,6 +990,8 @@ async function clearFacilityRoster(){
 function batchRow(m, pl, pre){
   var on=!!pre; var selMenu=pre?pre.menu:"";
   var menuOpts='<option value="">（メニュー）</option>'+pl.map(function(p){ return '<option value="'+esc(p.name)+'" data-price="'+(p.price||0)+'"'+(p.name===selMenu?" selected":"")+'>'+esc(p.name)+' '+yen(p.price)+'</option>'; }).join("");
+  // 料金表に無いメニュー（貼り付け等）も選択肢に入れて表示できるように
+  if(selMenu && !pl.some(function(p){return p.name===selMenu;})){ menuOpts+='<option value="'+esc(selMenu)+'" selected>'+esc(selMenu)+'</option>'; }
   var room=pre&&pre.room?pre.room:"";
   return '<div class="ba-row'+(on?" on":"")+'" data-mid="'+(m.id||"")+'" data-name="'+esc(m.name)+'" data-note="'+esc(pre&&pre.note?pre.note:"")+'">'+
     '<label class="chk"><input type="checkbox" class="ba_chk"'+(on?" checked":"")+' onchange="batchToggle(this)"> <b>'+(room?'🚪'+esc(room)+' ':'')+esc(m.name)+'</b></label>'+
