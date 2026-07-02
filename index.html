@@ -303,7 +303,7 @@ function renderToday(){
 
 /* ===== その日のタイムスケジュール（時間軸で目視） ===== */
 function hm2min(t){ if(!t) return null; var p=String(t).split(":"); return (+p[0])*60+(+(p[1]||0)); }
-function itDur(it){ return it.kind==="bk" ? (it.b.duration||60) : (Number(exRec(it.r).dur)||30); }   // 施術時間(分)
+function itDur(it){ return it.kind==="bk" ? (it.b.duration||60) : it.kind==="fac" ? 60 : (Number(exRec(it.r).dur)||30); }   // 施術時間(分)
 function movesForDay(iso){ return TB.filter(function(m){return m.date===iso && m.time;}); }   // 独立した移動ブロック
 function dayScheduleHtml(iso){
   var items=dayTimeline(iso);
@@ -321,12 +321,12 @@ function dayScheduleHtml(iso){
   if(iso===todayISO()){ var nm=(new Date()).getHours()*60+(new Date()).getMinutes(); if(nm>=top0 && nm<=endH*60){ var ny=(nm-top0)*ppm+PAD; h+='<div class="sched-now" style="top:'+ny+'px;"><span class="sched-now-dot"></span></div>'; } }
   timed.forEach(function(it){
     var m=hm2min(it.t), top=(m-top0)*ppm+PAD, hgt=Math.max(itDur(it)*ppm, 34);
-    var isBk=it.kind==="bk";
-    var done=isBk?(it.b.status==="施術終了"):(!!exRec(it.r).done);   // 予定=未/施術終了=済（予約・記録とも本人がボタンで切替）
+    var isBk=it.kind==="bk", isFac=it.kind==="fac";
+    var done, label, sub, onclick;
+    if(isFac){ done=it.recs.every(function(r){return !!exRec(r).done;}); label='🏢 '+esc(clientName(it.clientId))+'（'+it.recs.length+'名）'; sub=esc(menuSummary(it.recs))+'　'+yen(it.recs.reduce(function(a,r){return a+(r.amount||0);},0)); onclick="openFacVisit('"+it.clientId+"','"+it.iso+"','"+it.t+"')"; }
+    else if(isBk){ done=(it.b.status==="施術終了"); label=esc(clientName(it.b.client_id)); sub=done?'✅ 施術終了':(it.b.duration?it.b.duration+'分':'予定'); onclick="openBookingForm('"+it.b.id+"')"; }
+    else { done=!!exRec(it.r).done; label=recordWho(it.r); sub=esc(it.r.menu||'')+(it.r.amount?'　'+yen(it.r.amount):''); onclick="openRecordForm('"+it.r.id+"')"; }
     var cls=done?"fin":"plan";   // 未=予定(緑)/済=施術終了(灰)
-    var label=isBk?esc(clientName(it.b.client_id)):recordWho(it.r);
-    var sub=isBk?(done?'✅ 施術終了':(it.b.duration?it.b.duration+'分':'予定')):(esc(it.r.menu||'')+(it.r.amount?'　'+yen(it.r.amount):''));
-    var onclick=isBk?"openBookingForm('"+it.b.id+"')":"openRecordForm('"+it.r.id+"')";
     h+='<div class="sched-ev '+cls+'" style="top:'+top+'px;height:'+hgt+'px;" onclick="event.stopPropagation();'+onclick+'">'+
       '<b>'+esc(it.t)+'</b> '+label+(sub?'<div style="opacity:.85;">'+sub+'</div>':'')+'</div>';
   });
@@ -396,11 +396,57 @@ function rcAtPick(id){ var a=window._newAt||{}; var c=clientById(id); if(isFacil
 
 /* ===== 予約＋記録を「その日」に束ねる共通処理 ===== */
 function dayTimeline(iso){
-  return BK.filter(function(b){return b.date===iso;}).map(function(b){return {t:b.time||"",kind:"bk",b:b};})
-    .concat(RC.filter(function(r){return r.date===iso && !r.booking_id;}).map(function(r){return {t:exRec(r).t||"",kind:"rc",r:r};}))
-    .sort(function(a,b){return (a.t||"").localeCompare(b.t||"");});
+  var items=BK.filter(function(b){return b.date===iso;}).map(function(b){return {t:b.time||"",kind:"bk",b:b};});
+  var groups={};
+  RC.filter(function(r){return r.date===iso && !r.booking_id;}).forEach(function(r){
+    var c=clientById(r.client_id);
+    if(r.client_id && isFacility(c)){   // 施設は1件にまとめる（時間ごと）
+      var t=exRec(r).t||""; var key=r.client_id+"|"+t;
+      if(!groups[key]){ groups[key]={t:t,kind:"fac",clientId:r.client_id,iso:iso,recs:[]}; items.push(groups[key]); }
+      groups[key].recs.push(r);
+    } else { items.push({t:exRec(r).t||"",kind:"rc",r:r}); }
+  });
+  return items.sort(function(a,b){return (a.t||"").localeCompare(b.t||"");});
+}
+/* 施設グループの補助 */
+function menuSummary(recs){ var map={},order=[]; recs.forEach(function(r){ var m=(r.menu||"").trim()||"施術"; if(!(m in map)){map[m]=0;order.push(m);} map[m]++; }); return order.map(function(m){ return map[m]>1?(m+"×"+map[m]):m; }).join("・"); }
+function facGroupRecs(clientId, iso, t){ return RC.filter(function(r){ return r.client_id===clientId && r.date===iso && !r.booking_id && (exRec(r).t||"")===t; }); }
+async function toggleFacDone(clientId, iso, t){
+  var recs=facGroupRecs(clientId,iso,t); if(!recs.length) return;
+  var nd=!recs.every(function(r){return !!exRec(r).done;});
+  for(var i=0;i<recs.length;i++){ var r=recs[i]; var p=Object.assign({},exRec(r)); if(nd)p.done=true; else delete p.done; var res=await updateRecord(r.id,{photos:p}); if(!res.error) r.photos=p; }
+  if(el("overlay")&&el("overlay").classList.contains("show")) closeSheet();
+  toast(nd?"✅ 全員 施術終了にしました":"↩ 予定に戻しました"); renderTab();
+}
+/* 施設の1訪問を開く＝中の全員リスト */
+function openFacVisit(clientId, iso, t){
+  var recs=facGroupRecs(clientId,iso,t); var allDone=recs.length&&recs.every(function(r){return !!exRec(r).done;});
+  var body='<div class="sheet-title">🏢 '+esc(clientName(clientId))+'　'+esc(dateLabel(iso))+(t?'　'+esc(t):'')+'</div>'+
+    '<div class="muted" style="margin-bottom:8px;">この訪問の利用者 '+recs.length+'名。名前をタップで個別編集。</div>'+
+    '<button class="btn '+(allDone?"ghost":"primary")+'" onclick="toggleFacDone(\''+clientId+'\',\''+iso+'\',\''+t+'\')">'+(allDone?"↩ 予定に戻す":"✅ 全員 施術終了")+'</button>'+
+    recs.map(function(r){ var e=exRec(r); var rf=!!e.done;
+      return '<div class="item" style="cursor:pointer;" onclick="closeSheet();openRecordForm(\''+r.id+'\')"><div class="top"><div>'+
+        '<div class="name" style="font-size:14px;">'+(e.room?'🚪'+esc(e.room)+' ':'')+esc(e.nm||"お客様")+'</div>'+
+        '<div class="meta">✂️ '+esc(r.menu||"施術")+'　'+yen(r.amount)+(r.note?'　📝 '+esc(r.note):"")+'</div></div>'+
+        '<span class="pill '+(rf?"plan":"done")+'">'+(rf?"済":"予定")+'</span></div></div>';
+    }).join("")+
+    '<button class="btn ghost accent" style="margin-top:8px;" onclick="openFacilityBatch(\''+clientId+'\',{date:\''+iso+'\'})">＋ 利用者を追加・名簿を貼り付け</button>'+
+    '<button class="btn ghost" onclick="closeSheet()">閉じる</button>';
+  openSheet(body);
 }
 function timelineItemHtml(it){
+  if(it.kind==="fac"){
+    var frecs=it.recs; var ftot=frecs.reduce(function(a,r){return a+(r.amount||0);},0);
+    var fdone=frecs.every(function(r){return !!exRec(r).done;});
+    return '<div class="item"><div class="top">'+
+      '<div style="cursor:pointer;" onclick="openFacVisit(\''+it.clientId+'\',\''+it.iso+'\',\''+it.t+'\')"><div class="name">'+(it.t?esc(it.t)+'　':'')+'🏢 '+esc(clientName(it.clientId))+'（'+frecs.length+'名）</div>'+
+        '<div class="meta">✂️ '+esc(menuSummary(frecs))+'　'+yen(ftot)+'</div></div>'+
+      '<span class="pill '+(fdone?"plan":"done")+'">'+(fdone?"施術終了":"予定")+'</span></div>'+
+      '<div class="row" style="margin-top:10px;">'+
+        '<button class="btn '+(fdone?"ghost":"primary")+' sm" onclick="toggleFacDone(\''+it.clientId+'\',\''+it.iso+'\',\''+it.t+'\')">'+(fdone?"↩ 予定に戻す":"✅ 全員 施術終了")+'</button>'+
+        '<button class="btn ghost sm" onclick="openFacVisit(\''+it.clientId+'\',\''+it.iso+'\',\''+it.t+'\')">📂 中を見る（'+frecs.length+'名）</button></div>'+
+      '</div>';
+  }
   if(it.kind==="bk"){
     var b=it.b; var recs=recordsForBooking(b.id); var hasRec=recs.length>0; var fin=(b.status==="施術終了");
     var tot=recs.reduce(function(a,r){return a+(r.amount||0);},0);
