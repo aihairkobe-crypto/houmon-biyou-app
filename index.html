@@ -201,7 +201,7 @@ function renderTab(){
 /* ===== 予約・売上の紐付けヘルパ ===== */
 function clientById(id){ return CL.find(function(x){return x.id===id;}); }
 function clientName(id){ var c=clientById(id); return c?c.name:"（未設定）"; }
-function recordWho(r){ if(r.client_id){ return r.member_name?(esc(clientName(r.client_id))+' ／ '+esc(r.member_name)):esc(clientName(r.client_id)); } return r.member_name?esc(r.member_name):"その場のお客様"; }
+function recordWho(r){ if(r.client_id){ return r.member_name?(esc(clientName(r.client_id))+' ／ '+esc(r.member_name)):esc(clientName(r.client_id)); } var pk=r.place_kind?("["+esc(r.place_kind)+"] "):""; return pk+(r.member_name?esc(r.member_name):"その場のお客様"); }
 function isFacility(c){ return c && (c.kind==="施設"||c.kind==="病院"); }
 function recordsForBooking(bid){ return RC.filter(function(r){return r.booking_id===bid;}); }
 
@@ -381,6 +381,8 @@ function openQuickRecord(prefill){
   prefill=prefill||{};
   var body='<div class="sheet-title">その場でサッと記録</div>'+
     '<div class="muted" style="margin-bottom:8px;">顧客を選ばずに、その場の施術を記録します。</div>'+
+    '<div class="hint">区分</div><div class="seg-wrap" id="qr_kind" style="margin-bottom:8px;">'+
+      ["在宅","施設","病院"].map(function(k){return '<button class="seg'+(k==="在宅"?" on":"")+'" onclick="cfKind(this)">'+k+'</button>';}).join("")+'</div>'+
     '<div class="hint">日付</div><input id="qr_date" type="date" value="'+esc(prefill.date||todayISO())+'">'+
     '<div class="hint" style="margin-top:8px;">お客様名（任意）</div><input id="qr_name" placeholder="例：〇〇様（空欄でもOK）">'+
     '<div class="hint" style="margin-top:8px;">メニュー</div><input id="qr_menu" placeholder="例：カット">'+
@@ -392,8 +394,9 @@ function openQuickRecord(prefill){
   openSheet(body);
 }
 async function saveQuick(){
+  var kEl=document.querySelector("#qr_kind .seg.on"); var kind=kEl?kEl.textContent:"在宅";
   var data={ org_id:PROFILE.org_id, client_id:null, booking_id:null, member_id:null,
-    member_name:el("qr_name").value.trim()||null, staff_id:ME.id,
+    member_name:el("qr_name").value.trim()||null, staff_id:ME.id, place_kind:kind,
     menu:el("qr_menu").value.trim(), amount:Number(el("qr_amount").value)||0,
     note:el("qr_note").value.trim(), date:el("qr_date").value };
   var r=await sb.from("records").insert(data);
