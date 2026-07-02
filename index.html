@@ -390,7 +390,7 @@ async function delMove(id){
   closeSheet(); toast("🗑 削除しました"); await reloadTimeBlocks();
 }
 function newBookingAt(){ openPicker('bkAtPick',{title:'予約する施設・お客様を選ぶ',allowNew:true}); }
-function bkAtPick(id){ var a=window._newAt||{}; var c=clientById(id); if(isFacility(c)){ openFacilityBatch(id,{date:a.iso}); } else { openBookingForm(null,{client_id:id, date:a.iso, time:a.t}); } }
+function bkAtPick(id){ var a=window._newAt||{}; var c=clientById(id); if(isFacility(c)){ openFacilityBatch(id,{date:a.iso, time:a.t}); } else { openBookingForm(null,{client_id:id, date:a.iso, time:a.t}); } }
 function newRecordAt(){ openPicker('rcAtPick',{title:'だれの施術を記録しますか？',allowNew:true}); }
 function rcAtPick(id){ var a=window._newAt||{}; var c=clientById(id); if(isFacility(c)) openFacilityBatch(id,{date:a.iso}); else openRecordForm(null,{client_id:id, date:a.iso, time:a.t}); }
 
@@ -795,7 +795,7 @@ async function qrToFacility(kind){
   if(ex){ clientId=ex.id; var upd={}; if(addr)upd.address=addr; if(phone)upd.phone=phone; if(rules)upd.rules=rules; if(Object.keys(upd).length){ try{ await sb.from("clients").update(upd).eq("id",ex.id); }catch(e){} } }
   else { var cr=await sb.from("clients").insert({org_id:PROFILE.org_id,kind:kind,name:name,address:addr,phone:phone,rules:rules,billing:"一括"}).select().single(); if(cr.error){ showMsg("登録エラー："+esc(cr.error.message)); return; } clientId=cr.data.id; }
   await loadAll();
-  openFacilityBatch(clientId,{date:el("qr_date").value});
+  openFacilityBatch(clientId,{date:el("qr_date").value, time:el("qr_time").value});
 }
 async function saveQuick(){
   var kEl=document.querySelector("#qr_kind .seg.on"); var kind=kEl?kEl.textContent:"在宅";
@@ -1020,6 +1020,8 @@ async function delRecord(id){
 async function openFacilityBatch(clientId, opts){
   opts=opts||{}; var c=clientById(clientId)||{}; var iso=opts.date||todayISO();
   window._batch={ clientId:clientId, bookingId:opts.booking_id||null, date:iso };
+  var defTime=opts.time||defHM();   // 貼り付けで開き直しても時間を保持・記録画面から引き継ぎ
+  var defAddr=(opts.addr!=null?opts.addr:(c.address||"")), defPhone=(opts.phone!=null?opts.phone:(c.phone||""));
   openSheet('<div class="sheet-title">読み込み中…</div>');
   var rm=await sb.from("members_t").select("*").eq("client_id",clientId);
   var roster=rm.error?[]:(rm.data||[]);
@@ -1035,10 +1037,10 @@ async function openFacilityBatch(clientId, opts){
   var body='<div class="sheet-title">'+esc(c.name)+'　'+esc(dateLabel(iso))+'</div>'+
     '<div class="muted" style="margin-bottom:8px;">この日に来る<b>利用者リストを入力</b>（毎回変わってOK）。<b>📋名簿を貼り付け</b>か「＋利用者を追加」で入れて、まとめて保存。保存分は履歴・領収書の元として残ります。</div>'+
     '<div class="hint">お客様情報（ここで直すと顧客に反映・地図にも使われます）</div>'+
-    '<input id="ba_caddr" value="'+esc(c.address||"")+'" placeholder="住所（例：神戸市中央区元町通5-7-4-202）">'+
-    '<input id="ba_cphone" value="'+esc(c.phone||"")+'" placeholder="電話（任意）" style="margin-top:6px;">'+
+    '<input id="ba_caddr" value="'+esc(defAddr)+'" placeholder="住所（例：神戸市中央区元町通5-7-4-202）">'+
+    '<input id="ba_cphone" value="'+esc(defPhone)+'" placeholder="電話（任意）" style="margin-top:6px;">'+
     '<div class="row" style="margin-top:8px;"><div><div class="hint">日付</div><input id="ba_date" type="date" value="'+esc(iso)+'"></div>'+
-      '<div><div class="hint">時間</div><select id="ba_time">'+timeOptions(defHM())+'</select></div></div>'+
+      '<div><div class="hint">時間</div><select id="ba_time">'+timeOptions(defTime)+'</select></div></div>'+
     (hasRows?'<div class="card" style="padding:10px 12px;margin-top:10px;">'+
       '<div class="row"><button class="btn ghost accent sm" onclick="batchCheckAll(true)">✓ 全員チェック</button>'+
         '<button class="btn ghost sm" onclick="batchCheckAll(false)">全員はずす</button></div>'+
@@ -1130,7 +1132,10 @@ async function saveBatch(){
 }
 /* ===== 施設名簿をExcelからコピペで一括取り込み ===== */
 function priceOfMenu(pl, menu){ var f=(pl||[]).find(function(p){return p.name===menu;}); return f?f.price:null; }
-function reopenFacilityBatch(){ var b=window._batch||{}; openFacilityBatch(b.clientId,{date:b.date, booking_id:b.bookingId}); }
+function reopenFacilityBatch(){ var b=window._batch||{};
+  // 開き直しでも入力中の日付・時間・住所・電話を保持
+  openFacilityBatch(b.clientId,{ date:(el("ba_date")?el("ba_date").value:b.date), time:(el("ba_time")?el("ba_time").value:null), addr:(el("ba_caddr")?el("ba_caddr").value:null), phone:(el("ba_cphone")?el("ba_cphone").value:null), booking_id:b.bookingId });
+}
 function facilityBulkPaste(){
   openSheet('<div class="sheet-title">📋 名簿を貼り付け</div>'+
     '<div class="muted" style="margin-bottom:8px;">Excel・スプレッドシートで<b>取り込みたい行を選んでコピー</b>し、下に貼り付け → 「解析」。<b>見出し行も一緒に</b>コピーすると列を自動で見分けます。</div>'+
