@@ -55,12 +55,12 @@
   .sched-hline{position:absolute; left:44px; right:0; border-top:1px dashed var(--line);}
   .sched-hlabel{position:absolute; left:0; transform:translateY(-50%); font-size:11px; color:var(--hint);}
   .sched-ev{position:absolute; left:48px; right:2px; border-radius:8px; padding:3px 8px; font-size:12px; line-height:1.35; overflow:hidden; cursor:pointer; box-shadow:0 1px 2px rgba(0,0,0,.08); box-sizing:border-box;}
-  .sched-ev.plan{background:#eef1f0; color:var(--text); border-left:3px solid var(--muted);}
-  .sched-ev.done{background:var(--accent-soft); color:var(--accent-text); border-left:3px solid var(--accent);}
+  .sched-ev.plan{background:var(--accent-soft); color:var(--accent-text); border-left:3px solid var(--accent);}   /* 予定＝グリーン */
+  .sched-ev.done{background:#eef1f0; color:var(--muted); border-left:3px solid #b8b4b1;}   /* 記録済＝グレー */
   .sched-ev b{font-weight:700;}
   .sched-now{position:absolute; left:44px; right:0; border-top:2px solid var(--danger); z-index:5; pointer-events:none;}
   .sched-now-dot{position:absolute; left:-4px; top:-4px; width:7px; height:7px; border-radius:50%; background:var(--danger);}
-  .sched-ev.fin{background:var(--accent); color:#fff; border-left:3px solid var(--accent-text);}
+  .sched-ev.fin{background:#eef1f0; color:var(--muted); border-left:3px solid #b8b4b1;}   /* 施術終了＝グレー */
   .sched-move{position:absolute; left:48px; right:2px; border-radius:8px; padding:2px 8px; font-size:11px; line-height:1.3; box-sizing:border-box; overflow:hidden; background:#fbf2e2; color:#9a6b1e; border-left:3px solid #d8a85f;}
   /* タブバー */
   .tabbar{position:fixed; left:0; right:0; bottom:0; z-index:60; background:var(--surface); border-top:1px solid var(--line); display:flex; max-width:480px; margin:0 auto;}
@@ -299,15 +299,15 @@ function dayScheduleHtml(iso){
   timed.forEach(function(it){ var m=hm2min(it.t); var sh=Math.floor(m/60); if(sh<startH)startH=sh; var eh=Math.ceil((m+itDur(it)+itTravel(it))/60); if(eh>endH)endH=eh; });
   if(endH<=startH) endH=startH+1;
   var hourH=48, ppm=hourH/60, top0=startH*60, PAD=8;
-  var h='<div class="muted" style="font-size:11px;margin:2px 0 4px;">空き時間をタップで追加　｜　<span style="color:var(--muted);">■</span>予定　<span style="color:var(--accent);">■</span>施術終了　<span style="color:#d8a85f;">■</span>移動'+(iso===todayISO()?'　<span style="color:var(--danger);">—</span>今':'')+'</div>';
+  var h='<div class="muted" style="font-size:11px;margin:2px 0 4px;">空き時間をタップで追加　｜　<span style="color:var(--accent);">■</span>予定　<span style="color:var(--muted);">■</span>施術終了　<span style="color:#d8a85f;">■</span>移動'+(iso===todayISO()?'　<span style="color:var(--danger);">—</span>今':'')+'</div>';
   h+='<div class="sched" data-start="'+startH+'" style="height:'+((endH-startH)*hourH+PAD*2)+'px;" onclick="schedClick(event,\''+iso+'\')">';
   for(var hh=startH; hh<=endH; hh++){ var y=(hh-startH)*hourH+PAD; h+='<div class="sched-hline" style="top:'+y+'px;"></div><div class="sched-hlabel" style="top:'+y+'px;">'+pad(hh)+':00</div>'; }
   if(iso===todayISO()){ var nm=(new Date()).getHours()*60+(new Date()).getMinutes(); if(nm>=top0 && nm<=endH*60){ var ny=(nm-top0)*ppm+PAD; h+='<div class="sched-now" style="top:'+ny+'px;"><span class="sched-now-dot"></span></div>'; } }
   timed.forEach(function(it){
     var m=hm2min(it.t), top=(m-top0)*ppm+PAD, hgt=Math.max(itDur(it)*ppm, 34);
     var isBk=it.kind==="bk";
-    var done=isBk?recordsForBooking(it.b.id).length>0:true;
-    var cls=isBk?(done?"fin":"plan"):"done";   // 予約:未=予定/済=施術終了、記録=実施済
+    var done=isBk?(it.b.status==="施術終了"):true;   // 本人が「施術終了」ボタンを押したら終了
+    var cls=isBk?(done?"fin":"plan"):"done";   // 予約:未=予定(緑)/済=施術終了(灰)、記録=灰
     var label=isBk?esc(clientName(it.b.client_id)):recordWho(it.r);
     var sub=isBk?(done?'✅ 施術終了':(it.b.duration?it.b.duration+'分':'予定')):(esc(it.r.menu||'')+(it.r.amount?'　'+yen(it.r.amount):''));
     var onclick=isBk?"openBookingForm('"+it.b.id+"')":"openRecordForm('"+it.r.id+"')";
@@ -354,16 +354,18 @@ function dayTimeline(iso){
 }
 function timelineItemHtml(it){
   if(it.kind==="bk"){
-    var b=it.b; var recs=recordsForBooking(b.id); var done=recs.length>0;
+    var b=it.b; var recs=recordsForBooking(b.id); var hasRec=recs.length>0; var fin=(b.status==="施術終了");
     var tot=recs.reduce(function(a,r){return a+(r.amount||0);},0);
     return '<div class="item"><div class="top">'+
       '<div><div class="name">'+(b.time?esc(b.time)+'　':'')+esc(clientName(b.client_id))+'</div>'+
         (b.memo?'<div class="meta">📝 '+esc(b.memo)+'</div>':"")+
-        (done?'<div class="meta">💴 '+recs.length+'件　'+yen(tot)+'</div>':"")+
+        (hasRec?'<div class="meta">💴 '+recs.length+'件　'+yen(tot)+'</div>':"")+
         (Number(b.travel_min)>0?'<div class="meta" style="color:#9a6b1e;">🚗 この後 移動 '+b.travel_min+'分</div>':"")+'</div>'+
-      '<span class="pill '+(done?"done":"plan")+'">'+(done?"✅ 施術終了":"予定")+'</span></div>'+
-      '<div class="row" style="margin-top:10px;"><button class="btn '+(done?"ghost accent":"primary")+' sm" onclick="recFromBooking(\''+b.id+'\')">'+(done?"施術を追加/確認":"▶ 施術を記録")+'</button>'+
-        '<button class="btn ghost sm" onclick="openBookingForm(\''+b.id+'\')">予約を編集</button></div>'+
+      '<span class="pill '+(fin?"plan":"done")+'">'+(fin?"施術終了":"予定")+'</span></div>'+
+      '<div class="row" style="margin-top:10px;">'+
+        '<button class="btn '+(fin?"ghost":"primary")+' sm" onclick="toggleBookingDone(\''+b.id+'\')">'+(fin?"↩ 予定に戻す":"✅ 施術終了")+'</button>'+
+        '<button class="btn ghost accent sm" onclick="recFromBooking(\''+b.id+'\')">💴 施術を記録</button>'+
+        '<button class="btn ghost sm" onclick="openBookingForm(\''+b.id+'\')">編集</button></div>'+
       '</div>';
   }
   var r=it.r;
@@ -712,6 +714,7 @@ function openBookingForm(id, prefill){
     '<div class="hint" style="margin-top:8px;">メモ</div><input id="bf_memo" value="'+esc(b.memo||"")+'" placeholder="任意">'+
     '<div id="m"></div>'+
     '<button class="btn primary" onclick="saveBooking(\''+(id||"")+'\')">保存</button>'+
+    (id?'<button class="btn ghost accent" onclick="toggleBookingDone(\''+id+'\')">'+(b.status==="施術終了"?"↩ 予定に戻す":"✅ 施術終了にする")+'</button>':"")+
     (id?'<button class="btn ghost accent" onclick="recFromBooking(\''+id+'\')">💴 この予約の施術を記録</button>':"")+
     (id?'<button class="btn danger" onclick="delBooking(\''+id+'\')">削除</button>':"")+
     '<button class="btn ghost" onclick="closeSheet()">キャンセル</button>';
@@ -731,6 +734,16 @@ async function saveBooking(id){
     try{ await sb.from("clients").update(cu).eq("id",client); }catch(e){}
   }
   closeSheet(); toast("📅 予約を保存しました"); await loadAll(); renderTab();
+}
+/* 施術終了トグル（本人がタップ）＝status を切替。予定(緑)⇄施術終了(灰) */
+async function toggleBookingDone(id){
+  var b=BK.find(function(x){return x.id===id;}); if(!b) return;
+  var ns=(b.status==="施術終了")?"予定":"施術終了";
+  var r=await sb.from("bookings").update({status:ns}).eq("id",id);
+  if(r.error){ showMsg("更新エラー："+esc(r.error.message)); toast("更新できませんでした"); return; }
+  b.status=ns;
+  if(el("overlay")&&el("overlay").classList.contains("show")) closeSheet();
+  toast(ns==="施術終了"?"✅ 施術終了にしました":"↩ 予定に戻しました"); renderTab();
 }
 async function delBooking(id){
   if(!confirm("この予約を削除しますか？")) return;
