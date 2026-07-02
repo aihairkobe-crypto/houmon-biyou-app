@@ -130,6 +130,7 @@ async function boot(){
   await loadProfile();
   if(!PROFILE){ await ensurePersonalSpace(); await loadProfile(); }
   if(!PROFILE){ renderAuth(); return; }
+  loadStdMenu();
   await loadAll();
   renderApp();
   subscribeRealtime();
@@ -440,7 +441,9 @@ function openQuickRecord(prefill){
     '<div class="row"><div><div class="hint">日付</div><input id="qr_date" type="date" value="'+esc(prefill.date||todayISO())+'"></div>'+
       '<div><div class="hint">時間</div><input id="qr_time" type="time" value="'+esc(prefill.time||nowHM())+'"></div></div>'+
     '<div class="hint" style="margin-top:8px;">お客様名（任意）</div><input id="qr_name" placeholder="例：〇〇様（空欄でもOK）">'+
-    '<div class="hint" style="margin-top:8px;">メニュー</div><input id="qr_menu" placeholder="例：カット">'+
+    '<div class="hint" style="margin-top:8px;">メニュー'+(STD_MENU.length?'（標準メニューから選ぶと料金が入ります）':'')+'</div>'+
+    (STD_MENU.length?'<select id="qr_menusel" onchange="qrMenu()">'+menuOptionsFor(null,"")+'</select>':'')+
+    '<input id="qr_menu" placeholder="例：カット"'+(STD_MENU.length?' style="margin-top:6px;"':'')+'>'+
     '<div class="hint" style="margin-top:8px;">料金（円）</div><input id="qr_amount" type="number" placeholder="0">'+
     '<div class="hint" style="margin-top:8px;">メモ</div><input id="qr_note" placeholder="任意">'+
     '<div id="m"></div>'+
@@ -501,16 +504,19 @@ function recFromBooking(bid){
 }
 
 /* ===== 売上（個人・単体） ===== */
+/* 標準メニュー（マイ料金表）＝この端末に保存。お客様ごとの料金表があればそちら優先 */
+var STD_MENU=[];
+function loadStdMenu(){ try{ STD_MENU=JSON.parse(localStorage.getItem("stdmenu_"+(ME&&ME.id))||"[]"); }catch(e){ STD_MENU=[]; } if(!Array.isArray(STD_MENU)) STD_MENU=[]; }
+function priceListFor(clientId){ var c=clientById(clientId); var pl=(c&&Array.isArray(c.price_list)&&c.price_list.length)?c.price_list:STD_MENU; return Array.isArray(pl)?pl:[]; }
 function menuOptionsFor(clientId, selMenu){
-  var c=clientById(clientId); var pl=(c&&Array.isArray(c.price_list))?c.price_list:[];
   var opts='<option value="">（自由入力）</option>';
-  pl.forEach(function(p){ opts+='<option value="'+esc(p.name)+'" data-price="'+(p.price||0)+'"'+(p.name===selMenu?" selected":"")+'>'+esc(p.name)+' '+yen(p.price)+'</option>'; });
+  priceListFor(clientId).forEach(function(p){ opts+='<option value="'+esc(p.name)+'" data-price="'+(p.price||0)+'"'+(p.name===selMenu?" selected":"")+'>'+esc(p.name)+' '+yen(p.price)+'</option>'; });
   return opts;
 }
 function openRecordForm(id, prefill){
   var rec=id?(RC.find(function(x){return x.id===id;})||{}):(prefill||{});
   var c=clientById(rec.client_id)||{};
-  var hasPl=Array.isArray(c.price_list)&&c.price_list.length;   // 料金表があるときだけ選択式
+  var hasPl=priceListFor(rec.client_id).length;   // お客様の料金表 or 標準メニューがあれば選択式
   var body='<div class="sheet-title">'+(id?"施術を編集":"施術を記録")+'</div>'+
     '<div class="card" style="margin-bottom:10px;padding:10px 12px;"><b>'+esc(c.name||"（顧客）")+'</b>'+
       (exRec(rec).nm?'<div class="meta">👤 '+esc(exRec(rec).nm)+'</div>':"")+'</div>'+
@@ -533,6 +539,7 @@ function openRecordForm(id, prefill){
   openSheet(body);
 }
 function rfMenu(){ var sel=el("rf_menusel"); var opt=sel.options[sel.selectedIndex]; if(!opt||!opt.value) return; el("rf_menu").value=opt.value; var p=opt.getAttribute("data-price"); if(p!=null) el("rf_amount").value=p; }
+function qrMenu(){ var sel=el("qr_menusel"); var opt=sel.options[sel.selectedIndex]; if(!opt||!opt.value) return; el("qr_menu").value=opt.value; var p=opt.getAttribute("data-price"); if(p!=null) el("qr_amount").value=p; }
 async function saveRecord(id){
   var client=el("rf_client").value; if(!client){ showMsg("顧客が未設定です"); return; }
   var data={ org_id:PROFILE.org_id, client_id:client, booking_id:el("rf_booking").value||null,
@@ -717,11 +724,29 @@ function openHelp(){
   openSheet(body);
 }
 
+/* ===== 標準メニュー（マイ料金表） ===== */
+function openStdMenu(){
+  var body='<div class="sheet-title">標準メニュー（料金表）</div>'+
+    '<div class="muted" style="margin-bottom:8px;">よく使うメニューと料金を登録しておくと、<b>どのお客様の記録でも選べます</b>（施設など個別の料金表を設定した先は、そちらが優先）。</div>'+
+    '<div id="sm_rows">'+(STD_MENU.length?STD_MENU.map(function(p){return priceRow(p.name,p.price);}).join(""):priceRow("",""))+'</div>'+
+    '<button class="btn ghost sm" style="width:auto;" onclick="el(\'sm_rows\').insertAdjacentHTML(\'beforeend\', priceRow(\'\',\'\'))">＋ メニューを追加</button>'+
+    '<div id="m"></div>'+
+    '<button class="btn primary" onclick="saveStdMenuForm()">保存</button>'+
+    '<button class="btn ghost" onclick="closeSheet()">閉じる</button>';
+  openSheet(body);
+}
+function saveStdMenuForm(){
+  var out=[]; Array.prototype.forEach.call(document.querySelectorAll("#sm_rows .price-row"),function(r){ var n=r.querySelector(".pn").value.trim(); var p=Number(r.querySelector(".pp").value)||0; if(n) out.push({name:n,price:p}); });
+  STD_MENU=out; localStorage.setItem("stdmenu_"+ME.id, JSON.stringify(out));
+  closeSheet(); toast("🧾 標準メニューを保存しました");
+}
+
 /* ===== 設定 ===== */
 function openSettings(){
   var body='<div class="sheet-title">設定</div>'+
     '<div class="card"><div class="hint">お名前</div><div style="font-weight:700;">'+esc(PROFILE.name||"")+'</div>'+
       '<div class="hint" style="margin-top:8px;">メール</div><div>'+esc(ME.email||"")+'</div></div>'+
+    '<button class="btn ghost accent" onclick="openStdMenu()">🧾 標準メニュー（料金表）</button>'+
     '<button class="btn ghost accent" onclick="openHelp()">❓ 使い方・ヘルプ</button>'+
     '<div class="card"><div class="hint">組織リンク（今後）</div><div class="muted" style="font-size:12px;">サロン等で使う場合、ここに組織コードを入れると情報を共有できるようにする予定です。</div></div>'+
     '<button class="btn danger" onclick="resetAll()">🧹 自分のデータをすべてリセット</button>'+
