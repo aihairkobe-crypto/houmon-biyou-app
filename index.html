@@ -510,6 +510,7 @@ function menuOptionsFor(clientId, selMenu){
 function openRecordForm(id, prefill){
   var rec=id?(RC.find(function(x){return x.id===id;})||{}):(prefill||{});
   var c=clientById(rec.client_id)||{};
+  var hasPl=Array.isArray(c.price_list)&&c.price_list.length;   // 料金表があるときだけ選択式
   var body='<div class="sheet-title">'+(id?"施術を編集":"施術を記録")+'</div>'+
     '<div class="card" style="margin-bottom:10px;padding:10px 12px;"><b>'+esc(c.name||"（顧客）")+'</b>'+
       (exRec(rec).nm?'<div class="meta">👤 '+esc(exRec(rec).nm)+'</div>':"")+'</div>'+
@@ -520,9 +521,9 @@ function openRecordForm(id, prefill){
     '<input type="hidden" id="rf_pk" value="'+esc(exRec(rec).pk||"")+'">'+
     '<div class="row"><div><div class="hint">日付</div><input id="rf_date" type="date" value="'+esc(rec.date||todayISO())+'"></div>'+
       '<div><div class="hint">時間</div><input id="rf_time" type="time" value="'+esc(exRec(rec).t||nowHM())+'"></div></div>'+
-    '<div class="hint" style="margin-top:8px;">メニュー（料金表から選ぶと料金が入ります）</div>'+
-    '<select id="rf_menusel" onchange="rfMenu()">'+menuOptionsFor(rec.client_id, rec.menu)+'</select>'+
-    '<input id="rf_menu" value="'+esc(rec.menu||"")+'" placeholder="メニュー（自由入力も可）" style="margin-top:6px;">'+
+    '<div class="hint" style="margin-top:8px;">メニュー'+(hasPl?'（料金表から選ぶと料金が入ります）':'')+'</div>'+
+    (hasPl?'<select id="rf_menusel" onchange="rfMenu()">'+menuOptionsFor(rec.client_id, rec.menu)+'</select>':'')+
+    '<input id="rf_menu" value="'+esc(rec.menu||"")+'" placeholder="メニュー（例：カット）" style="margin-top:'+(hasPl?'6px':'0')+';">'+
     '<div class="hint" style="margin-top:8px;">料金（円）</div><input id="rf_amount" type="number" value="'+(rec.amount||"")+'" placeholder="0">'+
     '<div class="hint" style="margin-top:8px;">メモ・カルテ</div><input id="rf_note" value="'+esc(rec.note||"")+'" placeholder="任意">'+
     '<div id="m"></div>'+
