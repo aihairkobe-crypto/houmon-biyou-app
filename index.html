@@ -202,6 +202,20 @@ function renderTab(){
 function clientById(id){ return CL.find(function(x){return x.id===id;}); }
 function clientName(id){ var c=clientById(id); return c?c.name:"（未設定）"; }
 function recordWho(r){ if(r.client_id){ return r.member_name?(esc(clientName(r.client_id))+' ／ '+esc(r.member_name)):esc(clientName(r.client_id)); } var pk=r.place_kind?("["+esc(r.place_kind)+"] "):""; return pk+(r.member_name?esc(r.member_name):"その場のお客様"); }
+/* DBにまだ無い列があっても保存が止まらないよう、足りない列を外して再試行 */
+function stripCol(rows, col){ return (Array.isArray(rows)?rows:[rows]).map(function(o){ var c=Object.assign({},o); delete c[col]; return c; }); }
+async function insertRecords(rows){
+  var r=await sb.from("records").insert(rows);
+  var m=r.error&&r.error.message&&r.error.message.match(/Could not find the '(\w+)' column/);
+  if(m){ return await insertRecords(stripCol(rows, m[1])); }
+  return r;
+}
+async function updateRecord(id, data){
+  var r=await sb.from("records").update(data).eq("id",id);
+  var m=r.error&&r.error.message&&r.error.message.match(/Could not find the '(\w+)' column/);
+  if(m){ var d=Object.assign({},data); delete d[m[1]]; return await updateRecord(id, d); }
+  return r;
+}
 function isFacility(c){ return c && (c.kind==="施設"||c.kind==="病院"); }
 function recordsForBooking(bid){ return RC.filter(function(r){return r.booking_id===bid;}); }
 
@@ -399,7 +413,7 @@ async function saveQuick(){
     member_name:el("qr_name").value.trim()||null, staff_id:ME.id, place_kind:kind,
     menu:el("qr_menu").value.trim(), amount:Number(el("qr_amount").value)||0,
     note:el("qr_note").value.trim(), date:el("qr_date").value };
-  var r=await sb.from("records").insert(data);
+  var r=await insertRecords(data);
   if(r.error){ showMsg("保存エラー："+esc(r.error.message)); return; }
   closeSheet(); toast("💴 施術を記録しました"); await reloadRecords();
 }
@@ -426,7 +440,7 @@ function openBookingForm(id, prefill){
 }
 async function saveBooking(id){
   var client=el("bf_client").value; if(!client){ showMsg("顧客が未設定です"); return; }
-  var data={ org_id:PROFILE.org_id, client_id:client, date:el("bf_date").value, time:el("bf_time").value,
+  var data={ org_id:PROFILE.org_id, client_id:client, date:el("bf_date").value, time:(el("bf_time").value||"10:00"),
     duration:Number(el("bf_dur").value)||0, staff_ids:[ME.id], memo:el("bf_memo").value.trim() };
   var r=id?await sb.from("bookings").update(data).eq("id",id):await sb.from("bookings").insert(data);
   if(r.error){ showMsg("保存エラー："+esc(r.error.message)); return; }
@@ -481,7 +495,7 @@ async function saveRecord(id){
     member_id:el("rf_mid").value||null, member_name:el("rf_mname").value||null,
     staff_id:ME.id, menu:el("rf_menu").value.trim(), amount:Number(el("rf_amount").value)||0,
     note:el("rf_note").value.trim(), date:el("rf_date").value };
-  var r=id?await sb.from("records").update(data).eq("id",id):await sb.from("records").insert(data);
+  var r=id?await updateRecord(id,data):await insertRecords(data);
   if(r.error){ showMsg("保存エラー："+esc(r.error.message)); return; }
   closeSheet(); toast("💴 施術を記録しました"); await reloadRecords();
 }
@@ -545,7 +559,7 @@ async function saveBatch(){
       staff_id:ME.id, menu:row.querySelector(".ba_menu").value.trim(), amount:Number(row.querySelector(".ba_amount").value)||0, date:date });
   });
   if(!payload.length){ showMsg("その日 対応した人にチェックを入れてください"); return; }
-  var r=await sb.from("records").insert(payload);
+  var r=await insertRecords(payload);
   if(r.error){ showMsg("保存エラー："+esc(r.error.message)); return; }
   closeSheet(); toast("💴 "+payload.length+"件の施術を記録しました"); await reloadRecords();
 }
