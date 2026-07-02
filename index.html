@@ -73,6 +73,11 @@
   .seg-wrap{display:flex; background:var(--bg); border-radius:12px; padding:3px;}
   .seg{flex:1; border:none; background:none; padding:10px; border-radius:9px; font-size:15px; font-weight:700; color:var(--muted); cursor:pointer;}
   .seg.on{background:var(--surface); color:var(--accent-text); box-shadow:0 1px 3px rgba(0,0,0,.1);}
+  .mchips{display:flex; flex-wrap:wrap; gap:6px; margin:2px 0 6px;}
+  .mchip{border:1px solid var(--line); background:var(--surface); color:var(--text); padding:9px 13px; border-radius:999px; font-size:14px; font-weight:600; cursor:pointer;}
+  .mchip .p{color:var(--muted); font-weight:600; margin-left:5px; font-size:12px;}
+  .mchip.on{background:var(--accent-soft); border-color:var(--accent); color:var(--accent-text);}
+  .mchip.on .p{color:var(--accent-text);}
   /* 料金・チェック行 */
   .price-row{display:flex; gap:6px; margin-top:6px; align-items:center;}
   .price-row .pn{flex:2;} .price-row .pp{flex:1;}
@@ -594,9 +599,9 @@ function openQuickRecord(prefill){
     '<div class="row"><div><div class="hint">日付</div><input id="qr_date" type="date" value="'+esc(prefill.date||todayISO())+'"></div>'+
       '<div><div class="hint">時間</div><input id="qr_time" type="time" value="'+esc(prefill.time||nowHM())+'"></div></div>'+
     '<div class="hint" style="margin-top:8px;">お客様名（任意）</div><input id="qr_name" placeholder="例：〇〇様（空欄でもOK）">'+
-    '<div class="hint" style="margin-top:8px;">メニュー'+(STD_MENU.length?'（標準メニューから選ぶと料金が入ります）':'')+'</div>'+
-    (STD_MENU.length?'<select id="qr_menusel" onchange="qrMenu()">'+menuOptionsFor(null,"")+'</select>':'')+
-    '<input id="qr_menu" placeholder="例：カット"'+(STD_MENU.length?' style="margin-top:6px;"':'')+'>'+
+    '<div class="hint" style="margin-top:8px;">メニュー'+(STD_MENU.length?'（下のボタンをタップで料金も自動入力）':'')+'</div>'+
+    menuChipsHtml(null,"qr_menu","qr_amount")+
+    '<input id="qr_menu" placeholder="例：カット">'+
     '<div class="hint" style="margin-top:8px;">料金（円）</div><input id="qr_amount" type="number" placeholder="0">'+
     '<div class="hint" style="margin-top:8px;">メモ</div><input id="qr_note" placeholder="任意">'+
     '<div id="m"></div>'+
@@ -685,6 +690,21 @@ function menuOptionsFor(clientId, selMenu){
   priceListFor(clientId).forEach(function(p){ opts+='<option value="'+esc(p.name)+'" data-price="'+(p.price||0)+'"'+(p.name===selMenu?" selected":"")+'>'+esc(p.name)+' '+yen(p.price)+'</option>'; });
   return opts;
 }
+/* 料金表のメニューを1タップ入力チップに（メニュー名＋料金を同時セット） */
+function menuChipsHtml(clientId, menuId, amountId){
+  var pl=priceListFor(clientId); if(!pl.length) return "";
+  return '<div class="mchips">'+pl.map(function(p){
+    return '<button type="button" class="mchip" data-name="'+esc(p.name)+'" data-price="'+(p.price||0)+'" onclick="pickMenuChip(this,\''+menuId+'\',\''+amountId+'\')">'+esc(p.name)+'<span class="p">'+yen(p.price)+'</span></button>';
+  }).join("")+'</div>';
+}
+function pickMenuChip(btn, menuId, amountId){
+  var name=btn.getAttribute("data-name"), price=btn.getAttribute("data-price");
+  var mi=el(menuId); if(mi) mi.value=name;
+  var ai=el(amountId); if(ai && price!=null && price!=="") ai.value=price;
+  var wrap=btn.parentNode;
+  Array.prototype.forEach.call(wrap.querySelectorAll(".mchip"),function(b){ b.classList.remove("on"); });
+  btn.classList.add("on");
+}
 function openRecordForm(id, prefill){
   var rec=id?(RC.find(function(x){return x.id===id;})||{}):(prefill||{});
   var c=clientById(rec.client_id)||{};
@@ -699,9 +719,9 @@ function openRecordForm(id, prefill){
     '<input type="hidden" id="rf_pk" value="'+esc(exRec(rec).pk||"")+'">'+
     '<div class="row"><div><div class="hint">日付</div><input id="rf_date" type="date" value="'+esc(rec.date||todayISO())+'"></div>'+
       '<div><div class="hint">時間</div><input id="rf_time" type="time" value="'+esc(rec.time||exRec(rec).t||nowHM())+'"></div></div>'+
-    '<div class="hint" style="margin-top:8px;">メニュー'+(hasPl?'（料金表から選ぶと料金が入ります）':'')+'</div>'+
-    (hasPl?'<select id="rf_menusel" onchange="rfMenu()">'+menuOptionsFor(rec.client_id, rec.menu)+'</select>':'')+
-    '<input id="rf_menu" value="'+esc(rec.menu||"")+'" placeholder="メニュー（例：カット）" style="margin-top:'+(hasPl?'6px':'0')+';">'+
+    '<div class="hint" style="margin-top:8px;">メニュー'+(hasPl?'（下のボタンをタップで料金も自動入力）':'')+'</div>'+
+    menuChipsHtml(rec.client_id,"rf_menu","rf_amount")+
+    '<input id="rf_menu" value="'+esc(rec.menu||"")+'" placeholder="メニュー（例：カット）">'+
     '<div class="hint" style="margin-top:8px;">料金（円）</div><input id="rf_amount" type="number" value="'+(rec.amount||"")+'" placeholder="0">'+
     '<div class="hint" style="margin-top:8px;">メモ・カルテ</div><input id="rf_note" value="'+esc(rec.note||"")+'" placeholder="任意">'+
     '<div id="m"></div>'+
