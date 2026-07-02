@@ -51,6 +51,13 @@
   .cal .cell.sel{background:var(--accent); color:#fff;}
   .cal .cell .dot{width:5px; height:5px; border-radius:50%; background:var(--accent); margin-top:3px;}
   .cal .cell.sel .dot{background:#fff;}
+  .sched{position:relative; margin-top:8px;}
+  .sched-hline{position:absolute; left:44px; right:0; border-top:1px dashed var(--line);}
+  .sched-hlabel{position:absolute; left:0; transform:translateY(-50%); font-size:11px; color:var(--hint);}
+  .sched-ev{position:absolute; left:48px; right:2px; border-radius:8px; padding:3px 8px; font-size:12px; line-height:1.35; overflow:hidden; cursor:pointer; box-shadow:0 1px 2px rgba(0,0,0,.08); box-sizing:border-box;}
+  .sched-ev.plan{background:#eef1f0; color:var(--text); border-left:3px solid var(--muted);}
+  .sched-ev.done{background:var(--accent-soft); color:var(--accent-text); border-left:3px solid var(--accent);}
+  .sched-ev b{font-weight:700;}
   /* タブバー */
   .tabbar{position:fixed; left:0; right:0; bottom:0; z-index:60; background:var(--surface); border-top:1px solid var(--line); display:flex; max-width:480px; margin:0 auto;}
   .tabbar button{flex:1; border:none; background:none; padding:8px 0 10px; font-size:11px; color:var(--muted); cursor:pointer; display:flex; flex-direction:column; align-items:center; gap:2px;}
@@ -267,6 +274,41 @@ function renderToday(){
   v.innerHTML=html;
 }
 
+/* ===== その日のタイムスケジュール（時間軸で目視） ===== */
+function hm2min(t){ if(!t) return null; var p=String(t).split(":"); return (+p[0])*60+(+(p[1]||0)); }
+function itDur(it){ return it.kind==="bk" ? (it.b.duration||60) : 30; }   // 記録は30分の目安ブロック
+function dayScheduleHtml(iso){
+  var items=dayTimeline(iso);
+  var timed=items.filter(function(it){return it.t;});
+  var untimed=items.filter(function(it){return !it.t;});
+  if(!timed.length && !untimed.length) return '<div class="list-empty">この日の予定・記録はありません。</div>';
+  var startH=9, endH=18;
+  timed.forEach(function(it){ var m=hm2min(it.t); var sh=Math.floor(m/60); if(sh<startH)startH=sh; var eh=Math.ceil((m+itDur(it))/60); if(eh>endH)endH=eh; });
+  if(endH<=startH) endH=startH+1;
+  var hourH=48, ppm=hourH/60, top0=startH*60, PAD=8;
+  var h='';
+  if(timed.length){
+    h+='<div class="sched" style="height:'+((endH-startH)*hourH+PAD*2)+'px;">';
+    for(var hh=startH; hh<=endH; hh++){ var y=(hh-startH)*hourH+PAD; h+='<div class="sched-hline" style="top:'+y+'px;"></div><div class="sched-hlabel" style="top:'+y+'px;">'+pad(hh)+':00</div>'; }
+    timed.forEach(function(it){
+      var m=hm2min(it.t), top=(m-top0)*ppm+PAD, hgt=Math.max(itDur(it)*ppm, 34);
+      var isBk=it.kind==="bk";
+      var done=isBk?recordsForBooking(it.b.id).length>0:true;
+      var label=isBk?esc(clientName(it.b.client_id)):recordWho(it.r);
+      var sub=isBk?(it.b.duration?it.b.duration+'分':''):(esc(it.r.menu||'')+(it.r.amount?'　'+yen(it.r.amount):''));
+      var onclick=isBk?"openBookingForm('"+it.b.id+"')":"openRecordForm('"+it.r.id+"')";
+      h+='<div class="sched-ev '+(done?"done":"plan")+'" style="top:'+top+'px;height:'+hgt+'px;" onclick="'+onclick+'">'+
+        '<b>'+esc(it.t)+'</b> '+label+(sub?'<div style="opacity:.8;">'+sub+'</div>':'')+'</div>';
+    });
+    h+='</div>';
+  }
+  if(untimed.length){
+    h+='<div class="hint" style="margin-top:12px;">時間未設定</div>';
+    untimed.forEach(function(it){ h+=timelineItemHtml(it); });
+  }
+  return h;
+}
+
 /* ===== 予約＋記録を「その日」に束ねる共通処理 ===== */
 function dayTimeline(iso){
   return BK.filter(function(b){return b.date===iso;}).map(function(b){return {t:b.time||"",kind:"bk",b:b};})
@@ -317,11 +359,9 @@ function renderPlan(){
     html+='<div class="'+cls+'" onclick="planSelect(\''+iso+'\')">'+d+(dateHasEntries(iso)?'<span class="dot"></span>':"")+'</div>';
   }
   html+='</div></div>';
-  // 選択日の予定・記録
-  html+='<div class="sec">'+esc(dateLabel(PLAN_SEL))+'</div>';
-  var items=dayTimeline(PLAN_SEL);
-  if(!items.length){ html+='<div class="list-empty">この日の予定・記録はありません。</div>'; }
-  else { items.forEach(function(it){ html+=timelineItemHtml(it); }); }
+  // 選択日のタイムスケジュール（時間軸で目視）
+  html+='<div class="sec">'+esc(dateLabel(PLAN_SEL))+' の予定</div>';
+  html+=dayScheduleHtml(PLAN_SEL);
   v.innerHTML=html;
 }
 
