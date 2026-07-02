@@ -213,7 +213,7 @@ function firstRunGuide(){
     '<div class="muted" style="margin:4px 0 12px;">訪問美容の<b>予約・顧客・売上</b>を、これひとつで管理できます。<br>使い方は「登録 → 予約 → 売上」の3ステップ。</div>'+
     '<div class="guide-step"><span class="gnum">1</span><div><b>顧客・施設を登録</b><div class="muted">よく行く施設や、お客様を先に登録します。</div></div></div>'+
     '<div class="guide-step"><span class="gnum">2</span><div><b>予約を作る</b><div class="muted">訪問の予定を入れます（あとで直接記録でもOK）。</div></div></div>'+
-    '<div class="guide-step"><span class="gnum">3</span><div><b>売上を記録</b><div class="muted">施術したら金額を記録。売上に自動集計。</div></div></div>'+
+    '<div class="guide-step"><span class="gnum">3</span><div><b>施術を記録</b><div class="muted">施術したら料金を記録。売上に自動で集計されます。</div></div></div>'+
     '<button class="btn primary" onclick="startAddClient(\'施設\')" style="margin-top:14px;">① まず 顧客・施設を登録する →</button>'+
     '<div class="muted" style="text-align:center;font-size:12px;margin-top:12px;">どんなアプリか先に見たい方は</div>'+
     '<button class="btn ghost accent" onclick="loadSample()">🚀 まず使ってみる</button>'+
@@ -245,7 +245,7 @@ function renderToday(){
   var html='<div class="card" style="background:var(--accent-soft);border-color:#cbe7da;display:flex;justify-content:space-between;align-items:center;">'+
       '<div><div class="hint" style="margin:0;">'+esc(dateLabel(tISO))+'</div><div style="font-weight:700;font-size:15px;">今月の売上</div></div>'+
       '<div class="amt" style="font-size:20px;">'+yen(sumM)+'</div></div>';
-  html+='<button class="btn primary" onclick="openPicker(\'recWith\',{title:\'だれの売上を記録しますか？\',allowNew:true,allowQuick:true})">＋ 今日の売上を記録</button>';
+  html+='<button class="btn primary" onclick="openPicker(\'recWith\',{title:\'だれの施術を記録しますか？\',allowNew:true,allowQuick:true})">＋ 今日の施術を記録</button>';
   html+='<div class="sec">今日の訪問</div>';
   if(!todays.length){ html+='<div class="list-empty">今日の予約はありません。<br>上のボタンで直接記録もできます。</div>'; }
   else {
@@ -257,7 +257,7 @@ function renderToday(){
           (b.memo?'<div class="meta">📝 '+esc(b.memo)+'</div>':"")+
           (done?'<div class="meta">💴 '+recs.length+'件　'+yen(tot)+'</div>':"")+'</div>'+
         '<span class="pill '+(done?"done":"plan")+'">'+(done?"入力済":"予定")+'</span></div>'+
-        '<button class="btn '+(done?"ghost accent":"primary")+' sm" style="width:100%;margin-top:10px;" onclick="recFromBooking(\''+b.id+'\')">'+(done?"売上を追加/確認":"▶ 売上をつける")+'</button>'+
+        '<button class="btn '+(done?"ghost accent":"primary")+' sm" style="width:100%;margin-top:10px;" onclick="recFromBooking(\''+b.id+'\')">'+(done?"施術を追加/確認":"▶ 施術を記録")+'</button>'+
         '</div>';
     });
   }
@@ -311,7 +311,7 @@ function renderClientList(){
         '<div class="row" style="margin-top:10px;">'+
           '<button class="btn ghost sm" style="width:auto;" onclick="openClientForm(\''+c.id+'\')">編集</button>'+
           '<button class="btn ghost accent sm" style="width:auto;" onclick="bkWith(\''+c.id+'\')">📅 予約</button>'+
-          '<button class="btn ghost accent sm" style="width:auto;" onclick="recWith(\''+c.id+'\')">💴 売上</button>'+
+          '<button class="btn ghost accent sm" style="width:auto;" onclick="recWith(\''+c.id+'\')">💴 施術</button>'+
         '</div></div>';
     });
   });
@@ -393,11 +393,11 @@ function quickFromPicker(){ closeSheet(); openQuickRecord(); }
 function openQuickRecord(prefill){
   prefill=prefill||{};
   var body='<div class="sheet-title">その場でサッと記録</div>'+
-    '<div class="muted" style="margin-bottom:8px;">顧客を選ばずに、その場の売上を記録します。</div>'+
+    '<div class="muted" style="margin-bottom:8px;">顧客を選ばずに、その場の施術を記録します。</div>'+
     '<div class="hint">日付</div><input id="qr_date" type="date" value="'+esc(prefill.date||todayISO())+'">'+
     '<div class="hint" style="margin-top:8px;">お客様名（任意）</div><input id="qr_name" placeholder="例：〇〇様（空欄でもOK）">'+
     '<div class="hint" style="margin-top:8px;">メニュー</div><input id="qr_menu" placeholder="例：カット">'+
-    '<div class="hint" style="margin-top:8px;">金額（円）</div><input id="qr_amount" type="number" placeholder="0">'+
+    '<div class="hint" style="margin-top:8px;">料金（円）</div><input id="qr_amount" type="number" placeholder="0">'+
     '<div class="hint" style="margin-top:8px;">メモ</div><input id="qr_note" placeholder="任意">'+
     '<div id="m"></div>'+
     '<button class="btn primary" onclick="saveQuick()">保存</button>'+
@@ -411,7 +411,7 @@ async function saveQuick(){
     note:el("qr_note").value.trim(), date:el("qr_date").value };
   var r=await sb.from("records").insert(data);
   if(r.error){ showMsg("保存エラー："+esc(r.error.message)); return; }
-  closeSheet(); toast("💴 売上を記録しました"); await reloadRecords();
+  closeSheet(); toast("💴 施術を記録しました"); await reloadRecords();
 }
 
 /* ===== 予約フォーム ===== */
@@ -429,7 +429,7 @@ function openBookingForm(id, prefill){
     '<div class="hint" style="margin-top:8px;">メモ</div><input id="bf_memo" value="'+esc(b.memo||"")+'" placeholder="任意">'+
     '<div id="m"></div>'+
     '<button class="btn primary" onclick="saveBooking(\''+(id||"")+'\')">保存</button>'+
-    (id?'<button class="btn ghost accent" onclick="recFromBooking(\''+id+'\')">💴 この予約の売上をつける</button>':"")+
+    (id?'<button class="btn ghost accent" onclick="recFromBooking(\''+id+'\')">💴 この予約の施術を記録</button>':"")+
     (id?'<button class="btn danger" onclick="delBooking(\''+id+'\')">削除</button>':"")+
     '<button class="btn ghost" onclick="closeSheet()">キャンセル</button>';
   openSheet(body);
@@ -465,7 +465,7 @@ function menuOptionsFor(clientId, selMenu){
 function openRecordForm(id, prefill){
   var rec=id?(RC.find(function(x){return x.id===id;})||{}):(prefill||{});
   var c=clientById(rec.client_id)||{};
-  var body='<div class="sheet-title">'+(id?"売上を編集":"売上を記録")+'</div>'+
+  var body='<div class="sheet-title">'+(id?"施術を編集":"施術を記録")+'</div>'+
     '<div class="card" style="margin-bottom:10px;padding:10px 12px;"><b>'+esc(c.name||"（顧客）")+'</b>'+
       (rec.member_name?'<div class="meta">👤 '+esc(rec.member_name)+'</div>':"")+'</div>'+
     '<input type="hidden" id="rf_client" value="'+esc(rec.client_id||"")+'">'+
@@ -473,10 +473,10 @@ function openRecordForm(id, prefill){
     '<input type="hidden" id="rf_mid" value="'+esc(rec.member_id||"")+'">'+
     '<input type="hidden" id="rf_mname" value="'+esc(rec.member_name||"")+'">'+
     '<div class="hint">日付</div><input id="rf_date" type="date" value="'+esc(rec.date||todayISO())+'">'+
-    '<div class="hint" style="margin-top:8px;">メニュー（料金表から選ぶと金額が入ります）</div>'+
+    '<div class="hint" style="margin-top:8px;">メニュー（料金表から選ぶと料金が入ります）</div>'+
     '<select id="rf_menusel" onchange="rfMenu()">'+menuOptionsFor(rec.client_id, rec.menu)+'</select>'+
     '<input id="rf_menu" value="'+esc(rec.menu||"")+'" placeholder="メニュー（自由入力も可）" style="margin-top:6px;">'+
-    '<div class="hint" style="margin-top:8px;">金額（円）</div><input id="rf_amount" type="number" value="'+(rec.amount||"")+'" placeholder="0">'+
+    '<div class="hint" style="margin-top:8px;">料金（円）</div><input id="rf_amount" type="number" value="'+(rec.amount||"")+'" placeholder="0">'+
     '<div class="hint" style="margin-top:8px;">メモ・カルテ</div><input id="rf_note" value="'+esc(rec.note||"")+'" placeholder="任意">'+
     '<div id="m"></div>'+
     '<button class="btn primary" onclick="saveRecord(\''+(id||"")+'\')">保存</button>'+
@@ -493,7 +493,7 @@ async function saveRecord(id){
     note:el("rf_note").value.trim(), date:el("rf_date").value };
   var r=id?await sb.from("records").update(data).eq("id",id):await sb.from("records").insert(data);
   if(r.error){ showMsg("保存エラー："+esc(r.error.message)); return; }
-  closeSheet(); toast("💴 売上を保存しました"); await reloadRecords();
+  closeSheet(); toast("💴 施術を記録しました"); await reloadRecords();
 }
 async function delRecord(id){
   if(!confirm("この売上・カルテを削除しますか？")) return;
@@ -532,7 +532,7 @@ function batchRow(m, pl, pre){
     '<label class="chk"><input type="checkbox" class="ba_chk"'+(on?" checked":"")+' onchange="batchToggle(this)"> <b>'+esc(m.name)+'</b></label>'+
     '<div class="ba-detail" style="display:'+(on?"block":"none")+';margin-top:8px;">'+
       '<select class="ba_menu" onchange="batchMenu(this)">'+menuOpts+'</select>'+
-      '<input class="ba_amount" type="number" placeholder="金額（円）" value="'+(pre&&pre.amount!=null?pre.amount:"")+'" style="margin-top:6px;">'+
+      '<input class="ba_amount" type="number" placeholder="料金（円）" value="'+(pre&&pre.amount!=null?pre.amount:"")+'" style="margin-top:6px;">'+
     '</div></div>';
 }
 function batchToggle(chk){ var row=chk.closest(".ba-row"); row.querySelector(".ba-detail").style.display=chk.checked?"block":"none"; row.classList.toggle("on",chk.checked); }
@@ -557,7 +557,7 @@ async function saveBatch(){
   if(!payload.length){ showMsg("その日 対応した人にチェックを入れてください"); return; }
   var r=await sb.from("records").insert(payload);
   if(r.error){ showMsg("保存エラー："+esc(r.error.message)); return; }
-  closeSheet(); toast("💴 "+payload.length+"件の売上を記録しました"); await reloadRecords();
+  closeSheet(); toast("💴 "+payload.length+"件の施術を記録しました"); await reloadRecords();
 }
 
 /* ===== 顧客フォーム（＋施設の利用者名簿） ===== */
@@ -639,7 +639,7 @@ function openSettings(){
       '<div class="hint" style="margin-top:8px;">メール</div><div>'+esc(ME.email||"")+'</div></div>'+
     '<div class="card"><div class="hint">組織リンク（今後）</div><div class="muted" style="font-size:12px;">サロン等で使う場合、ここに組織コードを入れると情報を共有できるようにする予定です。</div></div>'+
     '<button class="btn danger" onclick="resetAll()">🧹 自分のデータをすべてリセット</button>'+
-    '<div class="muted" style="font-size:12px;text-align:center;">顧客・予約・売上を全部消します。元に戻せません。</div>'+
+    '<div class="muted" style="font-size:12px;text-align:center;">顧客・予約・施術の記録を全部消します。元に戻せません。</div>'+
     '<button class="btn ghost" onclick="doSignOut()" style="color:var(--hint);">ログアウト</button>'+
     '<button class="btn ghost" onclick="closeSheet()">閉じる</button>';
   openSheet(body);
