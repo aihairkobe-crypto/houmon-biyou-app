@@ -243,8 +243,8 @@ function clientById(id){ return CL.find(function(x){return x.id===id;}); }
 function clientName(id){ var c=clientById(id); return c?c.name:"（未設定）"; }
 /* 追加項目（名前・時間・区分）は既存の photos(jsonb) 列に格納＝SQL不要。{nm,t,pk} */
 function exRec(r){ var e=r&&r.photos; return (e&&typeof e==="object"&&!Array.isArray(e))?e:{}; }
-function recExtra(o){ var x={}; if(o.nm)x.nm=o.nm; if(o.t)x.t=o.t; if(o.pk)x.pk=o.pk; if(o.dur)x.dur=o.dur; if(o.travel)x.travel=o.travel; return x; }
-function recordWho(r){ var e=exRec(r); if(r.client_id){ return e.nm?(esc(clientName(r.client_id))+' ／ '+esc(e.nm)):esc(clientName(r.client_id)); } var pk=e.pk?("["+esc(e.pk)+"] "):""; return pk+(e.nm?esc(e.nm):"お客様"); }
+function recExtra(o){ var x={}; if(o.nm)x.nm=o.nm; if(o.t)x.t=o.t; if(o.pk)x.pk=o.pk; if(o.dur)x.dur=o.dur; if(o.travel)x.travel=o.travel; if(o.room)x.room=o.room; return x; }
+function recordWho(r){ var e=exRec(r); var room=e.room?('🚪'+esc(e.room)+' '):""; if(r.client_id){ return e.nm?(esc(clientName(r.client_id))+' ／ '+room+esc(e.nm)):esc(clientName(r.client_id)); } var pk=e.pk?("["+esc(e.pk)+"] "):""; return pk+room+(e.nm?esc(e.nm):"お客様"); }
 /* DBにまだ無い列があっても保存が止まらないよう、足りない列を外して再試行。
    ただし捨てた項目は「黙って消さず」に警告する（初期設定SQLの未実行を知らせる） */
 var COLJP={member_name:"お客様名",place_kind:"区分",time:"時間"};
@@ -903,6 +903,7 @@ function openRecordForm(id, prefill){
     '<div class="row"><div><div class="hint">日付</div><input id="rf_date" type="date" value="'+esc(rec.date||todayISO())+'"></div>'+
       '<div><div class="hint">時間</div><select id="rf_time">'+timeOptions(rec.time||exRec(rec).t||defHM())+'</select></div></div>'+
     '<div class="hint" style="margin-top:8px;">施術時間（分）</div><input id="rf_dur" type="number" step="5" value="'+(Number(exRec(rec).dur)||60)+'">'+
+    '<div class="hint" style="margin-top:8px;">部屋番号（任意）</div><input id="rf_room" value="'+esc(exRec(rec).room||"")+'" placeholder="例：305">'+
     '<div class="hint" style="margin-top:8px;">メニュー'+(hasPl?'（下のボタンをタップで料金も自動入力）':'')+'</div>'+
     menuChipsHtml(rec.client_id,"rf_menu","rf_amount")+
     '<input id="rf_menu" value="'+esc(rec.menu||"")+'" placeholder="メニュー（例：カット）">'+
@@ -923,7 +924,7 @@ async function saveRecord(id){
     member_id:el("rf_mid").value||null, staff_id:ME.id,
     menu:el("rf_menu").value.trim(), amount:Number(el("rf_amount").value)||0,
     note:el("rf_note").value.trim(), date:el("rf_date").value,
-    photos:recExtra({nm:el("rf_mname").value, t:el("rf_time").value, pk:el("rf_pk").value, dur:Number(el("rf_dur").value)||0}) };
+    photos:recExtra({nm:el("rf_mname").value, t:el("rf_time").value, pk:el("rf_pk").value, dur:Number(el("rf_dur").value)||0, room:(el("rf_room")?el("rf_room").value.trim():"")}) };
   var r=id?await updateRecord(id,data):await insertRecords(data);
   if(r.error){ showMsg("保存エラー："+esc(r.error.message)); return; }
   // お客様情報（住所・電話・注意）も一緒に更新。住所を変えたら地図の座標キャッシュを消して次回再変換
@@ -956,7 +957,7 @@ async function openFacilityBatch(clientId, opts){
   var pre={}; recs.forEach(function(r){ if(r.date===lastDate && r.member_id) pre[r.member_id]={menu:r.menu,amount:r.amount}; });
   var pl=Array.isArray(c.price_list)?c.price_list:[];
   // Excelから貼り付けた名簿を反映（該当利用者をチェック＋メニュー/料金プリセット）
-  if(window._batchPastePre){ roster.forEach(function(m){ var pp=window._batchPastePre[m.name]; if(pp){ pre[m.id]={menu:pp.menu||"", amount:(pp.amount!=null?pp.amount:(pp.menu?priceOfMenu(pl,pp.menu):null)), note:pp.note||""}; } }); window._batchPastePre=null; }
+  if(window._batchPastePre){ roster.forEach(function(m){ var pp=window._batchPastePre[m.name]; if(pp){ pre[m.id]={menu:pp.menu||"", amount:(pp.amount!=null?pp.amount:(pp.menu?priceOfMenu(pl,pp.menu):null)), note:pp.note||"", room:pp.room||""}; } }); window._batchPastePre=null; }
   var rowsHtml=roster.map(function(m){ return batchRow(m,pl,pre[m.id]); }).join("");
   var body='<div class="sheet-title">'+esc(c.name)+'　'+esc(dateLabel(iso))+'</div>'+
     '<div class="muted" style="margin-bottom:8px;">その日 <b>対応した人だけ</b> にチェック → まとめて保存。'+(lastDate?'<br>（前回対応した方は自動でチェック済み）':'')+'</div>'+
@@ -972,10 +973,12 @@ async function openFacilityBatch(clientId, opts){
 function batchRow(m, pl, pre){
   var on=!!pre; var selMenu=pre?pre.menu:"";
   var menuOpts='<option value="">（メニュー）</option>'+pl.map(function(p){ return '<option value="'+esc(p.name)+'" data-price="'+(p.price||0)+'"'+(p.name===selMenu?" selected":"")+'>'+esc(p.name)+' '+yen(p.price)+'</option>'; }).join("");
+  var room=pre&&pre.room?pre.room:"";
   return '<div class="ba-row'+(on?" on":"")+'" data-mid="'+(m.id||"")+'" data-name="'+esc(m.name)+'" data-note="'+esc(pre&&pre.note?pre.note:"")+'">'+
-    '<label class="chk"><input type="checkbox" class="ba_chk"'+(on?" checked":"")+' onchange="batchToggle(this)"> <b>'+esc(m.name)+'</b></label>'+
+    '<label class="chk"><input type="checkbox" class="ba_chk"'+(on?" checked":"")+' onchange="batchToggle(this)"> <b>'+(room?'🚪'+esc(room)+' ':'')+esc(m.name)+'</b></label>'+
     '<div class="ba-detail" style="display:'+(on?"block":"none")+';margin-top:8px;">'+
-      '<select class="ba_menu" onchange="batchMenu(this)">'+menuOpts+'</select>'+
+      '<input class="ba_room" placeholder="部屋番号（任意）" value="'+esc(room)+'">'+
+      '<select class="ba_menu" onchange="batchMenu(this)" style="margin-top:6px;">'+menuOpts+'</select>'+
       '<input class="ba_amount" type="number" placeholder="料金（円）" value="'+(pre&&pre.amount!=null?pre.amount:"")+'" style="margin-top:6px;">'+
       (pre&&pre.note?'<div class="meta" style="margin-top:6px;">📝 '+esc(pre.note)+'</div>':"")+
     '</div></div>';
@@ -999,7 +1002,7 @@ async function saveBatch(){
       member_id:row.getAttribute("data-mid")||null, staff_id:ME.id,
       menu:row.querySelector(".ba_menu").value.trim(), amount:Number(row.querySelector(".ba_amount").value)||0, date:date,
       note:row.getAttribute("data-note")||"",
-      photos:recExtra({nm:row.getAttribute("data-name")||""}) });
+      photos:recExtra({nm:row.getAttribute("data-name")||"", room:(row.querySelector(".ba_room")?row.querySelector(".ba_room").value.trim():"")}) });
   });
   if(!payload.length){ showMsg("その日 対応した人にチェックを入れてください"); return; }
   var r=await insertRecords(payload);
@@ -1021,10 +1024,10 @@ function facilityBulkPaste(){
 }
 /* 統一フォーマットの入力用雛形（CSV・Excelで開ける） */
 function downloadRosterTemplate(){
-  var rows=[["氏名","メニュー","料金","特記事項"],
-    ["山田 花子","カット","2500",""],
-    ["田中 太郎","カラー","5000","前髪短めに"],
-    ["","","",""]];
+  var rows=[["氏名","部屋番号","メニュー","料金","特記事項"],
+    ["山田 花子","305","カット","2500",""],
+    ["田中 太郎","105","カラー","5000","前髪短めに"],
+    ["","","","",""]];
   var csv="﻿"+rows.map(function(r){ return r.map(function(c){ return /[",\n]/.test(c)?'"'+String(c).replace(/"/g,'""')+'"':c; }).join(","); }).join("\r\n");
   try{
     var blob=new Blob([csv],{type:"text/csv;charset=utf-8;"}); var url=URL.createObjectURL(blob);
@@ -1041,9 +1044,10 @@ function guessCols(grid){
   var isHead=head.some(function(h){return /氏名|名前|利用者|お名前|施術|メニュー|内容|料金|金額/.test(h||"");});
   var body=isHead?grid.slice(1):grid;
   var ncol=0; grid.forEach(function(r){ if(r.length>ncol)ncol=r.length; });
-  var map={name:null,menu:null,amount:null,note:null};
+  var map={name:null,menu:null,amount:null,note:null,room:null};
   if(isHead){ head.forEach(function(h,i){ h=(h||"").trim();
     if(map.name==null&&/氏名|名前|利用者|お名前/.test(h))map.name=i;
+    else if(map.room==null&&/部屋|号室|場所|room/i.test(h))map.room=i;
     else if(map.menu==null&&/施術|メニュー|内容/.test(h))map.menu=i;
     else if(map.amount==null&&/料金|金額|価格/.test(h))map.amount=i;
     else if(map.note==null&&/特記|備考|要望|メモ/.test(h))map.note=i; }); }
@@ -1055,7 +1059,7 @@ function guessCols(grid){
   if(map.menu==null){ var bM=0,iM=null; score.forEach(function(s,i){ if(s.menu>bM){bM=s.menu;iM=i;} }); map.menu=iM; }
   if(map.name==null){ var bN=0,iN=null; score.forEach(function(s,i){ if(i===map.amount||i===map.menu)return; if(s.jp>bN && s.avg>=2 && s.avg<=6){bN=s.jp;iN=i;} }); map.name=iN; }
   // 前回の割り当てを記憶していれば優先
-  try{ var saved=JSON.parse(localStorage.getItem("bulkcolmap_"+(ME&&ME.id))||"null"); if(saved){ ["name","menu","amount","note"].forEach(function(k){ if(saved[k]!=null && saved[k]<ncol) map[k]=saved[k]; }); } }catch(e){}
+  try{ var saved=JSON.parse(localStorage.getItem("bulkcolmap_"+(ME&&ME.id))||"null"); if(saved){ ["name","menu","amount","note","room"].forEach(function(k){ if(saved[k]!=null && saved[k]<ncol) map[k]=saved[k]; }); } }catch(e){}
   return {isHead:isHead, body:body, ncol:ncol, map:map};
 }
 function colLabel(gc,i){ var s=""; for(var r=0;r<gc.body.length;r++){ var v=(gc.body[r][i]||"").trim(); if(v){s=v;break;} } return "列"+(i+1)+(s?"："+s:""); }
@@ -1073,6 +1077,7 @@ function openBulkMap(){
   openSheet('<div class="sheet-title">列の割り当て</div>'+
     '<div class="muted" style="margin-bottom:8px;">どの列が何かを選んでください（次回から記憶します）。</div>'+
     '<div class="hint">氏名</div>'+colSelect("bm_name",gc,gc.map.name)+
+    '<div class="hint" style="margin-top:6px;">部屋番号（任意）</div>'+colSelect("bm_room",gc,gc.map.room)+
     '<div class="hint" style="margin-top:6px;">メニュー（任意）</div>'+colSelect("bm_menu",gc,gc.map.menu)+
     '<div class="hint" style="margin-top:6px;">料金（任意・空欄は料金表から自動）</div>'+colSelect("bm_amount",gc,gc.map.amount)+
     '<div class="hint" style="margin-top:6px;">特記・メモ（任意）</div>'+colSelect("bm_note",gc,gc.map.note)+
@@ -1082,17 +1087,17 @@ function openBulkMap(){
     '<button class="btn ghost" onclick="facilityBulkPaste()">戻る</button>');
   renderBulkPreview();
 }
-function bulkMapNow(){ var v=function(id){ var e=el(id); return (e&&e.value!=="")?+e.value:null; }; return {name:v("bm_name"),menu:v("bm_menu"),amount:v("bm_amount"),note:v("bm_note")}; }
+function bulkMapNow(){ var v=function(id){ var e=el(id); return (e&&e.value!=="")?+e.value:null; }; return {name:v("bm_name"),menu:v("bm_menu"),amount:v("bm_amount"),note:v("bm_note"),room:v("bm_room")}; }
 function bulkRowsFrom(gc,mp){
   return gc.body.map(function(r){
     var g=function(i){ return (i!=null&&r[i]!=null)?String(r[i]).trim():""; };
     var amtRaw=g(mp.amount).replace(/[¥￥,，円\s]/g,""); var amount=/^\d+$/.test(amtRaw)?Number(amtRaw):null;
-    return {name:g(mp.name), menu:g(mp.menu), amount:amount, note:g(mp.note)};
+    return {name:g(mp.name), menu:g(mp.menu), amount:amount, note:g(mp.note), room:g(mp.room)};
   }).filter(function(x){return x.name;});
 }
 function renderBulkPreview(){
   var box=el("bm_prev"); if(!box) return; var gc=window._bulkGC; var rows=bulkRowsFrom(gc,bulkMapNow()).slice(0,4);
-  box.innerHTML=rows.length?rows.map(function(r){ return '<div class="item" style="padding:8px 10px;"><b>'+esc(r.name)+'</b>'+(r.menu?'　'+esc(r.menu):'')+(r.amount!=null?'　'+yen(r.amount):'')+(r.note?'<div class="meta">📝 '+esc(r.note)+'</div>':'')+'</div>'; }).join(""):'<div class="muted">氏名の列を選ぶと表示されます</div>';
+  box.innerHTML=rows.length?rows.map(function(r){ return '<div class="item" style="padding:8px 10px;"><b>'+(r.room?'🚪'+esc(r.room)+' ':'')+esc(r.name)+'</b>'+(r.menu?'　'+esc(r.menu):'')+(r.amount!=null?'　'+yen(r.amount):'')+(r.note?'<div class="meta">📝 '+esc(r.note)+'</div>':'')+'</div>'; }).join(""):'<div class="muted">氏名の列を選ぶと表示されます</div>';
 }
 async function saveBulkMapped(){
   var gc=window._bulkGC; var mp=bulkMapNow();
@@ -1106,7 +1111,7 @@ async function importBulkRows(rows){
   var have={}; roster.forEach(function(m){ have[m.name]=true; });
   var toAdd=[]; rows.forEach(function(r){ if(!have[r.name]){ have[r.name]=true; toAdd.push({org_id:PROFILE.org_id, client_id:b.clientId, name:r.name}); } });
   if(toAdd.length){ var ins=await sb.from("members_t").insert(toAdd); if(ins.error){ showMsg("取り込みエラー："+esc(ins.error.message)); return; } }
-  var map={}; rows.forEach(function(r){ map[r.name]={menu:r.menu, amount:r.amount, note:r.note}; }); window._batchPastePre=map;
+  var map={}; rows.forEach(function(r){ map[r.name]={menu:r.menu, amount:r.amount, note:r.note, room:r.room}; }); window._batchPastePre=map;
   toast("📋 "+rows.length+"人を取り込みました"); reopenFacilityBatch();
 }
 
