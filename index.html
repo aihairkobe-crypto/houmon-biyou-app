@@ -948,24 +948,21 @@ async function openFacilityBatch(clientId, opts){
   opts=opts||{}; var c=clientById(clientId)||{}; var iso=opts.date||todayISO();
   window._batch={ clientId:clientId, bookingId:opts.booking_id||null, date:iso };
   openSheet('<div class="sheet-title">読み込み中…</div>');
-  var rm=await sb.from("members_t").select("*").eq("client_id",clientId).order("created_at",{ascending:true});
+  var rm=await sb.from("members_t").select("*").eq("client_id",clientId);
   var roster=rm.error?[]:(rm.data||[]);
   window._batch.roster=roster;
-  // 前回の訪問で対応した人＝自動チェック（毎回ゼロ入力にしない）
-  var lr=await sb.from("records").select("member_id,menu,amount,date").eq("client_id",clientId).order("date",{ascending:false}).limit(80);
-  var recs=lr.error?[]:(lr.data||[]); var lastDate=recs.length?recs[0].date:null;
-  var pre={}; recs.forEach(function(r){ if(r.date===lastDate && r.member_id) pre[r.member_id]={menu:r.menu,amount:r.amount}; });
   var pl=Array.isArray(c.price_list)?c.price_list:[];
-  var rowsHtml=roster.map(function(m){ return batchRow(m,pl,pre[m.id]); }).join("");
-  // その回だけのリスト（貼り付け/取込分）＝名簿に溜めず、この訪問の行として表示
+  // この訪問のリストだけを行として表示（名簿members_tには溜め込まない＝利用者は毎回変わる前提）
+  var rowsHtml="";
   if(window._batchExtraRows && window._batchExtraRows.length){
-    rowsHtml+=window._batchExtraRows.map(function(r){ return batchRow({id:"",name:r.name}, pl, {menu:r.menu||"", amount:(r.amount!=null?r.amount:(r.menu?priceOfMenu(pl,r.menu):null)), note:r.note||"", room:r.room||""}); }).join("");
+    rowsHtml=window._batchExtraRows.map(function(r){ return batchRow({id:"",name:r.name}, pl, {menu:r.menu||"", amount:(r.amount!=null?r.amount:(r.menu?priceOfMenu(pl,r.menu):null)), note:r.note||"", room:r.room||""}); }).join("");
     window._batchExtraRows=null;
   }
+  var hasRows=rowsHtml!=="";
   var body='<div class="sheet-title">'+esc(c.name)+'　'+esc(dateLabel(iso))+'</div>'+
     '<div class="muted" style="margin-bottom:8px;">この日に来る<b>利用者リストを入力</b>（毎回変わってOK）。<b>📋名簿を貼り付け</b>か「＋利用者を追加」で入れて、まとめて保存。保存分は履歴・領収書の元として残ります。</div>'+
     '<div class="hint">日付</div><input id="ba_date" type="date" value="'+esc(iso)+'">'+
-    (roster.length?'<div class="card" style="padding:10px 12px;margin-top:10px;">'+
+    (hasRows?'<div class="card" style="padding:10px 12px;margin-top:10px;">'+
       '<div class="row"><button class="btn ghost accent sm" onclick="batchCheckAll(true)">✓ 全員チェック</button>'+
         '<button class="btn ghost sm" onclick="batchCheckAll(false)">全員はずす</button></div>'+
       '<div class="hint" style="margin-top:8px;">チェック中の全員に一括で</div>'+
@@ -979,8 +976,16 @@ async function openFacilityBatch(clientId, opts){
     '<button class="btn ghost accent" onclick="batchAdd()">➕ その場で利用者を追加</button>'+
     '<div id="m"></div>'+
     '<button class="btn primary" onclick="saveBatch()">まとめて保存</button>'+
+    (roster.length?'<button class="btn ghost sm" style="width:auto;color:var(--danger);margin-top:6px;" onclick="clearFacilityRoster()">🧹 以前の登録名簿を消す（'+roster.length+'件）</button>':"")+
     '<button class="btn ghost" onclick="closeSheet()">キャンセル</button>';
   openSheet(body);
+}
+async function clearFacilityRoster(){
+  var b=window._batch||{}; if(!b.clientId) return;
+  if(!confirm("以前に登録された名簿（"+((b.roster||[]).length)+"件）を全部消します。\n※記録した売上・履歴は消えません。よろしいですか？")) return;
+  var r=await sb.from("members_t").delete().eq("client_id",b.clientId);
+  if(r.error){ showMsg("削除エラー："+esc(r.error.message)); return; }
+  window._batch.roster=[]; toast("🧹 以前の名簿を消しました"); reopenFacilityBatch();
 }
 function batchRow(m, pl, pre){
   var on=!!pre; var selMenu=pre?pre.menu:"";
