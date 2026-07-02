@@ -1012,10 +1012,26 @@ function reopenFacilityBatch(){ var b=window._batch||{}; openFacilityBatch(b.cli
 function facilityBulkPaste(){
   openSheet('<div class="sheet-title">📋 名簿を貼り付け</div>'+
     '<div class="muted" style="margin-bottom:8px;">Excel・スプレッドシートで<b>取り込みたい行を選んでコピー</b>し、下に貼り付け → 「解析」。<b>見出し行も一緒に</b>コピーすると列を自動で見分けます。</div>'+
+    '<button class="btn ghost accent" onclick="downloadRosterTemplate()">📥 入力用の雛形をダウンロード（Excel可）</button>'+
+    '<div class="muted" style="font-size:11px;margin:4px 0 8px;">初めての方へ：この雛形に入力してもらうと、そのままキレイに取り込めます。</div>'+
     '<textarea id="bp_text" rows="8" style="width:100%;box-sizing:border-box;padding:10px;border:1px solid var(--line);border-radius:10px;font-size:15px;" placeholder="ここに貼り付け"></textarea>'+
     '<div id="m"></div>'+
     '<button class="btn primary" onclick="analyzeBulk()">解析する</button>'+
     '<button class="btn ghost" onclick="reopenFacilityBatch()">戻る</button>');
+}
+/* 統一フォーマットの入力用雛形（CSV・Excelで開ける） */
+function downloadRosterTemplate(){
+  var rows=[["氏名","メニュー","料金","特記事項"],
+    ["山田 花子","カット","2500",""],
+    ["田中 太郎","カラー","5000","前髪短めに"],
+    ["","","",""]];
+  var csv="﻿"+rows.map(function(r){ return r.map(function(c){ return /[",\n]/.test(c)?'"'+String(c).replace(/"/g,'""')+'"':c; }).join(","); }).join("\r\n");
+  try{
+    var blob=new Blob([csv],{type:"text/csv;charset=utf-8;"}); var url=URL.createObjectURL(blob);
+    var a=document.createElement("a"); a.href=url; a.download="訪問名簿_雛形.csv"; document.body.appendChild(a); a.click();
+    setTimeout(function(){ document.body.removeChild(a); URL.revokeObjectURL(url); },200);
+    toast("📥 雛形をダウンロードしました");
+  }catch(e){ showMsg("ダウンロードに失敗しました"); }
 }
 function splitCells(ln){ return ln.indexOf("\t")>=0 ? ln.split("\t") : ln.split(","); }
 var MENU_WORDS=/カット|カラー|パーマ|顔|そり|剃|シャンプー|ブロー|セット|白髪|トリート|マッサージ/;
