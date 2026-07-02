@@ -524,6 +524,9 @@ function renderSales(){
       '<span style="font-weight:700;">売上合計（'+recs.length+'件）</span><span class="amt" style="font-size:20px;">'+yen(tot)+'</span></div>'+
     '</div>';
   if(!recs.length){ html+='<div class="list-empty">この月の売上はまだありません。</div>'; v.innerHTML=html; return; }
+  html+=breakdownCard("🏢 顧客先・お客様別", sumBy(recs,function(r){ return r.client_id?clientName(r.client_id):(exRec(r).nm||"その他"); }));
+  html+=breakdownCard("✂️ メニュー別", sumBy(recs,function(r){ return (r.menu||"").trim()||"（メニュー未記入）"; }));
+  html+='<div class="sec">📋 日別明細</div>';
   var lastD="";
   recs.forEach(function(r){
     if(r.date!==lastD){ html+='<div class="sec">📅 '+esc(dateLabel(r.date))+'</div>'; lastD=r.date; }
@@ -536,6 +539,27 @@ function renderSales(){
   v.innerHTML=html;
 }
 function salesMonth(d){ SALES_MONTH=shiftMonth(SALES_MONTH||curMonth(),d); renderSales(); }
+/* 売上をキー別に集計（金額の多い順） */
+function sumBy(recs, keyFn){
+  var map={}, order=[];
+  recs.forEach(function(r){ var k=keyFn(r)||"（未設定）"; if(!(k in map)){ map[k]={amount:0,count:0}; order.push(k); } map[k].amount+=(r.amount||0); map[k].count++; });
+  return order.map(function(k){ return {name:k, amount:map[k].amount, count:map[k].count}; }).sort(function(a,b){ return b.amount-a.amount; });
+}
+/* 集計カード（上位＋棒グラフ、残りはまとめて表示） */
+function breakdownCard(title, rows){
+  if(!rows.length) return "";
+  var max=rows[0].amount||1, top=rows.slice(0,6);
+  var h='<div class="sec">'+title+'</div><div class="card" style="padding:12px;">';
+  top.forEach(function(r){
+    var pct=Math.max(3,Math.round(r.amount/max*100));
+    h+='<div style="margin-bottom:9px;">'+
+      '<div style="display:flex;justify-content:space-between;font-size:13px;"><span>'+esc(r.name)+' <span class="muted">('+r.count+')</span></span><span class="amt">'+yen(r.amount)+'</span></div>'+
+      '<div style="height:6px;background:var(--bg);border-radius:3px;margin-top:3px;overflow:hidden;"><div style="height:100%;width:'+pct+'%;background:var(--accent);border-radius:3px;"></div></div>'+
+    '</div>';
+  });
+  if(rows.length>6){ var rest=rows.slice(6).reduce(function(a,r){return a+r.amount;},0); h+='<div class="muted" style="font-size:12px;">ほか'+(rows.length-6)+'件 '+yen(rest)+'</div>'; }
+  return h+'</div>';
+}
 
 /* ===== 顧客を選ぶ（シート） ===== */
 function openPicker(onpickFn, opts){
