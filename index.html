@@ -229,6 +229,7 @@ function renderToday(){
       '<div><div class="hint" style="margin:0;">'+esc(dateLabel(tISO))+'</div><div style="font-weight:700;font-size:15px;">今月の売上</div></div>'+
       '<div class="amt" style="font-size:20px;">'+yen(sumM)+'</div></div>';
   html+='<button class="btn primary" onclick="openPicker(\'recWith\',{title:\'だれの施術を記録しますか？\',allowNew:true,allowQuick:true})">＋ 今日の施術を記録</button>';
+  html+='<button class="btn ghost accent" onclick="openClientForm(null,\'個人\')">＋ 新しいお客様・施設を登録</button>';
   html+='<div class="sec">今日の訪問</div>';
   if(!todays.length){ html+='<div class="list-empty">今日の予約はありません。<br>上のボタンで直接記録もできます。</div>'; }
   else {
