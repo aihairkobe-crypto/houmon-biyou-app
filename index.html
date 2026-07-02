@@ -703,12 +703,26 @@ function openClientForm(id, presetKind){
       (id?'<div id="cf_members"><div class="muted">読み込み中…</div></div>'
          :'<div id="cf_newmembers">'+newMemberRow("")+'</div><button class="btn ghost sm" style="width:auto;" onclick="addNewMemberRow()">＋ 利用者を追加</button>')+
     '</div>'+
+    (id?'<div class="hint" style="margin-top:14px;">来店履歴（カルテ）</div>'+clientHistoryHtml(id):'')+
     '<div id="m"></div>'+
     '<button class="btn primary" onclick="saveClient(\''+(id||"")+'\')">保存</button>'+
     (id?'<button class="btn danger" onclick="delClient(\''+id+'\')">削除</button>':"")+
     '<button class="btn ghost" onclick="closeSheet()">キャンセル</button>';
   openSheet(body);
   if(id&&(c.kind==="施設"||c.kind==="病院")) loadRoster(id);
+}
+function clientHistoryHtml(id){
+  var recs=RC.filter(function(r){return r.client_id===id;})
+    .sort(function(a,b){return (b.date||"").localeCompare(a.date||"")||((exRec(b).t||"").localeCompare(exRec(a).t||""));});
+  if(!recs.length) return '<div class="muted" style="font-size:12px;padding:4px 0;">まだ来店履歴はありません。</div>';
+  var total=recs.reduce(function(a,r){return a+(r.amount||0);},0);
+  var h='<div class="muted" style="font-size:12px;margin-bottom:4px;">全'+recs.length+'回・累計 '+yen(total)+'</div>';
+  h+=recs.map(function(r){ var e=exRec(r);
+    return '<div class="item" style="cursor:pointer;" onclick="closeSheet();openRecordForm(\''+r.id+'\')">'+
+      '<div class="name" style="font-size:14px;">'+esc(dateLabel(r.date))+(e.t?'　'+esc(e.t):'')+(e.nm?'　'+esc(e.nm):'')+'</div>'+
+      '<div class="meta">✂️ '+esc(r.menu||"（メニュー未記入）")+'　'+yen(r.amount)+(r.note?'　📝 '+esc(r.note):"")+'</div></div>';
+  }).join("");
+  return h;
 }
 function cfKind(b){
   var p=b.parentNode; Array.prototype.forEach.call(p.children,function(x){x.classList.remove("on");}); b.classList.add("on");
