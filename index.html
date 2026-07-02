@@ -581,16 +581,25 @@ function openClientForm(id, presetKind){
     '<div class="hint" style="margin-top:10px;">料金表（メニュー・値段）</div>'+
     '<div id="cf_prices">'+(pl.length?pl.map(function(p){return priceRow(p.name,p.price);}).join(""):priceRow("",""))+'</div>'+
     '<button class="btn ghost sm" style="width:auto;" onclick="addPriceRow()">＋ メニューを追加</button>'+
-    ((id&&(c.kind==="施設"||c.kind==="病院"))?'<div class="hint" style="margin-top:14px;">利用者（入居者）の名簿</div><div class="muted" style="font-size:11px;margin-bottom:4px;">いつもの名簿（候補）。訪問ごとに“その日対応した人”を選びます。入退居は随時ここを直せます。</div><div id="cf_members"><div class="muted">読み込み中…</div></div>':"")+
+    '<div id="cf_rosterSec" style="display:'+((c.kind==="施設"||c.kind==="病院")?"block":"none")+';">'+
+      '<div class="hint" style="margin-top:14px;">利用者（入居者）の名簿</div>'+
+      '<div class="muted" style="font-size:11px;margin-bottom:4px;">いつもの名簿（候補）。訪問ごとに“その日対応した人”を選びます。入退居は随時ここで直せます。</div>'+
+      (id?'<div id="cf_members"><div class="muted">読み込み中…</div></div>'
+         :'<div id="cf_newmembers">'+newMemberRow("")+'</div><button class="btn ghost sm" style="width:auto;" onclick="addNewMemberRow()">＋ 利用者を追加</button>')+
+    '</div>'+
     '<div id="m"></div>'+
     '<button class="btn primary" onclick="saveClient(\''+(id||"")+'\')">保存</button>'+
     (id?'<button class="btn danger" onclick="delClient(\''+id+'\')">削除</button>':"")+
-    ((!id)?'<div class="muted" style="font-size:11px;text-align:center;margin-top:6px;">※ 施設の利用者名簿は、保存後に編集画面で登録できます。</div>':"")+
     '<button class="btn ghost" onclick="closeSheet()">キャンセル</button>';
   openSheet(body);
   if(id&&(c.kind==="施設"||c.kind==="病院")) loadRoster(id);
 }
-function cfKind(b){ var p=b.parentNode; Array.prototype.forEach.call(p.children,function(x){x.classList.remove("on");}); b.classList.add("on"); }
+function cfKind(b){
+  var p=b.parentNode; Array.prototype.forEach.call(p.children,function(x){x.classList.remove("on");}); b.classList.add("on");
+  var sec=el("cf_rosterSec"); if(sec){ var k=b.textContent; sec.style.display=(k==="施設"||k==="病院")?"block":"none"; }
+}
+function newMemberRow(name){ return '<div class="price-row"><input class="cf_nm" value="'+esc(name||"")+'" placeholder="利用者名（例：田中 花子）"><button class="px" onclick="this.parentNode.remove()">×</button></div>'; }
+function addNewMemberRow(){ var b=el("cf_newmembers"); if(b) b.insertAdjacentHTML("beforeend", newMemberRow("")); }
 function priceRow(name,price){ return '<div class="price-row"><input class="pn" value="'+esc(name||"")+'" placeholder="メニュー（例：カット）"><input class="pp" type="number" value="'+(price!=null&&price!==""?price:"")+'" placeholder="円"><button class="px" onclick="this.parentNode.remove()">×</button></div>'; }
 function addPriceRow(){ el("cf_prices").insertAdjacentHTML("beforeend", priceRow("","")); }
 function collectPrices(){ var out=[]; Array.prototype.forEach.call(document.querySelectorAll("#cf_prices .price-row"),function(r){ var n=r.querySelector(".pn").value.trim(); var p=Number(r.querySelector(".pp").value)||0; if(n) out.push({name:n,price:p}); }); return out; }
@@ -598,8 +607,18 @@ async function saveClient(id){
   var name=el("cf_name").value.trim(); if(!name){ showMsg("名前を入力してください"); return; }
   var kEl=document.querySelector("#cf_kind .seg.on"); var kind=kEl?kEl.textContent:"個人";
   var data={ org_id:PROFILE.org_id, kind:kind, name:name, address:el("cf_addr").value.trim(), phone:el("cf_phone").value.trim(), rules:el("cf_rules").value.trim(), billing:(kind==="個人"?"個別":"一括"), price_list:collectPrices() };
-  var r=id?await sb.from("clients").update(data).eq("id",id):await sb.from("clients").insert(data);
-  if(r.error){ showMsg("保存エラー："+esc(r.error.message)); return; }
+  if(id){
+    var r=await sb.from("clients").update(data).eq("id",id);
+    if(r.error){ showMsg("保存エラー："+esc(r.error.message)); return; }
+  } else {
+    var r=await sb.from("clients").insert(data).select().single();
+    if(r.error){ showMsg("保存エラー："+esc(r.error.message)); return; }
+    // 新規施設なら、同じ画面で入れた利用者名簿もまとめて登録
+    if(kind==="施設"||kind==="病院"){
+      var names=[]; Array.prototype.forEach.call(document.querySelectorAll("#cf_newmembers .cf_nm"),function(inp){ var n=inp.value.trim(); if(n) names.push({org_id:PROFILE.org_id,client_id:r.data.id,name:n}); });
+      if(names.length) await sb.from("members_t").insert(names);
+    }
+  }
   closeSheet(); toast("💾 保存しました"); await reloadClients();
 }
 async function delClient(id){
@@ -645,7 +664,7 @@ function openHelp(){
   var body='<div class="sheet-title">使い方・ヘルプ</div>'+
     '<div class="muted" style="margin-bottom:8px;">訪問美容の <b>予約・顧客・売上</b> をこれひとつで管理できます。</div>'+
     helpItem("① 始め方（3ステップ）","1. <b>顧客・施設を登録</b>（顧客タブ）<br>2. <b>予約を作る</b>（予定タブ／任意）<br>3. <b>施術を記録</b>（今日タブ）→ 料金が<b>売上に自動集計</b>されます。")+
-    helpItem("🏢 施設の使い方","施設は、編集画面で<b>利用者（入居者）の名簿</b>を登録できます。<br>訪問したら「施術を記録」で名簿が出るので、<b>その日対応した人だけチェック</b>してまとめて保存。<br>※名簿は候補。前回対応した人は<b>自動でチェック済み</b>になります。入退居は随時直せます。")+
+    helpItem("🏢 施設の使い方","施設を登録する画面で、<b>利用者（入居者）の名簿</b>も一緒に入れられます（あとから編集も可）。<br>訪問したら「施術を記録」で名簿が出るので、<b>その日対応した人だけチェック</b>してまとめて保存。<br>※名簿は候補。前回対応した人は<b>自動でチェック済み</b>になります。入退居は随時直せます。")+
     helpItem("🏃 その場でサッと記録","決まったお客様がいない・一見のお客様は、今日タブの「＋今日の施術を記録」→ <b>その場でサッと記録</b> から、顧客登録なしで記録できます。")+
     helpItem("📅 予約","先の予定も入れられます。予約をタップ→「この予約の施術を記録」で、顧客や日付が引き継がれてラクに記録できます。")+
     helpItem("💰 売上の見方","売上タブで、月ごとの合計と一覧が見られます。上の ‹ › で月を切り替え。")+
