@@ -51,7 +51,7 @@
   .cal .cell.sel{background:var(--accent); color:#fff;}
   .cal .cell .dot{width:5px; height:5px; border-radius:50%; background:var(--accent); margin-top:3px;}
   .cal .cell.sel .dot{background:#fff;}
-  .sched{position:relative; margin-top:8px;}
+  .sched{position:relative; margin-top:8px; cursor:pointer;}
   .sched-hline{position:absolute; left:44px; right:0; border-top:1px dashed var(--line);}
   .sched-hlabel{position:absolute; left:0; transform:translateY(-50%); font-size:11px; color:var(--hint);}
   .sched-ev{position:absolute; left:48px; right:2px; border-radius:8px; padding:3px 8px; font-size:12px; line-height:1.35; overflow:hidden; cursor:pointer; box-shadow:0 1px 2px rgba(0,0,0,.08); box-sizing:border-box;}
@@ -281,33 +281,51 @@ function dayScheduleHtml(iso){
   var items=dayTimeline(iso);
   var timed=items.filter(function(it){return it.t;});
   var untimed=items.filter(function(it){return !it.t;});
-  if(!timed.length && !untimed.length) return '<div class="list-empty">この日の予定・記録はありません。</div>';
   var startH=9, endH=18;
   timed.forEach(function(it){ var m=hm2min(it.t); var sh=Math.floor(m/60); if(sh<startH)startH=sh; var eh=Math.ceil((m+itDur(it))/60); if(eh>endH)endH=eh; });
   if(endH<=startH) endH=startH+1;
   var hourH=48, ppm=hourH/60, top0=startH*60, PAD=8;
-  var h='';
-  if(timed.length){
-    h+='<div class="sched" style="height:'+((endH-startH)*hourH+PAD*2)+'px;">';
-    for(var hh=startH; hh<=endH; hh++){ var y=(hh-startH)*hourH+PAD; h+='<div class="sched-hline" style="top:'+y+'px;"></div><div class="sched-hlabel" style="top:'+y+'px;">'+pad(hh)+':00</div>'; }
-    timed.forEach(function(it){
-      var m=hm2min(it.t), top=(m-top0)*ppm+PAD, hgt=Math.max(itDur(it)*ppm, 34);
-      var isBk=it.kind==="bk";
-      var done=isBk?recordsForBooking(it.b.id).length>0:true;
-      var label=isBk?esc(clientName(it.b.client_id)):recordWho(it.r);
-      var sub=isBk?(it.b.duration?it.b.duration+'分':''):(esc(it.r.menu||'')+(it.r.amount?'　'+yen(it.r.amount):''));
-      var onclick=isBk?"openBookingForm('"+it.b.id+"')":"openRecordForm('"+it.r.id+"')";
-      h+='<div class="sched-ev '+(done?"done":"plan")+'" style="top:'+top+'px;height:'+hgt+'px;" onclick="'+onclick+'">'+
-        '<b>'+esc(it.t)+'</b> '+label+(sub?'<div style="opacity:.8;">'+sub+'</div>':'')+'</div>';
-    });
-    h+='</div>';
-  }
+  var h='<div class="muted" style="font-size:11px;margin:2px 0 4px;">空いた時間をタップすると、その時刻に追加できます</div>';
+  h+='<div class="sched" data-start="'+startH+'" style="height:'+((endH-startH)*hourH+PAD*2)+'px;" onclick="schedClick(event,\''+iso+'\')">';
+  for(var hh=startH; hh<=endH; hh++){ var y=(hh-startH)*hourH+PAD; h+='<div class="sched-hline" style="top:'+y+'px;"></div><div class="sched-hlabel" style="top:'+y+'px;">'+pad(hh)+':00</div>'; }
+  timed.forEach(function(it){
+    var m=hm2min(it.t), top=(m-top0)*ppm+PAD, hgt=Math.max(itDur(it)*ppm, 34);
+    var isBk=it.kind==="bk";
+    var done=isBk?recordsForBooking(it.b.id).length>0:true;
+    var label=isBk?esc(clientName(it.b.client_id)):recordWho(it.r);
+    var sub=isBk?(it.b.duration?it.b.duration+'分':''):(esc(it.r.menu||'')+(it.r.amount?'　'+yen(it.r.amount):''));
+    var onclick=isBk?"openBookingForm('"+it.b.id+"')":"openRecordForm('"+it.r.id+"')";
+    h+='<div class="sched-ev '+(done?"done":"plan")+'" style="top:'+top+'px;height:'+hgt+'px;" onclick="event.stopPropagation();'+onclick+'">'+
+      '<b>'+esc(it.t)+'</b> '+label+(sub?'<div style="opacity:.8;">'+sub+'</div>':'')+'</div>';
+  });
+  h+='</div>';
   if(untimed.length){
     h+='<div class="hint" style="margin-top:12px;">時間未設定</div>';
     untimed.forEach(function(it){ h+=timelineItemHtml(it); });
   }
   return h;
 }
+/* 空き時間タップ→その時刻に予約/施術を追加 */
+function schedClick(ev, iso){
+  var sched=ev.currentTarget; var rect=sched.getBoundingClientRect();
+  var startH=+sched.getAttribute("data-start")||9;
+  var y=ev.clientY-rect.top-8; if(y<0)y=0;              // PAD=8
+  var min=startH*60 + y/(48/60); min=Math.round(min/15)*15;   // 15分単位
+  var t=pad(Math.floor(min/60))+":"+pad(min%60);
+  openNewAt(iso, t);
+}
+function openNewAt(iso, t){
+  window._newAt={iso:iso, t:t};
+  openSheet('<div class="sheet-title">'+esc(dateLabel(iso))+'　'+esc(t)+'</div>'+
+    '<div class="muted" style="margin-bottom:8px;">この時間に追加します。</div>'+
+    '<button class="btn primary" onclick="newBookingAt()">＋ 予約を作る</button>'+
+    '<button class="btn ghost accent" onclick="newRecordAt()">💴 施術を記録</button>'+
+    '<button class="btn ghost" onclick="closeSheet()">キャンセル</button>');
+}
+function newBookingAt(){ openPicker('bkAtPick',{title:'予約する施設・お客様を選ぶ',allowNew:true}); }
+function bkAtPick(id){ var a=window._newAt||{}; openBookingForm(null,{client_id:id, date:a.iso, time:a.t}); }
+function newRecordAt(){ openPicker('rcAtPick',{title:'だれの施術を記録しますか？',allowNew:true}); }
+function rcAtPick(id){ var a=window._newAt||{}; var c=clientById(id); if(isFacility(c)) openFacilityBatch(id,{date:a.iso}); else openRecordForm(null,{client_id:id, date:a.iso, time:a.t}); }
 
 /* ===== 予約＋記録を「その日」に束ねる共通処理 ===== */
 function dayTimeline(iso){
@@ -574,7 +592,7 @@ function openRecordForm(id, prefill){
     '<input type="hidden" id="rf_mname" value="'+esc(exRec(rec).nm||"")+'">'+
     '<input type="hidden" id="rf_pk" value="'+esc(exRec(rec).pk||"")+'">'+
     '<div class="row"><div><div class="hint">日付</div><input id="rf_date" type="date" value="'+esc(rec.date||todayISO())+'"></div>'+
-      '<div><div class="hint">時間</div><input id="rf_time" type="time" value="'+esc(exRec(rec).t||nowHM())+'"></div></div>'+
+      '<div><div class="hint">時間</div><input id="rf_time" type="time" value="'+esc(rec.time||exRec(rec).t||nowHM())+'"></div></div>'+
     '<div class="hint" style="margin-top:8px;">メニュー'+(hasPl?'（料金表から選ぶと料金が入ります）':'')+'</div>'+
     (hasPl?'<select id="rf_menusel" onchange="rfMenu()">'+menuOptionsFor(rec.client_id, rec.menu)+'</select>':'')+
     '<input id="rf_menu" value="'+esc(rec.menu||"")+'" placeholder="メニュー（例：カット）" style="margin-top:'+(hasPl?'6px':'0')+';">'+
