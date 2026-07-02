@@ -94,6 +94,8 @@
 <div class="wrap" id="app"><div class="center-narrow"><div class="card">読み込み中…</div></div></div>
 <div class="overlay" id="overlay" onclick="if(event.target===this)closeSheet()"><div class="sheet"><div class="sheet-handle"></div><div id="sheetBody"></div></div></div>
 
+<link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
+<script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
 <script>
 /* ===== 接続設定（このプロジェクト専用） ===== */
@@ -271,6 +273,8 @@ function renderToday(){
   html+='<div class="sec">今日の訪問</div>';
   if(!todays.length){ html+='<div class="list-empty">今日の予定・記録はありません。<br>上のボタンから記録できます。</div>'; }
   else { todays.forEach(function(it){ html+=timelineItemHtml(it); }); }
+  html+='<button class="btn ghost accent" style="margin-top:10px;" onclick="showRouteMap(\''+tISO+'\')">🗺 今日の動線を地図で見る</button>';
+  html+='<div id="routeMap" style="display:none;margin-top:8px;"></div>';
   v.innerHTML=html;
 }
 
@@ -380,7 +384,86 @@ function renderPlan(){
   // 選択日のタイムスケジュール（時間軸で目視）
   html+='<div class="sec">'+esc(dateLabel(PLAN_SEL))+' の予定</div>';
   html+=dayScheduleHtml(PLAN_SEL);
+  html+='<button class="btn ghost accent" style="margin-top:10px;" onclick="showRouteMap(\''+PLAN_SEL+'\')">🗺 この日の動線を地図で見る</button>';
+  html+='<div id="routeMap" style="display:none;margin-top:8px;"></div>';
   v.innerHTML=html;
+}
+
+/* ===== 動線マップ（Leaflet＋OSM・無料） ===== */
+var _map=null;
+/* その日の訪問先を時間順に。住所ありの顧客のみ・重複はまとめる */
+function stopsFor(iso){
+  var items=dayTimeline(iso);
+  var seen={}, out=[];
+  items.forEach(function(it){
+    var cid=it.kind==="bk"?it.b.client_id:it.r.client_id;
+    if(!cid) return;
+    var c=clientById(cid);
+    if(!c || !(c.address&&c.address.trim())) return;
+    if(seen[cid]) return; seen[cid]=1;
+    out.push({client:c, t:it.t||""});
+  });
+  return out;
+}
+/* 住所→緯度経度（Nominatim・無料）。結果は clients.lat/lng に保存してキャッシュ */
+async function geocodeAddr(addr){
+  var u="https://nominatim.openstreetmap.org/search?format=json&limit=1&countrycodes=jp&accept-language=ja&q="+encodeURIComponent(addr);
+  try{ var r=await fetch(u); var j=await r.json(); if(j&&j[0]) return {lat:+j[0].lat, lng:+j[0].lon}; }catch(e){}
+  return null;
+}
+async function ensureGeocoded(stops){
+  var need=stops.filter(function(s){ return !(s.client.lat&&s.client.lng); });
+  for(var i=0;i<need.length;i++){
+    var c=need[i].client;
+    toast("住所を地図に変換中… ("+(i+1)+"/"+need.length+")");
+    var g=await geocodeAddr(c.address);
+    if(g){ c.lat=g.lat; c.lng=g.lng; try{ await sb.from("clients").update({lat:g.lat,lng:g.lng}).eq("id",c.id); }catch(e){} }
+    if(i<need.length-1) await new Promise(function(res){ setTimeout(res,1100); });  // Nominatimは1秒1件まで
+  }
+}
+/* 番号付きピン */
+function numIcon(n){ return L.divIcon({className:"",iconSize:[28,28],iconAnchor:[14,14],html:'<div style="background:var(--accent,#2f9e7d);color:#fff;width:28px;height:28px;border-radius:50%;display:flex;align-items:center;justify-content:center;font-weight:700;font-size:14px;border:2px solid #fff;box-shadow:0 1px 4px rgba(0,0,0,.35);">'+n+'</div>'}); }
+function navUrl(lat,lng){ return "https://www.google.com/maps/dir/?api=1&destination="+lat+","+lng; }
+function navAllUrl(pts){
+  if(!pts.length) return "";
+  var dest=pts[pts.length-1];
+  var wp=pts.slice(0,-1).map(function(p){return p.client.lat+","+p.client.lng;}).join("|");
+  var u="https://www.google.com/maps/dir/?api=1&destination="+dest.client.lat+","+dest.client.lng;
+  if(wp) u+="&waypoints="+encodeURIComponent(wp);
+  return u;
+}
+async function showRouteMap(iso){
+  var box=el("routeMap"); if(!box) return;
+  box.style.display="block";
+  var stops=stopsFor(iso);
+  if(!stops.length){ box.innerHTML='<div class="list-empty">住所が登録された訪問先がありません。<br>顧客の編集で住所を入れると、地図に表示されます。</div>'; return; }
+  box.innerHTML='<div class="muted" style="font-size:12px;margin:2px 0 6px;">地図を準備中…</div>';
+  await ensureGeocoded(stops);
+  var pts=stops.filter(function(s){ return s.client.lat&&s.client.lng; });
+  if(!pts.length){ box.innerHTML='<div class="list-empty">住所を地図に変換できませんでした。<br>住所の表記をご確認ください。</div>'; return; }
+  box.innerHTML='<div id="mapCanvas" style="height:300px;border-radius:12px;overflow:hidden;border:1px solid var(--line,#e3e3e3);"></div>'+
+    '<a class="btn primary" style="margin-top:8px;display:block;text-align:center;text-decoration:none;" href="'+navAllUrl(pts)+'" target="_blank" rel="noopener">🚗 全部まとめてナビ（'+pts.length+'件）</a>'+
+    '<div id="routeList" style="margin-top:8px;"></div>';
+  if(_map){ _map.remove(); _map=null; }
+  _map=L.map("mapCanvas");
+  L.tileLayer("https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png",{maxZoom:19,attribution:"© OpenStreetMap"}).addTo(_map);
+  var latlngs=[];
+  pts.forEach(function(s,i){
+    var ll=[s.client.lat,s.client.lng]; latlngs.push(ll);
+    L.marker(ll,{icon:numIcon(i+1)}).addTo(_map)
+      .bindPopup('<b>'+(i+1)+'. '+esc(s.client.name)+'</b>'+(s.t?'　'+esc(s.t):'')+'<br><a href="'+navUrl(s.client.lat,s.client.lng)+'" target="_blank" rel="noopener">Googleマップでナビ</a>');
+  });
+  if(latlngs.length>1) L.polyline(latlngs,{color:"#2f9e7d",weight:3,opacity:.7,dashArray:"6,6"}).addTo(_map);
+  if(latlngs.length>1) _map.fitBounds(latlngs,{padding:[30,30]}); else _map.setView(latlngs[0],15);
+  setTimeout(function(){ if(_map) _map.invalidateSize(); },150);
+  // 下のリスト（順番＋個別ナビ）
+  var lh=pts.map(function(s,i){
+    return '<div class="item" style="display:flex;justify-content:space-between;align-items:center;">'+
+      '<div><span style="display:inline-block;min-width:22px;font-weight:700;color:var(--accent,#2f9e7d);">'+(i+1)+'.</span>'+
+      (s.t?'<b>'+esc(s.t)+'</b>　':'')+esc(s.client.name)+'</div>'+
+      '<a class="btn ghost sm" style="width:auto;text-decoration:none;" href="'+navUrl(s.client.lat,s.client.lng)+'" target="_blank" rel="noopener">ナビ</a></div>';
+  }).join("");
+  el("routeList").innerHTML=lh;
 }
 
 /* ===== 顧客タブ ===== */
