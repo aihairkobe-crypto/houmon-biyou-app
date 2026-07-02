@@ -585,7 +585,18 @@ function recFromBooking(bid){
 /* 標準メニュー（マイ料金表）＝この端末に保存。お客様ごとの料金表があればそちら優先 */
 var STD_MENU=[];
 function loadStdMenu(){ try{ STD_MENU=JSON.parse(localStorage.getItem("stdmenu_"+(ME&&ME.id))||"[]"); }catch(e){ STD_MENU=[]; } if(!Array.isArray(STD_MENU)) STD_MENU=[]; }
-function priceListFor(clientId){ var c=clientById(clientId); var pl=(c&&Array.isArray(c.price_list)&&c.price_list.length)?c.price_list:STD_MENU; return Array.isArray(pl)?pl:[]; }
+function usedMenus(){   // 過去に記録したメニューを候補化（メニュー名ごとに最新の料金）
+  var recs=RC.slice().sort(function(a,b){return (b.date||"").localeCompare(a.date||"");});
+  var seen={}, out=[];
+  recs.forEach(function(r){ var m=(r.menu||"").trim(); if(!m||seen[m]) return; seen[m]=true; out.push({name:m, price:r.amount||0}); });
+  return out;
+}
+function priceListFor(clientId){
+  var c=clientById(clientId);
+  if(c&&Array.isArray(c.price_list)&&c.price_list.length) return c.price_list;   // 顧客個別の料金表
+  if(STD_MENU&&STD_MENU.length) return STD_MENU;                                  // 標準メニュー
+  return usedMenus();                                                             // 過去の記録から自動
+}
 function menuOptionsFor(clientId, selMenu){
   var opts='<option value="">（自由入力）</option>';
   priceListFor(clientId).forEach(function(p){ opts+='<option value="'+esc(p.name)+'" data-price="'+(p.price||0)+'"'+(p.name===selMenu?" selected":"")+'>'+esc(p.name)+' '+yen(p.price)+'</option>'; });
