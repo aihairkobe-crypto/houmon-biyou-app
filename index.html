@@ -945,20 +945,24 @@ async function delRecord(id){
 /* ===== 施設：その日の売上まとめ入力 ===== */
 async function openFacilityBatch(clientId, opts){
   opts=opts||{}; var c=clientById(clientId)||{}; var iso=opts.date||todayISO();
-  window._batch={ clientId:clientId, bookingId:opts.booking_id||null };
+  window._batch={ clientId:clientId, bookingId:opts.booking_id||null, date:iso };
   openSheet('<div class="sheet-title">読み込み中…</div>');
   var rm=await sb.from("members_t").select("*").eq("client_id",clientId).order("created_at",{ascending:true});
   var roster=rm.error?[]:(rm.data||[]);
+  window._batch.roster=roster;
   // 前回の訪問で対応した人＝自動チェック（毎回ゼロ入力にしない）
   var lr=await sb.from("records").select("member_id,menu,amount,date").eq("client_id",clientId).order("date",{ascending:false}).limit(80);
   var recs=lr.error?[]:(lr.data||[]); var lastDate=recs.length?recs[0].date:null;
   var pre={}; recs.forEach(function(r){ if(r.date===lastDate && r.member_id) pre[r.member_id]={menu:r.menu,amount:r.amount}; });
   var pl=Array.isArray(c.price_list)?c.price_list:[];
+  // Excelから貼り付けた名簿を反映（該当利用者をチェック＋メニュー/料金プリセット）
+  if(window._batchPastePre){ roster.forEach(function(m){ var pp=window._batchPastePre[m.name]; if(pp){ pre[m.id]={menu:pp.menu||"", amount:(pp.amount!=null?pp.amount:(pp.menu?priceOfMenu(pl,pp.menu):null))}; } }); window._batchPastePre=null; }
   var rowsHtml=roster.map(function(m){ return batchRow(m,pl,pre[m.id]); }).join("");
   var body='<div class="sheet-title">'+esc(c.name)+'　'+esc(dateLabel(iso))+'</div>'+
     '<div class="muted" style="margin-bottom:8px;">その日 <b>対応した人だけ</b> にチェック → まとめて保存。'+(lastDate?'<br>（前回対応した方は自動でチェック済み）':'')+'</div>'+
     '<div class="hint">日付</div><input id="ba_date" type="date" value="'+esc(iso)+'">'+
     '<div id="ba_rows" style="margin-top:10px;">'+(rowsHtml||'<div class="muted">名簿が空です。下の「＋利用者を追加」から。</div>')+'</div>'+
+    '<button class="btn ghost accent" onclick="facilityBulkPaste()">📋 名簿を貼り付け（Excelからコピー）</button>'+
     '<button class="btn ghost accent" onclick="batchAdd()">➕ その場で利用者を追加</button>'+
     '<div id="m"></div>'+
     '<button class="btn primary" onclick="saveBatch()">まとめて保存</button>'+
@@ -999,6 +1003,39 @@ async function saveBatch(){
   var r=await insertRecords(payload);
   if(r.error){ showMsg("保存エラー："+esc(r.error.message)); return; }
   closeSheet(); toast("💴 "+payload.length+"件の施術を記録しました"); await reloadRecords();
+}
+/* ===== 施設名簿をExcelからコピペで一括取り込み ===== */
+function priceOfMenu(pl, menu){ var f=(pl||[]).find(function(p){return p.name===menu;}); return f?f.price:null; }
+function reopenFacilityBatch(){ var b=window._batch||{}; openFacilityBatch(b.clientId,{date:b.date, booking_id:b.bookingId}); }
+function facilityBulkPaste(){
+  openSheet('<div class="sheet-title">📋 名簿を貼り付け</div>'+
+    '<div class="muted" style="margin-bottom:8px;">Excel・スプレッドシートで<b>名前の列</b>（必要ならメニュー・料金も）を選んでコピーし、下に貼り付け。<b>1行に1人</b>です。</div>'+
+    '<div class="muted" style="font-size:11px;margin-bottom:6px;">例：<br>山田花子<br>田中太郎　カット<br>佐藤梅子　カット,3000</div>'+
+    '<textarea id="bp_text" rows="8" style="width:100%;box-sizing:border-box;padding:10px;border:1px solid var(--line);border-radius:10px;font-size:15px;" placeholder="ここに貼り付け"></textarea>'+
+    '<div id="m"></div>'+
+    '<button class="btn primary" onclick="applyBulkPaste()">取り込む</button>'+
+    '<button class="btn ghost" onclick="reopenFacilityBatch()">戻る</button>');
+}
+/* 1行を「氏名 / メニュー / 料金」に分解（区切りはタブ・カンマ・読点。氏名内の空白は保持） */
+function parseRosterLine(ln){
+  var parts=ln.split(/[\t,、，]+/).map(function(s){return s.trim();}).filter(function(s){return s!=="";});
+  if(!parts.length) return null;
+  var name=parts[0], menu="", amount=null;
+  for(var i=1;i<parts.length;i++){ var num=parts[i].replace(/[¥￥,，円\s]/g,""); if(/^\d+$/.test(num)) amount=Number(num); else if(!menu) menu=parts[i]; }
+  return {name:name, menu:menu, amount:amount};
+}
+async function applyBulkPaste(){
+  var raw=(el("bp_text")&&el("bp_text").value)||"";
+  var rows=raw.split(/\r?\n/).map(function(s){return s.trim();}).filter(Boolean).map(parseRosterLine).filter(function(r){return r&&r.name;});
+  if(!rows.length){ showMsg("名前を貼り付けてください"); return; }
+  var b=window._batch||{}; var roster=b.roster||[];
+  // 既存名簿にない人だけ members_t に追加
+  var have={}; roster.forEach(function(m){ have[m.name]=true; });
+  var toAdd=[]; rows.forEach(function(r){ if(!have[r.name]){ have[r.name]=true; toAdd.push({org_id:PROFILE.org_id, client_id:b.clientId, name:r.name}); } });
+  if(toAdd.length){ var ins=await sb.from("members_t").insert(toAdd); if(ins.error){ showMsg("取り込みエラー："+esc(ins.error.message)); return; } }
+  // 貼り付けたメニュー・料金を名前キーで保持→再表示時にプリセット
+  var map={}; rows.forEach(function(r){ map[r.name]={menu:r.menu, amount:r.amount}; }); window._batchPastePre=map;
+  toast("📋 "+rows.length+"人を取り込みました"); reopenFacilityBatch();
 }
 
 /* ===== 顧客フォーム（＋施設の利用者名簿） ===== */
