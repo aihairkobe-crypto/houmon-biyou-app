@@ -475,7 +475,7 @@ function quickFromPicker(){ closeSheet(); openQuickRecord(); }
 function openQuickRecord(prefill){
   prefill=prefill||{};
   var body='<div class="sheet-title">施術をすぐ記録</div>'+
-    '<div class="muted" style="margin-bottom:8px;">お試し・単発向け。予定・売上にちゃんと積まれます。</div>'+
+    '<div class="muted" style="margin-bottom:8px;">お名前を入れると<b>顧客にも自動登録</b>されます。予定・売上にちゃんと積まれます。</div>'+
     '<div class="hint">区分</div><div class="seg-wrap" id="qr_kind" style="margin-bottom:8px;">'+
       ["在宅","施設","病院"].map(function(k){return '<button class="seg'+(k==="在宅"?" on":"")+'" onclick="cfKind(this)">'+k+'</button>';}).join("")+'</div>'+
     '<div class="row"><div><div class="hint">日付</div><input id="qr_date" type="date" value="'+esc(prefill.date||todayISO())+'"></div>'+
@@ -493,13 +493,21 @@ function openQuickRecord(prefill){
 }
 async function saveQuick(){
   var kEl=document.querySelector("#qr_kind .seg.on"); var kind=kEl?kEl.textContent:"在宅";
-  var data={ org_id:PROFILE.org_id, client_id:null, booking_id:null, member_id:null, staff_id:ME.id,
+  var name=el("qr_name").value.trim();
+  // 名前を入れたら顧客(個人)に自動登録。同名がいれば再利用して紐づける
+  var clientId=null, created=false;
+  if(name){
+    var ex=CL.find(function(c){return (c.kind||"個人")==="個人" && c.name===name;});
+    if(ex){ clientId=ex.id; }
+    else { var cr=await sb.from("clients").insert({org_id:PROFILE.org_id,kind:"個人",name:name,billing:"個別"}).select().single(); if(cr.error){ showMsg("顧客登録エラー："+esc(cr.error.message)); return; } clientId=cr.data.id; created=true; }
+  }
+  var data={ org_id:PROFILE.org_id, client_id:clientId, booking_id:null, member_id:null, staff_id:ME.id,
     menu:el("qr_menu").value.trim(), amount:Number(el("qr_amount").value)||0,
     note:el("qr_note").value.trim(), date:el("qr_date").value,
-    photos:recExtra({nm:el("qr_name").value.trim(), t:el("qr_time").value, pk:kind}) };
+    photos:recExtra({ nm:(clientId?"":name), t:el("qr_time").value, pk:kind }) };
   var r=await insertRecords(data);
   if(r.error){ showMsg("保存エラー："+esc(r.error.message)); return; }
-  closeSheet(); toast("💴 施術を記録しました"); await reloadRecords();
+  closeSheet(); toast(created?("💴 記録し「"+name+"」を顧客に登録しました"):"💴 施術を記録しました"); await loadAll(); renderTab();
 }
 
 /* ===== 予約フォーム ===== */
