@@ -541,7 +541,7 @@ function openRecordForm(id, prefill){
 function rfMenu(){ var sel=el("rf_menusel"); var opt=sel.options[sel.selectedIndex]; if(!opt||!opt.value) return; el("rf_menu").value=opt.value; var p=opt.getAttribute("data-price"); if(p!=null) el("rf_amount").value=p; }
 function qrMenu(){ var sel=el("qr_menusel"); var opt=sel.options[sel.selectedIndex]; if(!opt||!opt.value) return; el("qr_menu").value=opt.value; var p=opt.getAttribute("data-price"); if(p!=null) el("qr_amount").value=p; }
 async function saveRecord(id){
-  var client=el("rf_client").value; if(!client){ showMsg("顧客が未設定です"); return; }
+  var client=el("rf_client").value||null;   // 顧客なし（その場記録）も保存OK。名前はphotos.nmに残る
   var data={ org_id:PROFILE.org_id, client_id:client, booking_id:el("rf_booking").value||null,
     member_id:el("rf_mid").value||null, staff_id:ME.id,
     menu:el("rf_menu").value.trim(), amount:Number(el("rf_amount").value)||0,
