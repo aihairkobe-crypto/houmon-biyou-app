@@ -273,7 +273,7 @@ function timelineItemHtml(it){
     var b=it.b; var recs=recordsForBooking(b.id); var done=recs.length>0;
     var tot=recs.reduce(function(a,r){return a+(r.amount||0);},0);
     return '<div class="item"><div class="top">'+
-      '<div><div class="name">'+esc(b.time||"--:--")+'　'+esc(clientName(b.client_id))+'</div>'+
+      '<div><div class="name">'+(b.time?esc(b.time)+'　':'')+esc(clientName(b.client_id))+'</div>'+
         (b.memo?'<div class="meta">📝 '+esc(b.memo)+'</div>':"")+
         (done?'<div class="meta">💴 '+recs.length+'件　'+yen(tot)+'</div>':"")+'</div>'+
       '<span class="pill '+(done?"done":"plan")+'">'+(done?"入力済":"予定")+'</span></div>'+
@@ -283,7 +283,7 @@ function timelineItemHtml(it){
   }
   var r=it.r;
   return '<div class="item" onclick="openRecordForm(\''+r.id+'\')"><div class="top">'+
-    '<div><div class="name">'+esc(r.time||"--:--")+'　'+recordWho(r)+'</div>'+
+    '<div><div class="name">'+(r.time?esc(r.time)+'　':'')+recordWho(r)+'</div>'+
       '<div class="meta">✂️ '+esc(r.menu||"施術")+'　'+yen(r.amount)+(r.note?'　📝 '+esc(r.note):"")+'</div></div>'+
     '<span class="pill done">記録済</span></div></div>';
 }
