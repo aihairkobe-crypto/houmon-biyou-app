@@ -7,6 +7,7 @@
 
 alter table public.records add column if not exists member_name text;
 alter table public.records add column if not exists place_kind  text;
+alter table public.records add column if not exists "time"      text;  -- 施術の時間
 
 -- PostgREST のスキーマキャッシュを即時更新
 notify pgrst, 'reload schema';

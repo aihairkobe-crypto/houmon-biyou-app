@@ -98,6 +98,7 @@ function showMsg(t,k){ var m=el("m"); if(m) m.innerHTML='<div class="msg '+(k||"
 
 /* ===== 日付ヘルパ ===== */
 function pad(n){ return String(n).padStart(2,"0"); }
+function nowHM(){ var d=new Date(); return pad(d.getHours())+":"+pad(d.getMinutes()); }
 function todayISO(){ var d=new Date(); return d.getFullYear()+"-"+pad(d.getMonth()+1)+"-"+pad(d.getDate()); }
 function curMonth(){ var d=new Date(); return d.getFullYear()+"-"+pad(d.getMonth()+1); }
 function shiftMonth(ym,delta){ var p=ym.split("-"); var d=new Date(+p[0],+p[1]-1+delta,1); return d.getFullYear()+"-"+pad(d.getMonth()+1); }
@@ -343,7 +344,7 @@ function renderSales(){
     var who=recordWho(r);
     html+='<div class="item" onclick="openRecordForm(\''+r.id+'\')"><div class="top">'+
       '<div><div class="name">'+who+'</div>'+
-        '<div class="meta">✂️ '+esc(r.menu||"（メニュー未記入）")+(r.note?'　📝 '+esc(r.note):"")+'</div></div>'+
+        '<div class="meta">'+(r.time?'🕐 '+esc(r.time)+'　':'')+'✂️ '+esc(r.menu||"（メニュー未記入）")+(r.note?'　📝 '+esc(r.note):"")+'</div></div>'+
       '<span class="amt">'+yen(r.amount)+'</span></div></div>';
   });
   v.innerHTML=html;
@@ -397,7 +398,8 @@ function openQuickRecord(prefill){
     '<div class="muted" style="margin-bottom:8px;">顧客を選ばずに、その場の施術を記録します。</div>'+
     '<div class="hint">区分</div><div class="seg-wrap" id="qr_kind" style="margin-bottom:8px;">'+
       ["在宅","施設","病院"].map(function(k){return '<button class="seg'+(k==="在宅"?" on":"")+'" onclick="cfKind(this)">'+k+'</button>';}).join("")+'</div>'+
-    '<div class="hint">日付</div><input id="qr_date" type="date" value="'+esc(prefill.date||todayISO())+'">'+
+    '<div class="row"><div><div class="hint">日付</div><input id="qr_date" type="date" value="'+esc(prefill.date||todayISO())+'"></div>'+
+      '<div><div class="hint">時間</div><input id="qr_time" type="time" value="'+esc(prefill.time||nowHM())+'"></div></div>'+
     '<div class="hint" style="margin-top:8px;">お客様名（任意）</div><input id="qr_name" placeholder="例：〇〇様（空欄でもOK）">'+
     '<div class="hint" style="margin-top:8px;">メニュー</div><input id="qr_menu" placeholder="例：カット">'+
     '<div class="hint" style="margin-top:8px;">料金（円）</div><input id="qr_amount" type="number" placeholder="0">'+
@@ -410,7 +412,7 @@ function openQuickRecord(prefill){
 async function saveQuick(){
   var kEl=document.querySelector("#qr_kind .seg.on"); var kind=kEl?kEl.textContent:"在宅";
   var data={ org_id:PROFILE.org_id, client_id:null, booking_id:null, member_id:null,
-    member_name:el("qr_name").value.trim()||null, staff_id:ME.id, place_kind:kind,
+    member_name:el("qr_name").value.trim()||null, staff_id:ME.id, place_kind:kind, time:el("qr_time").value,
     menu:el("qr_menu").value.trim(), amount:Number(el("qr_amount").value)||0,
     note:el("qr_note").value.trim(), date:el("qr_date").value };
   var r=await insertRecords(data);
@@ -476,7 +478,8 @@ function openRecordForm(id, prefill){
     '<input type="hidden" id="rf_booking" value="'+esc(rec.booking_id||"")+'">'+
     '<input type="hidden" id="rf_mid" value="'+esc(rec.member_id||"")+'">'+
     '<input type="hidden" id="rf_mname" value="'+esc(rec.member_name||"")+'">'+
-    '<div class="hint">日付</div><input id="rf_date" type="date" value="'+esc(rec.date||todayISO())+'">'+
+    '<div class="row"><div><div class="hint">日付</div><input id="rf_date" type="date" value="'+esc(rec.date||todayISO())+'"></div>'+
+      '<div><div class="hint">時間</div><input id="rf_time" type="time" value="'+esc(rec.time||nowHM())+'"></div></div>'+
     '<div class="hint" style="margin-top:8px;">メニュー（料金表から選ぶと料金が入ります）</div>'+
     '<select id="rf_menusel" onchange="rfMenu()">'+menuOptionsFor(rec.client_id, rec.menu)+'</select>'+
     '<input id="rf_menu" value="'+esc(rec.menu||"")+'" placeholder="メニュー（自由入力も可）" style="margin-top:6px;">'+
@@ -494,7 +497,7 @@ async function saveRecord(id){
   var data={ org_id:PROFILE.org_id, client_id:client, booking_id:el("rf_booking").value||null,
     member_id:el("rf_mid").value||null, member_name:el("rf_mname").value||null,
     staff_id:ME.id, menu:el("rf_menu").value.trim(), amount:Number(el("rf_amount").value)||0,
-    note:el("rf_note").value.trim(), date:el("rf_date").value };
+    note:el("rf_note").value.trim(), date:el("rf_date").value, time:el("rf_time").value };
   var r=id?await updateRecord(id,data):await insertRecords(data);
   if(r.error){ showMsg("保存エラー："+esc(r.error.message)); return; }
   closeSheet(); toast("💴 施術を記録しました"); await reloadRecords();
