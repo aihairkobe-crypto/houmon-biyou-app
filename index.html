@@ -43,6 +43,14 @@
   .pill{font-size:11px; font-weight:700; padding:3px 9px; border-radius:12px; white-space:nowrap;}
   .pill.plan{background:#eef1f0; color:var(--muted);} .pill.done{background:var(--accent-soft); color:var(--accent-text);}
   .amt{font-weight:700; color:var(--accent-text);}
+  .cal{display:grid; grid-template-columns:repeat(7,1fr); gap:3px; margin-top:8px;}
+  .cal .wd{text-align:center; font-size:11px; color:var(--muted); padding:2px 0;}
+  .cal .cell{aspect-ratio:1/1; border-radius:9px; display:flex; flex-direction:column; align-items:center; justify-content:center; font-size:13px; cursor:pointer; border:1px solid transparent; background:var(--bg);}
+  .cal .cell.blank{background:transparent; cursor:default;}
+  .cal .cell.today{border-color:var(--accent);}
+  .cal .cell.sel{background:var(--accent); color:#fff;}
+  .cal .cell .dot{width:5px; height:5px; border-radius:50%; background:var(--accent); margin-top:3px;}
+  .cal .cell.sel .dot{background:#fff;}
   /* タブバー */
   .tabbar{position:fixed; left:0; right:0; bottom:0; z-index:60; background:var(--surface); border-top:1px solid var(--line); display:flex; max-width:480px; margin:0 auto;}
   .tabbar button{flex:1; border:none; background:none; padding:8px 0 10px; font-size:11px; color:var(--muted); cursor:pointer; display:flex; flex-direction:column; align-items:center; gap:2px;}
@@ -202,7 +210,7 @@ function renderTab(){
 /* ===== 予約・売上の紐付けヘルパ ===== */
 function clientById(id){ return CL.find(function(x){return x.id===id;}); }
 function clientName(id){ var c=clientById(id); return c?c.name:"（未設定）"; }
-function recordWho(r){ if(r.client_id){ return r.member_name?(esc(clientName(r.client_id))+' ／ '+esc(r.member_name)):esc(clientName(r.client_id)); } var pk=r.place_kind?("["+esc(r.place_kind)+"] "):""; return pk+(r.member_name?esc(r.member_name):"その場のお客様"); }
+function recordWho(r){ if(r.client_id){ return r.member_name?(esc(clientName(r.client_id))+' ／ '+esc(r.member_name)):esc(clientName(r.client_id)); } var pk=r.place_kind?("["+esc(r.place_kind)+"] "):""; return pk+(r.member_name?esc(r.member_name):"お客様"); }
 /* DBにまだ無い列があっても保存が止まらないよう、足りない列を外して再試行 */
 function stripCol(rows, col){ return (Array.isArray(rows)?rows:[rows]).map(function(o){ var c=Object.assign({},o); delete c[col]; return c; }); }
 async function insertRecords(rows){
@@ -231,7 +239,7 @@ function firstRunGuide(){
     '<div class="guide-step"><span class="gnum">3</span><div><b>施術を記録</b><div class="muted">施術したら料金を記録。売上に自動で集計。</div></div></div>'+
     '</div>'+
     '<div class="sec">まずはここから（どれでもOK）</div>'+
-    '<button class="btn primary" onclick="openQuickRecord()">🏃 とりあえず使ってみる（その場で記録）</button>'+
+    '<button class="btn primary" onclick="openQuickRecord()">🏃 とりあえず使ってみる</button>'+
     '<button class="btn ghost accent" onclick="openClientForm(null,\'個人\')">🧑 新規のお客様を登録</button>'+
     '<button class="btn ghost accent" onclick="openClientForm(null,\'施設\')">🏢 施設・訪問先を登録</button>'+
     '<button class="btn ghost" onclick="openHelp()">❓ 詳しい使い方を見る</button>';
@@ -239,7 +247,7 @@ function firstRunGuide(){
 function renderToday(){
   var v=el("view"); var tISO=todayISO();
   if(!CL.length && !RC.length && !BK.length){ v.innerHTML=firstRunGuide(); return; }   // 完全な初回のみ案内
-  var todays=BK.filter(function(b){return b.date===tISO;}).sort(function(a,b){return (a.time||"").localeCompare(b.time||"");});
+  var todays=dayTimeline(tISO);
   // 今月サマリ
   var recsM=RC.filter(function(r){return (r.date||"").slice(0,7)===curMonth();});
   var sumM=recsM.reduce(function(a,r){return a+(r.amount||0);},0);
@@ -249,39 +257,66 @@ function renderToday(){
   html+='<button class="btn primary" onclick="openPicker(\'recWith\',{title:\'だれの施術を記録しますか？\',allowNew:true,allowQuick:true})">＋ 今日の施術を記録</button>';
   html+='<button class="btn ghost accent" onclick="openClientForm(null,\'個人\')">＋ 新しいお客様・施設を登録</button>';
   html+='<div class="sec">今日の訪問</div>';
-  if(!todays.length){ html+='<div class="list-empty">今日の予約はありません。<br>上のボタンで直接記録もできます。</div>'; }
-  else {
-    todays.forEach(function(b){
-      var recs=recordsForBooking(b.id); var done=recs.length>0;
-      var tot=recs.reduce(function(a,r){return a+(r.amount||0);},0);
-      html+='<div class="item"><div class="top">'+
-        '<div><div class="name">'+esc((b.time||"--:--"))+'　'+esc(clientName(b.client_id))+'</div>'+
-          (b.memo?'<div class="meta">📝 '+esc(b.memo)+'</div>':"")+
-          (done?'<div class="meta">💴 '+recs.length+'件　'+yen(tot)+'</div>':"")+'</div>'+
-        '<span class="pill '+(done?"done":"plan")+'">'+(done?"入力済":"予定")+'</span></div>'+
-        '<button class="btn '+(done?"ghost accent":"primary")+' sm" style="width:100%;margin-top:10px;" onclick="recFromBooking(\''+b.id+'\')">'+(done?"施術を追加/確認":"▶ 施術を記録")+'</button>'+
-        '</div>';
-    });
-  }
+  if(!todays.length){ html+='<div class="list-empty">今日の予定・記録はありません。<br>上のボタンから記録できます。</div>'; }
+  else { todays.forEach(function(it){ html+=timelineItemHtml(it); }); }
   v.innerHTML=html;
 }
 
-/* ===== 予定タブ ===== */
+/* ===== 予約＋記録を「その日」に束ねる共通処理 ===== */
+function dayTimeline(iso){
+  return BK.filter(function(b){return b.date===iso;}).map(function(b){return {t:b.time||"",kind:"bk",b:b};})
+    .concat(RC.filter(function(r){return r.date===iso && !r.booking_id;}).map(function(r){return {t:r.time||"",kind:"rc",r:r};}))
+    .sort(function(a,b){return (a.t||"").localeCompare(b.t||"");});
+}
+function timelineItemHtml(it){
+  if(it.kind==="bk"){
+    var b=it.b; var recs=recordsForBooking(b.id); var done=recs.length>0;
+    var tot=recs.reduce(function(a,r){return a+(r.amount||0);},0);
+    return '<div class="item"><div class="top">'+
+      '<div><div class="name">'+esc(b.time||"--:--")+'　'+esc(clientName(b.client_id))+'</div>'+
+        (b.memo?'<div class="meta">📝 '+esc(b.memo)+'</div>':"")+
+        (done?'<div class="meta">💴 '+recs.length+'件　'+yen(tot)+'</div>':"")+'</div>'+
+      '<span class="pill '+(done?"done":"plan")+'">'+(done?"入力済":"予定")+'</span></div>'+
+      '<div class="row" style="margin-top:10px;"><button class="btn '+(done?"ghost accent":"primary")+' sm" onclick="recFromBooking(\''+b.id+'\')">'+(done?"施術を追加/確認":"▶ 施術を記録")+'</button>'+
+        '<button class="btn ghost sm" onclick="openBookingForm(\''+b.id+'\')">予約を編集</button></div>'+
+      '</div>';
+  }
+  var r=it.r;
+  return '<div class="item" onclick="openRecordForm(\''+r.id+'\')"><div class="top">'+
+    '<div><div class="name">'+esc(r.time||"--:--")+'　'+recordWho(r)+'</div>'+
+      '<div class="meta">✂️ '+esc(r.menu||"施術")+'　'+yen(r.amount)+(r.note?'　📝 '+esc(r.note):"")+'</div></div>'+
+    '<span class="pill done">記録済</span></div></div>';
+}
+
+/* ===== 予定タブ（カレンダー） ===== */
+var PLAN_MONTH=null, PLAN_SEL=null;
+function planSelect(iso){ PLAN_SEL=iso; renderPlan(); }
+function planMonth(d){ PLAN_MONTH=shiftMonth(PLAN_MONTH||curMonth(), d); renderPlan(); }
+function dateHasEntries(iso){ return BK.some(function(b){return b.date===iso;}) || RC.some(function(r){return r.date===iso && !r.booking_id;}); }
 function renderPlan(){
   var v=el("view");
+  if(!PLAN_MONTH) PLAN_MONTH=curMonth();
+  if(!PLAN_SEL) PLAN_SEL=todayISO();
+  var ym=PLAN_MONTH, p=ym.split("-"), first=new Date(+p[0],+p[1]-1,1).getDay(), days=new Date(+p[0],+p[1],0).getDate();
   var html='<button class="btn primary" onclick="openPicker(\'bkWith\',{title:\'予約する施設・お客様を選ぶ\',allowNew:true})">＋ 予約を作る</button>';
-  var future=BK.slice().sort(function(a,b){ return (a.date||"").localeCompare(b.date||"")||(a.time||"").localeCompare(b.time||""); });
-  if(!future.length){ html+='<div class="list-empty">まだ予約がありません。<br>上の「＋予約を作る」から。</div>'; v.innerHTML=html; return; }
-  var lastD="";
-  future.forEach(function(b){
-    if(b.date!==lastD){ html+='<div class="sec">📅 '+esc(dateLabel(b.date))+'</div>'; lastD=b.date; }
-    var recs=recordsForBooking(b.id); var done=recs.length>0;
-    html+='<div class="item" onclick="openBookingForm(\''+b.id+'\')"><div class="top">'+
-      '<div><div class="name">'+esc(b.time||"--:--")+'　'+esc(clientName(b.client_id))+'</div>'+
-        (b.duration?'<div class="meta">⏱ '+b.duration+'分</div>':"")+
-        (b.memo?'<div class="meta">📝 '+esc(b.memo)+'</div>':"")+'</div>'+
-      '<span class="pill '+(done?"done":"plan")+'">'+(done?"入力済":"予定")+'</span></div></div>';
-  });
+  // カレンダー
+  html+='<div class="card">'+
+    '<div class="row" style="align-items:center;"><button class="btn ghost sm" style="flex:0 0 44px;" onclick="planMonth(-1)">‹</button>'+
+      '<div style="text-align:center;font-weight:700;">'+esc(monthLabel(ym))+'</div>'+
+      '<button class="btn ghost sm" style="flex:0 0 44px;" onclick="planMonth(1)">›</button></div>'+
+    '<div class="cal">'+["日","月","火","水","木","金","土"].map(function(w){return '<div class="wd">'+w+'</div>';}).join("");
+  for(var i=0;i<first;i++){ html+='<div class="cell blank"></div>'; }
+  for(var d=1;d<=days;d++){
+    var iso=ym+"-"+pad(d);
+    var cls="cell"+(iso===todayISO()?" today":"")+(iso===PLAN_SEL?" sel":"");
+    html+='<div class="'+cls+'" onclick="planSelect(\''+iso+'\')">'+d+(dateHasEntries(iso)?'<span class="dot"></span>':"")+'</div>';
+  }
+  html+='</div></div>';
+  // 選択日の予定・記録
+  html+='<div class="sec">'+esc(dateLabel(PLAN_SEL))+'</div>';
+  var items=dayTimeline(PLAN_SEL);
+  if(!items.length){ html+='<div class="list-empty">この日の予定・記録はありません。</div>'; }
+  else { items.forEach(function(it){ html+=timelineItemHtml(it); }); }
   v.innerHTML=html;
 }
 
@@ -355,7 +390,7 @@ function salesMonth(d){ SALES_MONTH=shiftMonth(SALES_MONTH||curMonth(),d); rende
 function openPicker(onpickFn, opts){
   opts=opts||{}; window._pickFn=onpickFn; window._pickNew=!!opts.allowNew;
   var body='<div class="sheet-title">'+esc(opts.title||"施設・お客様を選ぶ")+'</div>'+
-    (opts.allowQuick?'<button class="btn ghost accent" onclick="quickFromPicker()">🏃 その場でサッと記録</button>':"")+
+    (opts.allowQuick?'<button class="btn ghost accent" onclick="quickFromPicker()">🏃 顧客登録なしで記録</button>':"")+
     '<input id="pkSearch" placeholder="🔍 名前で探す" oninput="renderPickList()" style="margin-top:'+(opts.allowQuick?"8px":"0")+';">'+
     (opts.allowNew?'<button class="btn ghost accent" onclick="pickNew()">➕ 新しい顧客・施設を登録</button>':"")+
     '<div id="pkList" style="margin-top:8px;"></div>'+
@@ -394,8 +429,8 @@ function quickFromPicker(){ closeSheet(); openQuickRecord(); }
 /* ===== 登録せず サッと売上記録（決まった顧客がいない人向け） ===== */
 function openQuickRecord(prefill){
   prefill=prefill||{};
-  var body='<div class="sheet-title">その場でサッと記録</div>'+
-    '<div class="muted" style="margin-bottom:8px;">顧客を選ばずに、その場の施術を記録します。</div>'+
+  var body='<div class="sheet-title">施術をすぐ記録</div>'+
+    '<div class="muted" style="margin-bottom:8px;">顧客登録なしで、施術を記録します。予定・売上にちゃんと積まれます。</div>'+
     '<div class="hint">区分</div><div class="seg-wrap" id="qr_kind" style="margin-bottom:8px;">'+
       ["在宅","施設","病院"].map(function(k){return '<button class="seg'+(k==="在宅"?" on":"")+'" onclick="cfKind(this)">'+k+'</button>';}).join("")+'</div>'+
     '<div class="row"><div><div class="hint">日付</div><input id="qr_date" type="date" value="'+esc(prefill.date||todayISO())+'"></div>'+
@@ -665,7 +700,7 @@ function openHelp(){
     '<div class="muted" style="margin-bottom:8px;">訪問美容の <b>予約・顧客・売上</b> をこれひとつで管理できます。</div>'+
     helpItem("① 始め方（3ステップ）","1. <b>顧客・施設を登録</b>（顧客タブ）<br>2. <b>予約を作る</b>（予定タブ／任意）<br>3. <b>施術を記録</b>（今日タブ）→ 料金が<b>売上に自動集計</b>されます。")+
     helpItem("🏢 施設の使い方","施設を登録する画面で、<b>利用者（入居者）の名簿</b>も一緒に入れられます（あとから編集も可）。<br>訪問したら「施術を記録」で名簿が出るので、<b>その日対応した人だけチェック</b>してまとめて保存。<br>※名簿は候補。前回対応した人は<b>自動でチェック済み</b>になります。入退居は随時直せます。")+
-    helpItem("🏃 その場でサッと記録","決まったお客様がいない・一見のお客様は、今日タブの「＋今日の施術を記録」→ <b>その場でサッと記録</b> から、顧客登録なしで記録できます。")+
+    helpItem("🏃 顧客登録なしで記録","決まったお客様がいないときは、今日タブの「＋今日の施術を記録」→ <b>顧客登録なしで記録</b> から、すぐに記録できます。記録は予定・売上にちゃんと積まれます。")+
     helpItem("📅 予約","先の予定も入れられます。予約をタップ→「この予約の施術を記録」で、顧客や日付が引き継がれてラクに記録できます。")+
     helpItem("💰 売上の見方","売上タブで、月ごとの合計と一覧が見られます。上の ‹ › で月を切り替え。")+
     helpItem("📱 複数の端末・自動更新","同じアカウントでログインすれば、どの端末でも同じデータ。変更は自動で反映されます（電波がある時）。")+
