@@ -478,12 +478,24 @@ function renderPickList(){
   box.innerHTML=html;
 }
 function pickChoose(id){ var fn=window._pickFn; closeSheet(); if(fn&&window[fn]) window[fn](id); }
-async function pickNew(){
-  var name=prompt("新しい顧客・施設の名前を入力してください"); if(!name||!name.trim()) return; name=name.trim();
-  var kind=confirm("施設・訪問先ですか？\n（OK＝施設 / キャンセル＝個人）")?"施設":"個人";
+function pickNew(){
+  var fn=window._pickFn||"";   // 登録後に続ける処理（予約/記録）
+  openSheet('<div class="sheet-title">新しい顧客・施設を登録</div>'+
+    '<div class="hint">区分</div><div class="seg-wrap" id="pn_kind" style="margin-bottom:8px;">'+
+      ["個人","施設","病院"].map(function(k){return '<button class="seg'+(k==="個人"?" on":"")+'" onclick="cfKind(this)">'+k+'</button>';}).join("")+'</div>'+
+    '<input id="pn_name" placeholder="名前（例：山田 花子 / 〇〇苑）">'+
+    '<div id="m"></div>'+
+    '<button class="btn primary" onclick="pickNewSave(\''+fn+'\')">登録して進む</button>'+
+    '<button class="btn ghost" onclick="closeSheet()">キャンセル</button>');
+  setTimeout(function(){ var n=el("pn_name"); if(n) n.focus(); }, 50);
+}
+async function pickNewSave(fn){
+  var name=el("pn_name").value.trim(); if(!name){ showMsg("名前を入力してください"); return; }
+  var kEl=document.querySelector("#pn_kind .seg.on"); var kind=kEl?kEl.textContent:"個人";
   var r=await sb.from("clients").insert({ org_id:PROFILE.org_id, kind:kind, name:name, billing:(kind==="個人"?"個別":"一括") }).select().single();
-  if(r.error){ alert("追加エラー："+r.error.message); return; }
-  CL.push(r.data); var fn=window._pickFn; closeSheet(); toast("🆕 「"+name+"」を登録しました"); if(fn&&window[fn]) window[fn](r.data.id);
+  if(r.error){ showMsg("登録エラー："+esc(r.error.message)); return; }
+  CL.push(r.data); toast("🆕 「"+name+"」を登録しました");
+  closeSheet(); if(fn&&window[fn]) window[fn](r.data.id);
 }
 function bkWith(id){ openBookingForm(null,{client_id:id}); }
 function recWith(id){ var c=clientById(id); if(isFacility(c)) openFacilityBatch(id,{date:todayISO()}); else openRecordForm(null,{client_id:id,date:todayISO()}); }
