@@ -55,13 +55,13 @@
   .sched-hline{position:absolute; left:44px; right:0; border-top:1px dashed var(--line);}
   .sched-hlabel{position:absolute; left:0; transform:translateY(-50%); font-size:11px; color:var(--hint);}
   .sched-ev{position:absolute; left:48px; right:2px; border-radius:8px; padding:3px 8px; font-size:12px; line-height:1.35; overflow:hidden; cursor:pointer; box-shadow:0 1px 2px rgba(0,0,0,.08); box-sizing:border-box;}
-  .sched-ev.plan{background:var(--accent-soft); color:var(--accent-text); border-left:3px solid var(--accent);}   /* 予定＝グリーン */
-  .sched-ev.done{background:#eef1f0; color:var(--muted); border-left:3px solid #b8b4b1;}   /* 記録済＝グレー */
+  .sched-ev.plan{background:var(--c-plan-bg,var(--accent-soft)); color:var(--c-plan,var(--accent-text)); border-left:3px solid var(--c-plan,var(--accent));}   /* 予定 */
+  .sched-ev.done{background:var(--c-fin-bg,#eef1f0); color:var(--c-fin,var(--muted)); border-left:3px solid var(--c-fin,#b8b4b1);}   /* 記録済 */
   .sched-ev b{font-weight:700;}
   .sched-now{position:absolute; left:44px; right:0; border-top:2px solid var(--danger); z-index:5; pointer-events:none;}
   .sched-now-dot{position:absolute; left:-4px; top:-4px; width:7px; height:7px; border-radius:50%; background:var(--danger);}
-  .sched-ev.fin{background:#eef1f0; color:var(--muted); border-left:3px solid #b8b4b1;}   /* 施術終了＝グレー */
-  .sched-move{position:absolute; left:48px; right:2px; border-radius:8px; padding:2px 8px; font-size:11px; line-height:1.3; box-sizing:border-box; overflow:hidden; background:#fbf2e2; color:#9a6b1e; border-left:3px solid #d8a85f;}
+  .sched-ev.fin{background:var(--c-fin-bg,#eef1f0); color:var(--c-fin,var(--muted)); border-left:3px solid var(--c-fin,#b8b4b1);}   /* 施術終了 */
+  .sched-move{position:absolute; left:48px; right:2px; border-radius:8px; padding:2px 8px; font-size:11px; line-height:1.3; box-sizing:border-box; overflow:hidden; background:var(--c-move-bg,#fbf2e2); color:var(--c-move,#9a6b1e); border-left:3px solid var(--c-move,#d8a85f);}
   /* タブバー */
   .tabbar{position:fixed; left:0; right:0; bottom:0; z-index:60; background:var(--surface); border-top:1px solid var(--line); display:flex; max-width:480px; margin:0 auto;}
   .tabbar button{flex:1; border:none; background:none; padding:8px 0 10px; font-size:11px; color:var(--muted); cursor:pointer; display:flex; flex-direction:column; align-items:center; gap:2px;}
@@ -149,6 +149,7 @@ async function boot(){
   if(!PROFILE){ await ensurePersonalSpace(); await loadProfile(); }
   if(!PROFILE){ renderAuth(); return; }
   loadStdMenu();
+  loadStateColors(); applyStateColors();
   await loadAll();
   renderApp();
   subscribeRealtime();
@@ -299,7 +300,7 @@ function dayScheduleHtml(iso){
   timed.forEach(function(it){ var m=hm2min(it.t); var sh=Math.floor(m/60); if(sh<startH)startH=sh; var eh=Math.ceil((m+itDur(it)+itTravel(it))/60); if(eh>endH)endH=eh; });
   if(endH<=startH) endH=startH+1;
   var hourH=48, ppm=hourH/60, top0=startH*60, PAD=8;
-  var h='<div class="muted" style="font-size:11px;margin:2px 0 4px;">空き時間をタップで追加　｜　<span style="color:var(--accent);">■</span>予定　<span style="color:var(--muted);">■</span>施術終了　<span style="color:#d8a85f;">■</span>移動'+(iso===todayISO()?'　<span style="color:var(--danger);">—</span>今':'')+'</div>';
+  var h='<div class="muted" style="font-size:11px;margin:2px 0 4px;">空き時間をタップで追加　｜　<span style="color:var(--c-plan,var(--accent));">■</span>予定　<span style="color:var(--c-fin,var(--muted));">■</span>施術終了　<span style="color:var(--c-move,#d8a85f);">■</span>移動'+(iso===todayISO()?'　<span style="color:var(--danger);">—</span>今':'')+'</div>';
   h+='<div class="sched" data-start="'+startH+'" style="height:'+((endH-startH)*hourH+PAD*2)+'px;" onclick="schedClick(event,\''+iso+'\')">';
   for(var hh=startH; hh<=endH; hh++){ var y=(hh-startH)*hourH+PAD; h+='<div class="sched-hline" style="top:'+y+'px;"></div><div class="sched-hlabel" style="top:'+y+'px;">'+pad(hh)+':00</div>'; }
   if(iso===todayISO()){ var nm=(new Date()).getHours()*60+(new Date()).getMinutes(); if(nm>=top0 && nm<=endH*60){ var ny=(nm-top0)*ppm+PAD; h+='<div class="sched-now" style="top:'+ny+'px;"><span class="sched-now-dot"></span></div>'; } }
@@ -762,6 +763,33 @@ function recFromBooking(bid){
 /* 標準メニュー（マイ料金表）＝この端末に保存。お客様ごとの料金表があればそちら優先 */
 var STD_MENU=[];
 function loadStdMenu(){ try{ STD_MENU=JSON.parse(localStorage.getItem("stdmenu_"+(ME&&ME.id))||"[]"); }catch(e){ STD_MENU=[]; } if(!Array.isArray(STD_MENU)) STD_MENU=[]; }
+/* ===== 表示の色（予定/施術終了/移動・端末に保存） ===== */
+var STATE_COLORS_DEFAULT={plan:"#1d9e75", fin:"#8a938f", move:"#d8a85f"};
+var STATE_COLORS=Object.assign({},STATE_COLORS_DEFAULT);
+function loadStateColors(){ try{ var s=JSON.parse(localStorage.getItem("statecolors_"+(ME&&ME.id))||"{}"); STATE_COLORS=Object.assign({},STATE_COLORS_DEFAULT,s||{}); }catch(e){ STATE_COLORS=Object.assign({},STATE_COLORS_DEFAULT); } }
+function hexToRgba(hex,a){ var m=String(hex).replace("#","").match(/^([0-9a-f]{2})([0-9a-f]{2})([0-9a-f]{2})$/i); if(!m) return hex; return "rgba("+parseInt(m[1],16)+","+parseInt(m[2],16)+","+parseInt(m[3],16)+","+a+")"; }
+function applyStateColors(){ var r=document.documentElement.style;
+  r.setProperty("--c-plan",STATE_COLORS.plan); r.setProperty("--c-plan-bg",hexToRgba(STATE_COLORS.plan,0.16));
+  r.setProperty("--c-fin",STATE_COLORS.fin);   r.setProperty("--c-fin-bg",hexToRgba(STATE_COLORS.fin,0.16));
+  r.setProperty("--c-move",STATE_COLORS.move); r.setProperty("--c-move-bg",hexToRgba(STATE_COLORS.move,0.16));
+}
+function openColorSettings(){
+  var rows=[["plan","予定"],["fin","施術終了"],["move","移動"]];
+  var body='<div class="sheet-title">表示の色</div>'+
+    '<div class="muted" style="margin-bottom:8px;">予定表の色を自由に選べます。分かりやすい色にどうぞ。</div>'+
+    rows.map(function(k){ return '<div class="row" style="align-items:center;margin-bottom:8px;"><div style="flex:1;font-weight:700;">'+k[1]+'</div>'+
+      '<input type="color" id="col_'+k[0]+'" value="'+STATE_COLORS[k[0]]+'" style="width:56px;height:40px;border:1px solid var(--line);border-radius:8px;background:none;"></div>'; }).join("")+
+    '<button class="btn primary" onclick="saveColorSettings()">保存</button>'+
+    '<button class="btn ghost" onclick="resetColors()">既定の色に戻す</button>'+
+    '<button class="btn ghost" onclick="openSettings()">戻る</button>';
+  openSheet(body);
+}
+function saveColorSettings(){
+  STATE_COLORS={ plan:el("col_plan").value, fin:el("col_fin").value, move:el("col_move").value };
+  try{ localStorage.setItem("statecolors_"+(ME&&ME.id), JSON.stringify(STATE_COLORS)); }catch(e){}
+  applyStateColors(); closeSheet(); toast("🎨 色を保存しました"); renderTab();
+}
+function resetColors(){ STATE_COLORS=Object.assign({},STATE_COLORS_DEFAULT); try{ localStorage.removeItem("statecolors_"+(ME&&ME.id)); }catch(e){} applyStateColors(); openColorSettings(); }
 function usedMenus(){   // 過去に記録したメニューを候補化（メニュー名ごとに最新の料金）
   var recs=RC.slice().sort(function(a,b){return (b.date||"").localeCompare(a.date||"");});
   var seen={}, out=[];
@@ -1086,6 +1114,7 @@ function openSettings(){
     '<div class="card"><div class="hint">お名前</div><div style="font-weight:700;">'+esc(PROFILE.name||"")+'</div>'+
       '<div class="hint" style="margin-top:8px;">メール</div><div>'+esc(ME.email||"")+'</div></div>'+
     '<button class="btn ghost accent" onclick="openStdMenu()">🧾 標準メニュー（料金表）</button>'+
+    '<button class="btn ghost accent" onclick="openColorSettings()">🎨 表示の色（予定・施術終了・移動）</button>'+
     '<button class="btn ghost accent" onclick="openHelp()">❓ 使い方・ヘルプ</button>'+
     '<div class="card"><div class="hint">組織リンク（今後）</div><div class="muted" style="font-size:12px;">サロン等で使う場合、ここに組織コードを入れると情報を共有できるようにする予定です。</div></div>'+
     '<button class="btn danger" onclick="resetAll()">🧹 自分のデータをすべてリセット</button>'+
