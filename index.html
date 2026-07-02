@@ -210,17 +210,20 @@ function startAddClient(kind){ TAB="clients"; renderApp(); openClientForm(null, 
 function firstRunGuide(){
   return '<div class="card" style="background:var(--accent-soft);border-color:#cbe7da;">'+
     '<div style="font-weight:700;font-size:17px;">ようこそ！🎉</div>'+
-    '<div class="muted" style="margin:4px 0 12px;">訪問美容の<b>予約・顧客・売上</b>を、これひとつで管理できます。<br>使い方は「登録 → 予約 → 売上」の3ステップ。</div>'+
-    '<div class="guide-step"><span class="gnum">1</span><div><b>顧客・施設を登録</b><div class="muted">よく行く施設や、お客様を先に登録します。</div></div></div>'+
-    '<div class="guide-step"><span class="gnum">2</span><div><b>予約を作る</b><div class="muted">訪問の予定を入れます（あとで直接記録でもOK）。</div></div></div>'+
-    '<div class="guide-step"><span class="gnum">3</span><div><b>施術を記録</b><div class="muted">施術したら料金を記録。売上に自動で集計されます。</div></div></div>'+
-    '<button class="btn primary" onclick="startAddClient(\'施設\')" style="margin-top:14px;">① まず 顧客・施設を登録する →</button>'+
-    '<button class="btn ghost" onclick="openHelp()">❓ 詳しい使い方を見る</button>'+
-    '</div>';
+    '<div class="muted" style="margin:4px 0 12px;">訪問美容の<b>予約・顧客・売上</b>を、これひとつで。<br>難しい準備はいりません。気軽に始めましょう。</div>'+
+    '<div class="guide-step"><span class="gnum">1</span><div><b>お客様・施設を登録</b><div class="muted">よく行く先やお客様。あとからでもOK。</div></div></div>'+
+    '<div class="guide-step"><span class="gnum">2</span><div><b>予約を作る</b><div class="muted">訪問の予定を入れます（任意）。</div></div></div>'+
+    '<div class="guide-step"><span class="gnum">3</span><div><b>施術を記録</b><div class="muted">施術したら料金を記録。売上に自動で集計。</div></div></div>'+
+    '</div>'+
+    '<div class="sec">まずはここから（どれでもOK）</div>'+
+    '<button class="btn primary" onclick="openQuickRecord()">🏃 とりあえず使ってみる（その場で記録）</button>'+
+    '<button class="btn ghost accent" onclick="openClientForm(null,\'個人\')">🧑 新規のお客様を登録</button>'+
+    '<button class="btn ghost accent" onclick="openClientForm(null,\'施設\')">🏢 施設・訪問先を登録</button>'+
+    '<button class="btn ghost" onclick="openHelp()">❓ 詳しい使い方を見る</button>';
 }
 function renderToday(){
   var v=el("view"); var tISO=todayISO();
-  if(!CL.length){ v.innerHTML=firstRunGuide(); return; }   // 初回：まず登録へ案内
+  if(!CL.length && !RC.length && !BK.length){ v.innerHTML=firstRunGuide(); return; }   // 完全な初回のみ案内
   var todays=BK.filter(function(b){return b.date===tISO;}).sort(function(a,b){return (a.time||"").localeCompare(b.time||"");});
   // 今月サマリ
   var recsM=RC.filter(function(r){return (r.date||"").slice(0,7)===curMonth();});
