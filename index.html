@@ -956,11 +956,14 @@ async function openFacilityBatch(clientId, opts){
   var recs=lr.error?[]:(lr.data||[]); var lastDate=recs.length?recs[0].date:null;
   var pre={}; recs.forEach(function(r){ if(r.date===lastDate && r.member_id) pre[r.member_id]={menu:r.menu,amount:r.amount}; });
   var pl=Array.isArray(c.price_list)?c.price_list:[];
-  // Excelから貼り付けた名簿を反映（該当利用者をチェック＋メニュー/料金プリセット）
-  if(window._batchPastePre){ roster.forEach(function(m){ var pp=window._batchPastePre[m.name]; if(pp){ pre[m.id]={menu:pp.menu||"", amount:(pp.amount!=null?pp.amount:(pp.menu?priceOfMenu(pl,pp.menu):null)), note:pp.note||"", room:pp.room||""}; } }); window._batchPastePre=null; }
   var rowsHtml=roster.map(function(m){ return batchRow(m,pl,pre[m.id]); }).join("");
+  // その回だけのリスト（貼り付け/取込分）＝名簿に溜めず、この訪問の行として表示
+  if(window._batchExtraRows && window._batchExtraRows.length){
+    rowsHtml+=window._batchExtraRows.map(function(r){ return batchRow({id:"",name:r.name}, pl, {menu:r.menu||"", amount:(r.amount!=null?r.amount:(r.menu?priceOfMenu(pl,r.menu):null)), note:r.note||"", room:r.room||""}); }).join("");
+    window._batchExtraRows=null;
+  }
   var body='<div class="sheet-title">'+esc(c.name)+'　'+esc(dateLabel(iso))+'</div>'+
-    '<div class="muted" style="margin-bottom:8px;">その日 <b>対応した人だけ</b> にチェック → まとめて保存。'+(lastDate?'<br>（前回対応した方は自動でチェック済み）':'')+'</div>'+
+    '<div class="muted" style="margin-bottom:8px;">この日に来る<b>利用者リストを入力</b>（毎回変わってOK）。<b>📋名簿を貼り付け</b>か「＋利用者を追加」で入れて、まとめて保存。保存分は履歴・領収書の元として残ります。</div>'+
     '<div class="hint">日付</div><input id="ba_date" type="date" value="'+esc(iso)+'">'+
     (roster.length?'<div class="card" style="padding:10px 12px;margin-top:10px;">'+
       '<div class="row"><button class="btn ghost accent sm" onclick="batchCheckAll(true)">✓ 全員チェック</button>'+
@@ -971,7 +974,7 @@ async function openFacilityBatch(clientId, opts){
         '<input id="ba_bulkamt" type="number" placeholder="料金" style="flex:0 0 90px;">'+
         '<button class="btn primary sm" style="flex:0 0 auto;" onclick="batchApplyAll()">適用</button></div>'+
     '</div>':'')+
-    '<div id="ba_rows" style="margin-top:10px;">'+(rowsHtml||'<div class="muted">名簿が空です。下の「＋利用者を追加」から。</div>')+'</div>'+
+    '<div id="ba_rows" style="margin-top:10px;">'+(rowsHtml||'<div class="list-empty">まだ利用者がいません。<br>下の「📋 名簿を貼り付け」か「＋ 利用者を追加」で、この日の人を入れてください。</div>')+'</div>'+
     '<button class="btn ghost accent" onclick="facilityBulkPaste()">📋 名簿を貼り付け（Excelからコピー）</button>'+
     '<button class="btn ghost accent" onclick="batchAdd()">➕ その場で利用者を追加</button>'+
     '<div id="m"></div>'+
@@ -1130,14 +1133,11 @@ async function saveBulkMapped(){
   try{ localStorage.setItem("bulkcolmap_"+(ME&&ME.id), JSON.stringify(mp)); }catch(e){}
   importBulkRows(bulkRowsFrom(gc,mp));
 }
-async function importBulkRows(rows){
+function importBulkRows(rows){
   if(!rows.length){ showMsg("取り込む行がありません"); return; }
-  var b=window._batch||{}; var roster=b.roster||[];
-  var have={}; roster.forEach(function(m){ have[m.name]=true; });
-  var toAdd=[]; rows.forEach(function(r){ if(!have[r.name]){ have[r.name]=true; toAdd.push({org_id:PROFILE.org_id, client_id:b.clientId, name:r.name}); } });
-  if(toAdd.length){ var ins=await sb.from("members_t").insert(toAdd); if(ins.error){ showMsg("取り込みエラー："+esc(ins.error.message)); return; } }
-  var map={}; rows.forEach(function(r){ map[r.name]={menu:r.menu, amount:r.amount, note:r.note, room:r.room}; }); window._batchPastePre=map;
-  toast("📋 "+rows.length+"人を取り込みました"); reopenFacilityBatch();
+  // その回だけのリスト（名簿には溜め込まない＝施設の利用者は毎回変わる前提）。記録として残る＝履歴・領収書の元
+  window._batchExtraRows=(window._batchExtraRows||[]).concat(rows);
+  toast("📋 "+rows.length+"人を読み込みました"); reopenFacilityBatch();
 }
 
 /* ===== 顧客フォーム（＋施設の利用者名簿） ===== */
