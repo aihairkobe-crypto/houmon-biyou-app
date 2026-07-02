@@ -315,19 +315,19 @@ function dayScheduleHtml(iso){
   moves.forEach(function(mv){ var m=hm2min(mv.time); var sh=Math.floor(m/60); if(sh<startH)startH=sh; var eh=Math.ceil((m+(mv.duration||15))/60); if(eh>endH)endH=eh; });
   if(endH<=startH) endH=startH+1;
   var hourH=48, ppm=hourH/60, top0=startH*60, PAD=8;
-  var h='<div class="muted" style="font-size:11px;margin:2px 0 4px;">空き時間をタップで追加　｜　<span style="color:var(--c-plan,var(--accent));">■</span>予定　<span style="color:var(--c-fin,var(--muted));">■</span>施術終了　<span style="color:var(--c-move,#d8a85f);">■</span>移動'+(iso===todayISO()?'　<span style="color:var(--danger);">—</span>今':'')+'</div>';
-  h+='<div class="sched" data-start="'+startH+'" style="height:'+((endH-startH)*hourH+PAD*2)+'px;" onclick="schedClick(event,\''+iso+'\')">';
+  var h='<div class="muted" style="font-size:11px;margin:2px 0 4px;">空きをタップで追加・ブロックをドラッグで時間移動　｜　<span style="color:var(--c-plan,var(--accent));">■</span>予定　<span style="color:var(--c-fin,var(--muted));">■</span>施術終了　<span style="color:var(--c-move,#d8a85f);">■</span>移動'+(iso===todayISO()?'　<span style="color:var(--danger);">—</span>今':'')+'</div>';
+  h+='<div class="sched" data-start="'+startH+'" style="height:'+((endH-startH)*hourH+PAD*2)+'px;touch-action:pan-y;" onclick="schedClick(event,\''+iso+'\')" onpointerdown="schedDown(event)">';
   for(var hh=startH; hh<=endH; hh++){ var y=(hh-startH)*hourH+PAD; h+='<div class="sched-hline" style="top:'+y+'px;"></div><div class="sched-hlabel" style="top:'+y+'px;">'+pad(hh)+':00</div>'; }
   if(iso===todayISO()){ var nm=(new Date()).getHours()*60+(new Date()).getMinutes(); if(nm>=top0 && nm<=endH*60){ var ny=(nm-top0)*ppm+PAD; h+='<div class="sched-now" style="top:'+ny+'px;"><span class="sched-now-dot"></span></div>'; } }
   timed.forEach(function(it){
     var m=hm2min(it.t), top=(m-top0)*ppm+PAD, hgt=Math.max(itDur(it)*ppm, 34);
     var isBk=it.kind==="bk", isFac=it.kind==="fac";
-    var done, label, sub, onclick;
-    if(isFac){ done=it.recs.every(function(r){return !!exRec(r).done;}); label='🏢 '+esc(clientName(it.clientId))+'（'+it.recs.length+'名）'; sub=esc(menuSummary(it.recs))+'　'+yen(it.recs.reduce(function(a,r){return a+(r.amount||0);},0)); onclick="openFacVisit('"+it.clientId+"','"+it.iso+"','"+it.t+"')"; }
-    else if(isBk){ done=(it.b.status==="施術終了"); label=esc(clientName(it.b.client_id)); sub=done?'✅ 施術終了':(it.b.duration?it.b.duration+'分':'予定'); onclick="openBookingForm('"+it.b.id+"')"; }
-    else { done=!!exRec(it.r).done; label=recordWho(it.r); sub=esc(it.r.menu||'')+(it.r.amount?'　'+yen(it.r.amount):''); onclick="openRecordForm('"+it.r.id+"')"; }
+    var done, label, sub, dataAttr;
+    if(isFac){ done=it.recs.every(function(r){return !!exRec(r).done;}); label='🏢 '+esc(clientName(it.clientId))+'（'+it.recs.length+'名）'; sub=esc(menuSummary(it.recs))+'　'+yen(it.recs.reduce(function(a,r){return a+(r.amount||0);},0)); dataAttr='data-mv="fac" data-cid="'+esc(it.clientId)+'" data-iso="'+esc(it.iso)+'" data-t="'+esc(it.t)+'"'; }
+    else if(isBk){ done=(it.b.status==="施術終了"); label=esc(clientName(it.b.client_id)); sub=done?'✅ 施術終了':(it.b.duration?it.b.duration+'分':'予定'); dataAttr='data-mv="bk" data-id="'+esc(it.b.id)+'"'; }
+    else { done=!!exRec(it.r).done; label=recordWho(it.r); sub=esc(it.r.menu||'')+(it.r.amount?'　'+yen(it.r.amount):''); dataAttr='data-mv="rc" data-id="'+esc(it.r.id)+'"'; }
     var cls=done?"fin":"plan";   // 未=予定(緑)/済=施術終了(灰)
-    h+='<div class="sched-ev '+cls+'" style="top:'+top+'px;height:'+hgt+'px;" onclick="event.stopPropagation();'+onclick+'">'+
+    h+='<div class="sched-ev '+cls+'" '+dataAttr+' style="top:'+top+'px;height:'+hgt+'px;cursor:grab;">'+
       '<b>'+esc(it.t)+'</b> '+label+(sub?'<div style="opacity:.85;">'+sub+'</div>':'')+'</div>';
   });
   // 独立した移動ブロック（好きな時間・場所に配置）
@@ -342,8 +342,49 @@ function dayScheduleHtml(iso){
   }
   return h;
 }
+/* ===== ブロックをドラッグして時間移動 ===== */
+var _sdrag=null;
+function schedDown(ev){
+  var block=ev.target.closest?ev.target.closest(".sched-ev"):null; if(!block) return;
+  var sched=block.closest(".sched"); var startH=+sched.getAttribute("data-start")||9;
+  _sdrag={ block:block, startH:startH, y0:ev.clientY, top0:parseFloat(block.style.top)||8, moved:false };
+  window.addEventListener("pointermove", schedMove, {passive:false});
+  window.addEventListener("pointerup", schedUp);
+}
+function schedMove(ev){
+  if(!_sdrag) return; var dy=ev.clientY-_sdrag.y0;
+  if(!_sdrag.moved && Math.abs(dy)>5) _sdrag.moved=true;
+  if(_sdrag.moved){ if(ev.cancelable) ev.preventDefault(); var nt=_sdrag.top0+dy; if(nt<8)nt=8; _sdrag.block.style.top=nt+"px"; _sdrag.block.style.opacity="0.75"; _sdrag.block.style.zIndex="20"; _sdrag.block.style.cursor="grabbing"; }
+}
+async function schedUp(ev){
+  window.removeEventListener("pointermove", schedMove); window.removeEventListener("pointerup", schedUp);
+  var d=_sdrag; _sdrag=null; if(!d) return;
+  d.block.style.opacity=""; d.block.style.zIndex=""; d.block.style.cursor="grab";
+  if(!d.moved){ schedOpen(d.block); return; }
+  var ppm=48/60, PAD=8, top0=d.startH*60;
+  var newTop=parseFloat(d.block.style.top)||PAD;
+  var min=Math.round(((newTop-PAD)/ppm+top0)/5)*5; if(min<0)min=0; if(min>1435)min=1435;
+  await moveSchedItem(d.block, pad(Math.floor(min/60))+":"+pad(min%60));
+}
+function schedOpen(block){
+  var kind=block.getAttribute("data-mv");
+  if(kind==="bk") openBookingForm(block.getAttribute("data-id"));
+  else if(kind==="rc") openRecordForm(block.getAttribute("data-id"));
+  else if(kind==="fac") openFacVisit(block.getAttribute("data-cid"),block.getAttribute("data-iso"),block.getAttribute("data-t"));
+}
+async function moveSchedItem(block, newT){
+  var kind=block.getAttribute("data-mv");
+  if(kind==="bk"){ var id=block.getAttribute("data-id"); var b=BK.find(function(x){return x.id===id;}); if(!b) return;
+    var r=await sb.from("bookings").update({time:newT}).eq("id",id); if(r.error){ toast("移動できませんでした"); renderTab(); return; } b.time=newT; }
+  else if(kind==="rc"){ var id2=block.getAttribute("data-id"); var rec=RC.find(function(x){return x.id===id2;}); if(!rec) return;
+    var p=Object.assign({},exRec(rec)); p.t=newT; var res=await updateRecord(id2,{photos:p}); if(res.error){ toast("移動できませんでした"); renderTab(); return; } rec.photos=p; }
+  else if(kind==="fac"){ var cid=block.getAttribute("data-cid"), iso=block.getAttribute("data-iso"), oldT=block.getAttribute("data-t");
+    var recs=facGroupRecs(cid,iso,oldT); for(var i=0;i<recs.length;i++){ var rr=recs[i]; var pp=Object.assign({},exRec(rr)); pp.t=newT; var rs=await updateRecord(rr.id,{photos:pp}); if(!rs.error) rr.photos=pp; } }
+  toast("⏰ "+newT+"に移動しました"); renderTab();
+}
 /* 空き時間タップ→その時刻に予約/施術を追加 */
 function schedClick(ev, iso){
+  if(ev.target.closest && ev.target.closest(".sched-ev")) return;   // ブロック上はドラッグ/開くで処理
   var sched=ev.currentTarget; var rect=sched.getBoundingClientRect();
   var startH=+sched.getAttribute("data-start")||9;
   var y=ev.clientY-rect.top-8; if(y<0)y=0;              // PAD=8
