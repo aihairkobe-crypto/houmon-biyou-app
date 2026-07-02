@@ -210,7 +210,10 @@ function renderTab(){
 /* ===== 予約・売上の紐付けヘルパ ===== */
 function clientById(id){ return CL.find(function(x){return x.id===id;}); }
 function clientName(id){ var c=clientById(id); return c?c.name:"（未設定）"; }
-function recordWho(r){ if(r.client_id){ return r.member_name?(esc(clientName(r.client_id))+' ／ '+esc(r.member_name)):esc(clientName(r.client_id)); } var pk=r.place_kind?("["+esc(r.place_kind)+"] "):""; return pk+(r.member_name?esc(r.member_name):"お客様"); }
+/* 追加項目（名前・時間・区分）は既存の photos(jsonb) 列に格納＝SQL不要。{nm,t,pk} */
+function exRec(r){ var e=r&&r.photos; return (e&&typeof e==="object"&&!Array.isArray(e))?e:{}; }
+function recExtra(o){ var x={}; if(o.nm)x.nm=o.nm; if(o.t)x.t=o.t; if(o.pk)x.pk=o.pk; return x; }
+function recordWho(r){ var e=exRec(r); if(r.client_id){ return e.nm?(esc(clientName(r.client_id))+' ／ '+esc(e.nm)):esc(clientName(r.client_id)); } var pk=e.pk?("["+esc(e.pk)+"] "):""; return pk+(e.nm?esc(e.nm):"お客様"); }
 /* DBにまだ無い列があっても保存が止まらないよう、足りない列を外して再試行。
    ただし捨てた項目は「黙って消さず」に警告する（初期設定SQLの未実行を知らせる） */
 var COLJP={member_name:"お客様名",place_kind:"区分",time:"時間"};
@@ -266,7 +269,7 @@ function renderToday(){
 /* ===== 予約＋記録を「その日」に束ねる共通処理 ===== */
 function dayTimeline(iso){
   return BK.filter(function(b){return b.date===iso;}).map(function(b){return {t:b.time||"",kind:"bk",b:b};})
-    .concat(RC.filter(function(r){return r.date===iso && !r.booking_id;}).map(function(r){return {t:r.time||"",kind:"rc",r:r};}))
+    .concat(RC.filter(function(r){return r.date===iso && !r.booking_id;}).map(function(r){return {t:exRec(r).t||"",kind:"rc",r:r};}))
     .sort(function(a,b){return (a.t||"").localeCompare(b.t||"");});
 }
 function timelineItemHtml(it){
@@ -284,7 +287,7 @@ function timelineItemHtml(it){
   }
   var r=it.r;
   return '<div class="item" onclick="openRecordForm(\''+r.id+'\')"><div class="top">'+
-    '<div><div class="name">'+(r.time?esc(r.time)+'　':'')+recordWho(r)+'</div>'+
+    '<div><div class="name">'+(exRec(r).t?esc(exRec(r).t)+'　':'')+recordWho(r)+'</div>'+
       '<div class="meta">✂️ '+esc(r.menu||"施術")+'　'+yen(r.amount)+(r.note?'　📝 '+esc(r.note):"")+'</div></div>'+
     '<span class="pill done">記録済</span></div></div>';
 }
@@ -380,7 +383,7 @@ function renderSales(){
     var who=recordWho(r);
     html+='<div class="item" onclick="openRecordForm(\''+r.id+'\')"><div class="top">'+
       '<div><div class="name">'+who+'</div>'+
-        '<div class="meta">'+(r.time?'🕐 '+esc(r.time)+'　':'')+'✂️ '+esc(r.menu||"（メニュー未記入）")+(r.note?'　📝 '+esc(r.note):"")+'</div></div>'+
+        '<div class="meta">'+(exRec(r).t?'🕐 '+esc(exRec(r).t)+'　':'')+'✂️ '+esc(r.menu||"（メニュー未記入）")+(r.note?'　📝 '+esc(r.note):"")+'</div></div>'+
       '<span class="amt">'+yen(r.amount)+'</span></div></div>';
   });
   v.innerHTML=html;
@@ -447,10 +450,10 @@ function openQuickRecord(prefill){
 }
 async function saveQuick(){
   var kEl=document.querySelector("#qr_kind .seg.on"); var kind=kEl?kEl.textContent:"在宅";
-  var data={ org_id:PROFILE.org_id, client_id:null, booking_id:null, member_id:null,
-    member_name:el("qr_name").value.trim()||null, staff_id:ME.id, place_kind:kind, time:el("qr_time").value,
+  var data={ org_id:PROFILE.org_id, client_id:null, booking_id:null, member_id:null, staff_id:ME.id,
     menu:el("qr_menu").value.trim(), amount:Number(el("qr_amount").value)||0,
-    note:el("qr_note").value.trim(), date:el("qr_date").value };
+    note:el("qr_note").value.trim(), date:el("qr_date").value,
+    photos:recExtra({nm:el("qr_name").value.trim(), t:el("qr_time").value, pk:kind}) };
   var r=await insertRecords(data);
   if(r.error){ showMsg("保存エラー："+esc(r.error.message)); return; }
   closeSheet(); toast("💴 施術を記録しました"); await reloadRecords();
@@ -509,13 +512,14 @@ function openRecordForm(id, prefill){
   var c=clientById(rec.client_id)||{};
   var body='<div class="sheet-title">'+(id?"施術を編集":"施術を記録")+'</div>'+
     '<div class="card" style="margin-bottom:10px;padding:10px 12px;"><b>'+esc(c.name||"（顧客）")+'</b>'+
-      (rec.member_name?'<div class="meta">👤 '+esc(rec.member_name)+'</div>':"")+'</div>'+
+      (exRec(rec).nm?'<div class="meta">👤 '+esc(exRec(rec).nm)+'</div>':"")+'</div>'+
     '<input type="hidden" id="rf_client" value="'+esc(rec.client_id||"")+'">'+
     '<input type="hidden" id="rf_booking" value="'+esc(rec.booking_id||"")+'">'+
     '<input type="hidden" id="rf_mid" value="'+esc(rec.member_id||"")+'">'+
-    '<input type="hidden" id="rf_mname" value="'+esc(rec.member_name||"")+'">'+
+    '<input type="hidden" id="rf_mname" value="'+esc(exRec(rec).nm||"")+'">'+
+    '<input type="hidden" id="rf_pk" value="'+esc(exRec(rec).pk||"")+'">'+
     '<div class="row"><div><div class="hint">日付</div><input id="rf_date" type="date" value="'+esc(rec.date||todayISO())+'"></div>'+
-      '<div><div class="hint">時間</div><input id="rf_time" type="time" value="'+esc(rec.time||nowHM())+'"></div></div>'+
+      '<div><div class="hint">時間</div><input id="rf_time" type="time" value="'+esc(exRec(rec).t||nowHM())+'"></div></div>'+
     '<div class="hint" style="margin-top:8px;">メニュー（料金表から選ぶと料金が入ります）</div>'+
     '<select id="rf_menusel" onchange="rfMenu()">'+menuOptionsFor(rec.client_id, rec.menu)+'</select>'+
     '<input id="rf_menu" value="'+esc(rec.menu||"")+'" placeholder="メニュー（自由入力も可）" style="margin-top:6px;">'+
@@ -531,9 +535,10 @@ function rfMenu(){ var sel=el("rf_menusel"); var opt=sel.options[sel.selectedInd
 async function saveRecord(id){
   var client=el("rf_client").value; if(!client){ showMsg("顧客が未設定です"); return; }
   var data={ org_id:PROFILE.org_id, client_id:client, booking_id:el("rf_booking").value||null,
-    member_id:el("rf_mid").value||null, member_name:el("rf_mname").value||null,
-    staff_id:ME.id, menu:el("rf_menu").value.trim(), amount:Number(el("rf_amount").value)||0,
-    note:el("rf_note").value.trim(), date:el("rf_date").value, time:el("rf_time").value };
+    member_id:el("rf_mid").value||null, staff_id:ME.id,
+    menu:el("rf_menu").value.trim(), amount:Number(el("rf_amount").value)||0,
+    note:el("rf_note").value.trim(), date:el("rf_date").value,
+    photos:recExtra({nm:el("rf_mname").value, t:el("rf_time").value, pk:el("rf_pk").value}) };
   var r=id?await updateRecord(id,data):await insertRecords(data);
   if(r.error){ showMsg("保存エラー："+esc(r.error.message)); return; }
   closeSheet(); toast("💴 施術を記録しました"); await reloadRecords();
@@ -553,7 +558,7 @@ async function openFacilityBatch(clientId, opts){
   var rm=await sb.from("members_t").select("*").eq("client_id",clientId).order("created_at",{ascending:true});
   var roster=rm.error?[]:(rm.data||[]);
   // 前回の訪問で対応した人＝自動チェック（毎回ゼロ入力にしない）
-  var lr=await sb.from("records").select("member_id,member_name,menu,amount,date").eq("client_id",clientId).order("date",{ascending:false}).limit(80);
+  var lr=await sb.from("records").select("member_id,menu,amount,date").eq("client_id",clientId).order("date",{ascending:false}).limit(80);
   var recs=lr.error?[]:(lr.data||[]); var lastDate=recs.length?recs[0].date:null;
   var pre={}; recs.forEach(function(r){ if(r.date===lastDate && r.member_id) pre[r.member_id]={menu:r.menu,amount:r.amount}; });
   var pl=Array.isArray(c.price_list)?c.price_list:[];
@@ -594,8 +599,9 @@ async function saveBatch(){
   Array.prototype.forEach.call(rows,function(row){
     if(!row.querySelector(".ba_chk").checked) return;
     payload.push({ org_id:PROFILE.org_id, client_id:window._batch.clientId, booking_id:window._batch.bookingId||null,
-      member_id:row.getAttribute("data-mid")||null, member_name:row.getAttribute("data-name")||"",
-      staff_id:ME.id, menu:row.querySelector(".ba_menu").value.trim(), amount:Number(row.querySelector(".ba_amount").value)||0, date:date });
+      member_id:row.getAttribute("data-mid")||null, staff_id:ME.id,
+      menu:row.querySelector(".ba_menu").value.trim(), amount:Number(row.querySelector(".ba_amount").value)||0, date:date,
+      photos:recExtra({nm:row.getAttribute("data-name")||""}) });
   });
   if(!payload.length){ showMsg("その日 対応した人にチェックを入れてください"); return; }
   var r=await insertRecords(payload);
@@ -710,27 +716,12 @@ function openHelp(){
   openSheet(body);
 }
 
-/* ===== データ準備（初回SQL） ===== */
-function openSqlHelp(){
-  var sql='alter table public.records add column if not exists member_name text;\n'+
-    'alter table public.records add column if not exists place_kind  text;\n'+
-    'alter table public.records add column if not exists "time"      text;\n'+
-    "notify pgrst, 'reload schema';";
-  var body='<div class="sheet-title">データ準備（初回だけ・1回）</div>'+
-    '<div class="muted" style="margin-bottom:8px;"><b>お客様名・時間・区分</b>を保存するために、Supabase で下のSQLを1回だけ実行してください。<br>Supabase → <b>SQL Editor</b> → 貼り付け → <b>Run</b>。</div>'+
-    '<textarea readonly onclick="this.select()" style="width:100%;height:120px;font-family:monospace;font-size:12px;padding:10px;border:1px solid var(--line);border-radius:10px;">'+esc(sql)+'</textarea>'+
-    '<div class="muted" style="font-size:12px;margin-top:6px;">これを実行するまで、お客様名・時間は保存されません（未保存の警告が出ます）。</div>'+
-    '<button class="btn ghost" onclick="closeSheet()">閉じる</button>';
-  openSheet(body);
-}
-
 /* ===== 設定 ===== */
 function openSettings(){
   var body='<div class="sheet-title">設定</div>'+
     '<div class="card"><div class="hint">お名前</div><div style="font-weight:700;">'+esc(PROFILE.name||"")+'</div>'+
       '<div class="hint" style="margin-top:8px;">メール</div><div>'+esc(ME.email||"")+'</div></div>'+
     '<button class="btn ghost accent" onclick="openHelp()">❓ 使い方・ヘルプ</button>'+
-    '<button class="btn ghost accent" onclick="openSqlHelp()">🛠 データ準備（初回のSQL）</button>'+
     '<div class="card"><div class="hint">組織リンク（今後）</div><div class="muted" style="font-size:12px;">サロン等で使う場合、ここに組織コードを入れると情報を共有できるようにする予定です。</div></div>'+
     '<button class="btn danger" onclick="resetAll()">🧹 自分のデータをすべてリセット</button>'+
     '<div class="muted" style="font-size:12px;text-align:center;">顧客・予約・施術の記録を全部消します。元に戻せません。</div>'+
