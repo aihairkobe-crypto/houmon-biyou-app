@@ -414,9 +414,24 @@ function stopsFor(iso){
   return out;
 }
 /* 住所→緯度経度（Nominatim・無料）。結果は clients.lat/lng に保存してキャッシュ */
+/* 全角数字・ハイフンを半角に寄せる（住所の表記ゆれ対策） */
+function normAddr(s){
+  return String(s||"").replace(/[０-９]/g,function(c){return String.fromCharCode(c.charCodeAt(0)-0xFEE0);})
+    .replace(/[‐‑–—ー－]/g,"-").replace(/\s+/g," ").trim();
+}
 async function geocodeAddr(addr){
-  var u="https://nominatim.openstreetmap.org/search?format=json&limit=1&countrycodes=jp&accept-language=ja&q="+encodeURIComponent(addr);
-  try{ var r=await fetch(u); var j=await r.json(); if(j&&j[0]) return {lat:+j[0].lat, lng:+j[0].lon}; }catch(e){}
+  var q=normAddr(addr); if(!q) return null;
+  // ①国土地理院ジオコーダ（日本の住所に強い・丁目/番地/号までヒット・無料・キー不要）
+  try{
+    var r=await fetch("https://msearch.gsi.go.jp/address-search/AddressSearch?q="+encodeURIComponent(q));
+    var j=await r.json();
+    if(j&&j[0]&&j[0].geometry&&j[0].geometry.coordinates){ var co=j[0].geometry.coordinates; return {lat:+co[1], lng:+co[0]}; }
+  }catch(e){}
+  // ②OSM Nominatim（フォールバック）
+  try{
+    var u="https://nominatim.openstreetmap.org/search?format=json&limit=1&countrycodes=jp&accept-language=ja&q="+encodeURIComponent(q);
+    var r2=await fetch(u); var j2=await r2.json(); if(j2&&j2[0]) return {lat:+j2[0].lat, lng:+j2[0].lon};
+  }catch(e){}
   return null;
 }
 async function ensureGeocoded(stops){
@@ -426,7 +441,7 @@ async function ensureGeocoded(stops){
     toast("住所を地図に変換中… ("+(i+1)+"/"+need.length+")");
     var g=await geocodeAddr(c.address);
     if(g){ c.lat=g.lat; c.lng=g.lng; try{ await sb.from("clients").update({lat:g.lat,lng:g.lng}).eq("id",c.id); }catch(e){} }
-    if(i<need.length-1) await new Promise(function(res){ setTimeout(res,1100); });  // Nominatimは1秒1件まで
+    if(i<need.length-1) await new Promise(function(res){ setTimeout(res,400); });   // 連続呼び出しを軽く間引き
   }
 }
 /* 番号付きピン */
@@ -628,7 +643,7 @@ function openQuickRecord(prefill){
     '<div class="row"><div><div class="hint">日付</div><input id="qr_date" type="date" value="'+esc(prefill.date||todayISO())+'"></div>'+
       '<div><div class="hint">時間</div><input id="qr_time" type="time" value="'+esc(prefill.time||nowHM())+'"></div></div>'+
     '<div class="hint" style="margin-top:8px;">お客様名（任意）</div><input id="qr_name" placeholder="例：〇〇様（空欄でもOK）">'+
-    '<div class="hint" style="margin-top:8px;">住所（地図に出す・任意）</div><input id="qr_addr" placeholder="例：神戸市〇〇区〇〇1-2-3">'+
+    '<div class="hint" style="margin-top:8px;">住所（地図に出す・任意）</div><input id="qr_addr" placeholder="例：神戸市中央区元町通5-7-4-202">'+
     '<div class="hint" style="margin-top:8px;">電話（任意）</div><input id="qr_phone" placeholder="任意">'+
     '<div class="hint" style="margin-top:8px;">注意・ルール（任意）</div><input id="qr_rules" placeholder="例：13時以降 / P1台">'+
     '<div class="hint" style="margin-top:8px;">メニュー'+(STD_MENU.length?'（下のボタンをタップで料金も自動入力）':'')+'</div>'+
@@ -674,7 +689,7 @@ function openBookingForm(id, prefill){
     '<div class="card" style="margin-bottom:10px;padding:10px 12px;"><b>'+esc(c.name||"（顧客未設定）")+'</b>'+(c.address?'<div class="meta">📍 '+esc(c.address)+'</div>':"")+'</div>'+
     '<input type="hidden" id="bf_client" value="'+esc(b.client_id||"")+'">'+
     (b.client_id?'<div class="hint">お客様情報（ここで直すと顧客に反映・地図にも使われます）</div>'+
-      '<input id="bf_caddr" value="'+esc(c.address||"")+'" placeholder="住所（例：神戸市〇〇区〇〇1-2-3）">'+
+      '<input id="bf_caddr" value="'+esc(c.address||"")+'" placeholder="住所（例：神戸市中央区元町通5-7-4-202）">'+
       '<input id="bf_cphone" value="'+esc(c.phone||"")+'" placeholder="電話（任意）" style="margin-top:6px;margin-bottom:4px;">':'')+
     '<div class="hint">日付</div><input id="bf_date" type="date" value="'+esc(b.date||todayISO())+'">'+
     '<div class="row" style="margin-top:8px;">'+
@@ -766,7 +781,7 @@ function openRecordForm(id, prefill){
     '<input type="hidden" id="rf_mname" value="'+esc(exRec(rec).nm||"")+'">'+
     '<input type="hidden" id="rf_pk" value="'+esc(exRec(rec).pk||"")+'">'+
     (rec.client_id?'<div class="hint">お客様情報（ここで直すと顧客に反映・地図にも使われます）</div>'+
-      '<input id="rf_caddr" value="'+esc(c.address||"")+'" placeholder="住所（例：神戸市〇〇区〇〇1-2-3）">'+
+      '<input id="rf_caddr" value="'+esc(c.address||"")+'" placeholder="住所（例：神戸市中央区元町通5-7-4-202）">'+
       '<input id="rf_cphone" value="'+esc(c.phone||"")+'" placeholder="電話（任意）" style="margin-top:6px;">'+
       '<input id="rf_crules" value="'+esc(c.rules||"")+'" placeholder="注意・ルール（任意）" style="margin-top:6px;margin-bottom:4px;">':'')+
     '<div class="row"><div><div class="hint">日付</div><input id="rf_date" type="date" value="'+esc(rec.date||todayISO())+'"></div>'+
@@ -876,7 +891,7 @@ function openClientForm(id, presetKind){
     '<div class="hint">区分</div><div class="seg-wrap" id="cf_kind" style="margin-bottom:8px;">'+
       ["個人","施設","病院"].map(function(k){return '<button class="seg'+(k===(c.kind||"個人")?" on":"")+'" onclick="cfKind(this)">'+k+'</button>';}).join("")+'</div>'+
     '<input id="cf_name" value="'+esc(c.name||"")+'" placeholder="名前（例：〇〇苑 / 山田 花子）">'+
-    '<input id="cf_addr" value="'+esc(c.address||"")+'" placeholder="住所（任意）" style="margin-top:6px;">'+
+    '<input id="cf_addr" value="'+esc(c.address||"")+'" placeholder="住所（例：神戸市中央区元町通5-7-4-202）" style="margin-top:6px;">'+
     '<input id="cf_phone" value="'+esc(c.phone||"")+'" placeholder="電話（任意）" style="margin-top:6px;">'+
     '<input id="cf_rules" value="'+esc(c.rules||"")+'" placeholder="注意・ルール（例：13時以降 / P1台）" style="margin-top:6px;">'+
     '<div class="hint" style="margin-top:10px;">料金表（メニュー・値段）</div>'+
