@@ -910,6 +910,7 @@ function openRecordForm(id, prefill){
     '<div class="hint" style="margin-top:8px;">メモ・カルテ</div><input id="rf_note" value="'+esc(rec.note||"")+'" placeholder="任意">'+
     '<div id="m"></div>'+
     '<button class="btn primary" onclick="saveRecord(\''+(id||"")+'\')">保存</button>'+
+    (id?'<button class="btn ghost accent" onclick="toggleRecordDone(\''+id+'\')">'+(exRec(rec).done?"↩ 予定に戻す":"✅ 施術終了にする")+'</button>':"")+
     (id?'<button class="btn danger" onclick="delRecord(\''+id+'\')">削除</button>':"")+
     '<button class="btn ghost" onclick="closeSheet()">キャンセル</button>';
   openSheet(body);
