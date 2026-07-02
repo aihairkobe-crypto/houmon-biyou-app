@@ -126,6 +126,13 @@ function showMsg(t,k){ var m=el("m"); if(m) m.innerHTML='<div class="msg '+(k||"
 function pad(n){ return String(n).padStart(2,"0"); }
 function nowHM(){ var d=new Date(); return pad(d.getHours())+":"+pad(d.getMinutes()); }
 function defHM(){ var d=new Date(); return pad(d.getHours())+":00"; }   // 初期値は「今の時」の:00（分は00始まり）
+/* 5分刻みの時間ドロップダウン（ネイティブtimeのstepが効かない端末対策） */
+function timeOptions(sel){
+  var opts="", found=false;
+  for(var h=5; h<=22; h++){ for(var m=0;m<60;m+=5){ var v=pad(h)+":"+pad(m); if(v===sel)found=true; opts+='<option value="'+v+'"'+(v===sel?" selected":"")+'>'+v+'</option>'; } }
+  if(sel && !found){ opts='<option value="'+esc(sel)+'" selected>'+esc(sel)+'（そのまま）</option>'+opts; }
+  return opts;
+}
 function todayISO(){ var d=new Date(); return d.getFullYear()+"-"+pad(d.getMonth()+1)+"-"+pad(d.getDate()); }
 function curMonth(){ var d=new Date(); return d.getFullYear()+"-"+pad(d.getMonth()+1); }
 function shiftMonth(ym,delta){ var p=ym.split("-"); var d=new Date(+p[0],+p[1]-1+delta,1); return d.getFullYear()+"-"+pad(d.getMonth()+1); }
@@ -255,6 +262,8 @@ async function updateRecord(id, data){
 }
 function isFacility(c){ return c && (c.kind==="施設"||c.kind==="病院"); }
 function recordsForBooking(bid){ return RC.filter(function(r){return r.booking_id===bid;}); }
+/* 施術終了なら売上に反映。予約紐付けは予約のstatus、単体記録はphotos.done */
+function recDone(r){ if(r.booking_id){ var b=BK.find(function(x){return x.id===r.booking_id;}); return b?(b.status==="施術終了"):!!exRec(r).done; } return !!exRec(r).done; }
 
 /* ===== 今日タブ ===== */
 function startAddClient(kind){ TAB="clients"; renderApp(); openClientForm(null, kind||"施設"); }
@@ -277,7 +286,7 @@ function renderToday(){
   if(!CL.length && !RC.length && !BK.length){ v.innerHTML=firstRunGuide(); return; }   // 完全な初回のみ案内
   var todays=dayTimeline(tISO);
   // 今月サマリ
-  var recsM=RC.filter(function(r){return (r.date||"").slice(0,7)===curMonth();});
+  var recsM=RC.filter(function(r){return (r.date||"").slice(0,7)===curMonth() && recDone(r);});   // 施術終了のみ
   var sumM=recsM.reduce(function(a,r){return a+(r.amount||0);},0);
   var html='<div class="card" style="background:var(--accent-soft);border-color:#cbe7da;display:flex;justify-content:space-between;align-items:center;">'+
       '<div><div class="hint" style="margin:0;">'+esc(dateLabel(tISO))+'</div><div style="font-weight:700;font-size:15px;">今月の売上</div></div>'+
@@ -358,7 +367,7 @@ function openMoveForm(id, prefill){
   var body='<div class="sheet-title">🚗 移動時間</div>'+
     '<div class="muted" style="margin-bottom:8px;">移動の時間を予定表に入れます。次の訪問先までの移動などにどうぞ。</div>'+
     '<div class="row"><div><div class="hint">日付</div><input id="mv_date" type="date" value="'+esc(m.date||todayISO())+'"></div>'+
-      '<div><div class="hint">開始時間</div><input id="mv_time" type="time" step="300" value="'+esc(m.time||defHM())+'"></div></div>'+
+      '<div><div class="hint">開始時間</div><select id="mv_time">'+timeOptions(m.time||defHM())+'</select></div></div>'+
     '<div class="hint" style="margin-top:8px;">移動時間（分）</div><input id="mv_dur" type="number" step="5" value="'+(m.duration||15)+'">'+
     '<div class="hint" style="margin-top:8px;">メモ（任意）</div><input id="mv_label" value="'+esc(m.label||"")+'" placeholder="例：〇〇苑へ移動 / 休憩">'+
     '<div id="m"></div>'+
@@ -588,7 +597,7 @@ function renderClientList(){
 var SALES_MONTH=null;
 function renderSales(){
   var v=el("view"); if(!SALES_MONTH) SALES_MONTH=curMonth();
-  var recs=RC.filter(function(r){return (r.date||"").slice(0,7)===SALES_MONTH;})
+  var recs=RC.filter(function(r){return (r.date||"").slice(0,7)===SALES_MONTH && recDone(r);})   // 施術終了のみ売上に反映
     .sort(function(a,b){return (b.date||"").localeCompare(a.date||"");});
   var tot=recs.reduce(function(a,r){return a+(r.amount||0);},0);
   var html='<div class="card" style="background:var(--accent-soft);border-color:#cbe7da;">'+
@@ -599,8 +608,9 @@ function renderSales(){
     '</div>'+
     '<div style="display:flex;justify-content:space-between;align-items:center;margin-top:8px;border-top:1px solid #cbe7da;padding-top:8px;">'+
       '<span style="font-weight:700;">売上合計（'+recs.length+'件）</span><span class="amt" style="font-size:20px;">'+yen(tot)+'</span></div>'+
+      '<div class="muted" style="font-size:11px;margin-top:4px;">※「施術終了」にした分だけ売上に反映されます</div>'+
     '</div>';
-  if(!recs.length){ html+='<div class="list-empty">この月の売上はまだありません。</div>'; v.innerHTML=html; return; }
+  if(!recs.length){ html+='<div class="list-empty">この月の売上はまだありません。<br>予定を「✅施術終了」にすると、ここに反映されます。</div>'; v.innerHTML=html; return; }
   html+=breakdownCard("🏢 顧客先・お客様別", sumBy(recs,function(r){ return r.client_id?clientName(r.client_id):(exRec(r).nm||"その他"); }));
   html+=breakdownCard("✂️ メニュー別", sumBy(recs,function(r){ return (r.menu||"").trim()||"（メニュー未記入）"; }));
   html+='<div class="sec">📋 日別明細</div>';
@@ -698,7 +708,7 @@ function openQuickRecord(prefill){
     '<div class="hint">区分</div><div class="seg-wrap" id="qr_kind" style="margin-bottom:8px;">'+
       ["在宅","施設","病院"].map(function(k){return '<button class="seg'+(k==="在宅"?" on":"")+'" onclick="cfKind(this)">'+k+'</button>';}).join("")+'</div>'+
     '<div class="row"><div><div class="hint">日付</div><input id="qr_date" type="date" value="'+esc(prefill.date||todayISO())+'"></div>'+
-      '<div><div class="hint">時間</div><input id="qr_time" type="time" step="300" value="'+esc(prefill.time||defHM())+'"></div></div>'+
+      '<div><div class="hint">時間</div><select id="qr_time">'+timeOptions(prefill.time||defHM())+'</select></div></div>'+
     '<div class="hint" style="margin-top:8px;">施術時間（分）</div><input id="qr_dur" type="number" step="5" value="'+(prefill.dur||60)+'">'+
     '<div class="hint" style="margin-top:8px;">お客様名（任意）</div><input id="qr_name" placeholder="例：〇〇様（空欄でもOK）">'+
     '<div class="hint" style="margin-top:8px;">住所（地図に出す・任意）</div><input id="qr_addr" placeholder="例：神戸市中央区元町通5-7-4-202">'+
@@ -751,7 +761,7 @@ function openBookingForm(id, prefill){
       '<input id="bf_cphone" value="'+esc(c.phone||"")+'" placeholder="電話（任意）" style="margin-top:6px;margin-bottom:4px;">':'')+
     '<div class="hint">日付</div><input id="bf_date" type="date" value="'+esc(b.date||todayISO())+'">'+
     '<div class="row" style="margin-top:8px;">'+
-      '<div><div class="hint">時間</div><input id="bf_time" type="time" step="300" value="'+esc(b.time||"10:00")+'"></div>'+
+      '<div><div class="hint">時間</div><select id="bf_time">'+timeOptions(b.time||"10:00")+'</select></div>'+
       '<div><div class="hint">所要(分)</div><input id="bf_dur" type="number" step="15" value="'+(b.duration||60)+'"></div>'+
     '</div>'+
     '<div class="hint" style="margin-top:8px;">メモ</div><input id="bf_memo" value="'+esc(b.memo||"")+'" placeholder="任意">'+
@@ -891,7 +901,7 @@ function openRecordForm(id, prefill){
       '<input id="rf_cphone" value="'+esc(c.phone||"")+'" placeholder="電話（任意）" style="margin-top:6px;">'+
       '<input id="rf_crules" value="'+esc(c.rules||"")+'" placeholder="注意・ルール（任意）" style="margin-top:6px;margin-bottom:4px;">':'')+
     '<div class="row"><div><div class="hint">日付</div><input id="rf_date" type="date" value="'+esc(rec.date||todayISO())+'"></div>'+
-      '<div><div class="hint">時間</div><input id="rf_time" type="time" step="300" value="'+esc(rec.time||exRec(rec).t||defHM())+'"></div></div>'+
+      '<div><div class="hint">時間</div><select id="rf_time">'+timeOptions(rec.time||exRec(rec).t||defHM())+'</select></div></div>'+
     '<div class="hint" style="margin-top:8px;">施術時間（分）</div><input id="rf_dur" type="number" step="5" value="'+(Number(exRec(rec).dur)||60)+'">'+
     '<div class="hint" style="margin-top:8px;">メニュー'+(hasPl?'（下のボタンをタップで料金も自動入力）':'')+'</div>'+
     menuChipsHtml(rec.client_id,"rf_menu","rf_amount")+
