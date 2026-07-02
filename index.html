@@ -114,7 +114,7 @@ var sb = supabase.createClient(SUPABASE_URL, SUPABASE_KEY);
 
 var APP=document.getElementById("app");
 var ME=null, PROFILE=null;
-var CL=[], BK=[], RC=[];      // 顧客 / 予約 / 売上
+var CL=[], BK=[], RC=[], TB=[];      // 顧客 / 予約 / 売上 / 移動ブロック(time_blocks)
 var TAB="today";
 
 function esc(s){ return (s==null?"":String(s)).replace(/[&<>"]/g,function(c){return {"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;"}[c];}); }
@@ -166,7 +166,10 @@ async function loadAll(){
   BK=b.error?[]:(b.data||[]);
   var c=await sb.from("records").select("*");
   RC=c.error?[]:(c.data||[]);
+  var d=await sb.from("time_blocks").select("*");
+  TB=d.error?[]:(d.data||[]);
 }
+async function reloadTimeBlocks(){ var d=await sb.from("time_blocks").select("*"); if(!d.error) TB=d.data||[]; renderTab(); }
 
 /* ===== ログイン / 新規登録 ===== */
 function setAuthMode(mmode){ var e=el("email"),p=el("pw"),n=el("nm"); if(e)window._ae=e.value; if(p)window._ap=p.value; if(n)window._an=n.value; window._am=mmode; renderAuth(); }
@@ -291,13 +294,15 @@ function renderToday(){
 /* ===== その日のタイムスケジュール（時間軸で目視） ===== */
 function hm2min(t){ if(!t) return null; var p=String(t).split(":"); return (+p[0])*60+(+(p[1]||0)); }
 function itDur(it){ return it.kind==="bk" ? (it.b.duration||60) : (Number(exRec(it.r).dur)||30); }   // 施術時間(分)
-function itTravel(it){ return it.kind==="bk" ? (Number(it.b.travel_min)||0) : (Number(exRec(it.r).travel)||0); }   // 移動時間(分)
+function movesForDay(iso){ return TB.filter(function(m){return m.date===iso && m.time;}); }   // 独立した移動ブロック
 function dayScheduleHtml(iso){
   var items=dayTimeline(iso);
   var timed=items.filter(function(it){return it.t;});
   var untimed=items.filter(function(it){return !it.t;});
+  var moves=movesForDay(iso);
   var startH=9, endH=18;
-  timed.forEach(function(it){ var m=hm2min(it.t); var sh=Math.floor(m/60); if(sh<startH)startH=sh; var eh=Math.ceil((m+itDur(it)+itTravel(it))/60); if(eh>endH)endH=eh; });
+  timed.forEach(function(it){ var m=hm2min(it.t); var sh=Math.floor(m/60); if(sh<startH)startH=sh; var eh=Math.ceil((m+itDur(it))/60); if(eh>endH)endH=eh; });
+  moves.forEach(function(mv){ var m=hm2min(mv.time); var sh=Math.floor(m/60); if(sh<startH)startH=sh; var eh=Math.ceil((m+(mv.duration||15))/60); if(eh>endH)endH=eh; });
   if(endH<=startH) endH=startH+1;
   var hourH=48, ppm=hourH/60, top0=startH*60, PAD=8;
   var h='<div class="muted" style="font-size:11px;margin:2px 0 4px;">空き時間をタップで追加　｜　<span style="color:var(--c-plan,var(--accent));">■</span>予定　<span style="color:var(--c-fin,var(--muted));">■</span>施術終了　<span style="color:var(--c-move,#d8a85f);">■</span>移動'+(iso===todayISO()?'　<span style="color:var(--danger);">—</span>今':'')+'</div>';
@@ -314,9 +319,11 @@ function dayScheduleHtml(iso){
     var onclick=isBk?"openBookingForm('"+it.b.id+"')":"openRecordForm('"+it.r.id+"')";
     h+='<div class="sched-ev '+cls+'" style="top:'+top+'px;height:'+hgt+'px;" onclick="event.stopPropagation();'+onclick+'">'+
       '<b>'+esc(it.t)+'</b> '+label+(sub?'<div style="opacity:.85;">'+sub+'</div>':'')+'</div>';
-    var tr=itTravel(it);
-    if(tr>0){ var mt=m+itDur(it), mtop=(mt-top0)*ppm+PAD, mh=Math.max(tr*ppm,20);
-      h+='<div class="sched-move" style="top:'+mtop+'px;height:'+mh+'px;">🚗 移動 '+tr+'分</div>'; }
+  });
+  // 独立した移動ブロック（好きな時間・場所に配置）
+  moves.forEach(function(mv){
+    var m=hm2min(mv.time), top=(m-top0)*ppm+PAD, mh=Math.max((mv.duration||15)*ppm,20);
+    h+='<div class="sched-move" style="top:'+top+'px;height:'+mh+'px;cursor:pointer;" onclick="event.stopPropagation();openMoveForm(\''+mv.id+'\')">🚗 '+esc(mv.label||"移動")+(mv.duration?' '+mv.duration+'分':'')+'</div>';
   });
   h+='</div>';
   if(untimed.length){
@@ -340,7 +347,37 @@ function openNewAt(iso, t){
     '<div class="muted" style="margin-bottom:8px;">この時間に追加します。</div>'+
     '<button class="btn primary" onclick="newBookingAt()">＋ 予約を作る</button>'+
     '<button class="btn ghost accent" onclick="newRecordAt()">💴 施術を記録</button>'+
+    '<button class="btn ghost accent" onclick="newMoveAt()">🚗 移動を入れる</button>'+
     '<button class="btn ghost" onclick="closeSheet()">キャンセル</button>');
+}
+function newMoveAt(){ var a=window._newAt||{}; openMoveForm(null,{date:a.iso, time:a.t, duration:15}); }
+/* 独立した移動ブロック（time_blocks）＝好きな時間・場所に自由に配置 */
+function openMoveForm(id, prefill){
+  var m=id?(TB.find(function(x){return x.id===id;})||{}):(prefill||{});
+  var body='<div class="sheet-title">🚗 移動時間</div>'+
+    '<div class="muted" style="margin-bottom:8px;">移動の時間を予定表に入れます。次の訪問先までの移動などにどうぞ。</div>'+
+    '<div class="row"><div><div class="hint">日付</div><input id="mv_date" type="date" value="'+esc(m.date||todayISO())+'"></div>'+
+      '<div><div class="hint">開始時間</div><input id="mv_time" type="time" value="'+esc(m.time||nowHM())+'"></div></div>'+
+    '<div class="hint" style="margin-top:8px;">移動時間（分）</div><input id="mv_dur" type="number" step="5" value="'+(m.duration||15)+'">'+
+    '<div class="hint" style="margin-top:8px;">メモ（任意）</div><input id="mv_label" value="'+esc(m.label||"")+'" placeholder="例：〇〇苑へ移動 / 休憩">'+
+    '<div id="m"></div>'+
+    '<button class="btn primary" onclick="saveMove(\''+(id||"")+'\')">保存</button>'+
+    (id?'<button class="btn danger" onclick="delMove(\''+id+'\')">削除</button>':"")+
+    '<button class="btn ghost" onclick="closeSheet()">キャンセル</button>';
+  openSheet(body);
+}
+async function saveMove(id){
+  var data={ org_id:PROFILE.org_id, date:el("mv_date").value, time:el("mv_time").value,
+    duration:Number(el("mv_dur").value)||0, label:el("mv_label").value.trim() };
+  var r=id?await sb.from("time_blocks").update(data).eq("id",id):await sb.from("time_blocks").insert(data);
+  if(r.error){ showMsg("保存エラー："+esc(r.error.message)); return; }
+  closeSheet(); toast("🚗 移動を入れました"); await reloadTimeBlocks();
+}
+async function delMove(id){
+  if(!confirm("この移動を削除しますか？")) return;
+  var r=await sb.from("time_blocks").delete().eq("id",id);
+  if(r.error){ showMsg("削除エラー："+esc(r.error.message)); return; }
+  closeSheet(); toast("🗑 削除しました"); await reloadTimeBlocks();
 }
 function newBookingAt(){ openPicker('bkAtPick',{title:'予約する施設・お客様を選ぶ',allowNew:true}); }
 function bkAtPick(id){ var a=window._newAt||{}; openBookingForm(null,{client_id:id, date:a.iso, time:a.t}); }
@@ -360,8 +397,7 @@ function timelineItemHtml(it){
     return '<div class="item"><div class="top">'+
       '<div><div class="name">'+(b.time?esc(b.time)+'　':'')+esc(clientName(b.client_id))+'</div>'+
         (b.memo?'<div class="meta">📝 '+esc(b.memo)+'</div>':"")+
-        (hasRec?'<div class="meta">💴 '+recs.length+'件　'+yen(tot)+'</div>':"")+
-        (Number(b.travel_min)>0?'<div class="meta" style="color:#9a6b1e;">🚗 この後 移動 '+b.travel_min+'分</div>':"")+'</div>'+
+        (hasRec?'<div class="meta">💴 '+recs.length+'件　'+yen(tot)+'</div>':"")+'</div>'+
       '<span class="pill '+(fin?"plan":"done")+'">'+(fin?"施術終了":"予定")+'</span></div>'+
       '<div class="row" style="margin-top:10px;">'+
         '<button class="btn '+(fin?"ghost":"primary")+' sm" onclick="toggleBookingDone(\''+b.id+'\')">'+(fin?"↩ 予定に戻す":"✅ 施術終了")+'</button>'+
@@ -657,8 +693,7 @@ function openQuickRecord(prefill){
       ["在宅","施設","病院"].map(function(k){return '<button class="seg'+(k==="在宅"?" on":"")+'" onclick="cfKind(this)">'+k+'</button>';}).join("")+'</div>'+
     '<div class="row"><div><div class="hint">日付</div><input id="qr_date" type="date" value="'+esc(prefill.date||todayISO())+'"></div>'+
       '<div><div class="hint">時間</div><input id="qr_time" type="time" value="'+esc(prefill.time||nowHM())+'"></div></div>'+
-    '<div class="row" style="margin-top:8px;"><div><div class="hint">施術時間（分）</div><input id="qr_dur" type="number" step="5" value="'+(prefill.dur||60)+'"></div>'+
-      '<div><div class="hint">🚗 移動時間（分）</div><input id="qr_travel" type="number" step="5" value="'+(prefill.travel||0)+'"></div></div>'+
+    '<div class="hint" style="margin-top:8px;">施術時間（分）</div><input id="qr_dur" type="number" step="5" value="'+(prefill.dur||60)+'">'+
     '<div class="hint" style="margin-top:8px;">お客様名（任意）</div><input id="qr_name" placeholder="例：〇〇様（空欄でもOK）">'+
     '<div class="hint" style="margin-top:8px;">住所（地図に出す・任意）</div><input id="qr_addr" placeholder="例：神戸市中央区元町通5-7-4-202">'+
     '<div class="hint" style="margin-top:8px;">電話（任意）</div><input id="qr_phone" placeholder="任意">'+
@@ -692,7 +727,7 @@ async function saveQuick(){
   var data={ org_id:PROFILE.org_id, client_id:clientId, booking_id:null, member_id:null, staff_id:ME.id,
     menu:el("qr_menu").value.trim(), amount:Number(el("qr_amount").value)||0,
     note:el("qr_note").value.trim(), date:el("qr_date").value,
-    photos:recExtra({ nm:(clientId?"":name), t:el("qr_time").value, pk:kind, dur:Number(el("qr_dur").value)||0, travel:Number(el("qr_travel").value)||0 }) };
+    photos:recExtra({ nm:(clientId?"":name), t:el("qr_time").value, pk:kind, dur:Number(el("qr_dur").value)||0 }) };
   var r=await insertRecords(data);
   if(r.error){ showMsg("保存エラー："+esc(r.error.message)); return; }
   closeSheet(); toast(created?("💴 記録し「"+name+"」を顧客に登録しました"):"💴 施術を記録しました"); await loadAll(); renderTab();
@@ -713,7 +748,6 @@ function openBookingForm(id, prefill){
       '<div><div class="hint">時間</div><input id="bf_time" type="time" value="'+esc(b.time||"10:00")+'"></div>'+
       '<div><div class="hint">所要(分)</div><input id="bf_dur" type="number" step="15" value="'+(b.duration||60)+'"></div>'+
     '</div>'+
-    '<div class="hint" style="margin-top:8px;">🚗 この後の移動時間（分）</div><input id="bf_travel" type="number" step="5" value="'+(Number(b.travel_min)||0)+'" placeholder="0（次の訪問までの移動に必要な時間）">'+
     '<div class="hint" style="margin-top:8px;">メモ</div><input id="bf_memo" value="'+esc(b.memo||"")+'" placeholder="任意">'+
     '<div id="m"></div>'+
     '<button class="btn primary" onclick="saveBooking(\''+(id||"")+'\')">保存</button>'+
@@ -726,7 +760,7 @@ function openBookingForm(id, prefill){
 async function saveBooking(id){
   var client=el("bf_client").value; if(!client){ showMsg("顧客が未設定です"); return; }
   var data={ org_id:PROFILE.org_id, client_id:client, date:el("bf_date").value, time:(el("bf_time").value||"10:00"),
-    duration:Number(el("bf_dur").value)||0, travel_min:Number(el("bf_travel").value)||0, staff_ids:[ME.id], memo:el("bf_memo").value.trim() };
+    duration:Number(el("bf_dur").value)||0, staff_ids:[ME.id], memo:el("bf_memo").value.trim() };
   var r=id?await sb.from("bookings").update(data).eq("id",id):await sb.from("bookings").insert(data);
   if(r.error){ showMsg("保存エラー："+esc(r.error.message)); return; }
   // お客様情報（住所・電話）も一緒に更新。住所を変えたら地図の座標キャッシュを消す
@@ -842,8 +876,7 @@ function openRecordForm(id, prefill){
       '<input id="rf_crules" value="'+esc(c.rules||"")+'" placeholder="注意・ルール（任意）" style="margin-top:6px;margin-bottom:4px;">':'')+
     '<div class="row"><div><div class="hint">日付</div><input id="rf_date" type="date" value="'+esc(rec.date||todayISO())+'"></div>'+
       '<div><div class="hint">時間</div><input id="rf_time" type="time" value="'+esc(rec.time||exRec(rec).t||nowHM())+'"></div></div>'+
-    '<div class="row" style="margin-top:8px;"><div><div class="hint">施術時間（分）</div><input id="rf_dur" type="number" step="5" value="'+(Number(exRec(rec).dur)||60)+'"></div>'+
-      '<div><div class="hint">🚗 移動時間（分）</div><input id="rf_travel" type="number" step="5" value="'+(Number(exRec(rec).travel)||0)+'"></div></div>'+
+    '<div class="hint" style="margin-top:8px;">施術時間（分）</div><input id="rf_dur" type="number" step="5" value="'+(Number(exRec(rec).dur)||60)+'">'+
     '<div class="hint" style="margin-top:8px;">メニュー'+(hasPl?'（下のボタンをタップで料金も自動入力）':'')+'</div>'+
     menuChipsHtml(rec.client_id,"rf_menu","rf_amount")+
     '<input id="rf_menu" value="'+esc(rec.menu||"")+'" placeholder="メニュー（例：カット）">'+
@@ -863,7 +896,7 @@ async function saveRecord(id){
     member_id:el("rf_mid").value||null, staff_id:ME.id,
     menu:el("rf_menu").value.trim(), amount:Number(el("rf_amount").value)||0,
     note:el("rf_note").value.trim(), date:el("rf_date").value,
-    photos:recExtra({nm:el("rf_mname").value, t:el("rf_time").value, pk:el("rf_pk").value, dur:Number(el("rf_dur").value)||0, travel:Number(el("rf_travel").value)||0}) };
+    photos:recExtra({nm:el("rf_mname").value, t:el("rf_time").value, pk:el("rf_pk").value, dur:Number(el("rf_dur").value)||0}) };
   var r=id?await updateRecord(id,data):await insertRecords(data);
   if(r.error){ showMsg("保存エラー："+esc(r.error.message)); return; }
   // お客様情報（住所・電話・注意）も一緒に更新。住所を変えたら地図の座標キャッシュを消して次回再変換
