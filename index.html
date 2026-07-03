@@ -278,10 +278,10 @@ function firstRunGuide(){
     '<div class="guide-step"><span class="gnum">3</span><div><b>施術を記録</b><div class="muted">施術したら料金を記録。売上に自動で集計。</div></div></div>'+
     '</div>'+
     '<div class="sec">まずはここから（どれでもOK）</div>'+
-    '<button class="btn primary" onclick="openPicker(\'recWith\',{title:\'だれの施術を入力しますか？\',allowNew:true})">💴 施術情報を入力</button>'+
-    '<button class="btn ghost accent" onclick="openPicker(\'bkWith\',{title:\'だれの予約を入れますか？\',allowNew:true})">📅 予約を入力</button>'+
-    '<button class="btn ghost accent" onclick="openClientForm(null,\'個人\')">🧑 お客様を登録</button>'+
-    '<button class="btn ghost accent" onclick="openClientForm(null,\'施設\')">🏢 施設・訪問先を登録</button>'+
+    '<button class="btn primary" onclick="openClientForm(null,\'個人\')">① お客様・施設を登録</button>'+
+    '<div class="muted" style="font-size:11px;margin:-2px 0 6px;">登録画面で「個人／施設／病院」を選べます。</div>'+
+    '<button class="btn ghost accent" onclick="openPicker(\'bkWith\',{title:\'だれの予約を入れますか？\',allowNew:true})">② 📅 予約を入力</button>'+
+    '<button class="btn ghost accent" onclick="openPicker(\'recWith\',{title:\'だれの施術を入力しますか？\',allowNew:true})">③ 💴 施術情報を入力</button>'+
     '<button class="btn ghost" onclick="openHelp()">❓ 詳しい使い方を見る</button>';
 }
 function renderToday(){
