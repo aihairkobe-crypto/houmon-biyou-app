@@ -312,7 +312,7 @@ function renderToday(){
       '<div class="amt" style="font-size:20px;">'+yen(sumM)+'</div></div>';
   html+='<button class="btn primary" onclick="openPicker(\'recWith\',{title:\'だれの施術を入力しますか？\',allowNew:true})">💴 施術情報を入力</button>';
   html+='<button class="btn ghost accent" onclick="openPicker(\'bkWith\',{title:\'だれの予約を入れますか？\',allowNew:true})">📅 予約を入力</button>';
-  html+='<button class="btn ghost accent" onclick="openClientForm(null,\'個人\')">＋ 新しいお客様・施設を登録</button>';
+  html+='<div class="muted" style="font-size:11px;margin:2px 2px 0;">※新しいお客様・施設は、上の入力画面の「＋新しい顧客・施設を登録」か「👥顧客」タブから登録できます。</div>';
   html+='<div class="sec">今日の訪問</div>';
   if(!todays.length){ html+='<div class="list-empty">今日の予定・記録はありません。<br>上のボタンから記録できます。</div>'; }
   else { todays.forEach(function(it){ html+=timelineItemHtml(it); }); }
