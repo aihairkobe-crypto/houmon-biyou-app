@@ -597,9 +597,8 @@ function renderPlan(){
   if(!PLAN_MONTH) PLAN_MONTH=curMonth();
   if(!PLAN_SEL) PLAN_SEL=todayISO();
   var ym=PLAN_MONTH, p=ym.split("-"), first=new Date(+p[0],+p[1]-1,1).getDay(), days=new Date(+p[0],+p[1],0).getDate();
-  var html='<button class="btn primary" onclick="openPicker(\'bkWith\',{title:\'だれの予約・施術を入れますか？\',allowNew:true})">＋ 予約・施術を入力</button>';
-  // カレンダー
-  html+='<div class="card">'+
+  // カレンダー（iPhoneカレンダー風：日付をタップ→その日の下に追加ボタン）
+  var html='<div class="card">'+
     '<div class="row" style="align-items:center;"><button class="btn ghost sm" style="flex:0 0 44px;" onclick="planMonth(-1)">‹</button>'+
       '<div style="text-align:center;font-weight:700;">'+esc(monthLabel(ym))+'</div>'+
       '<button class="btn ghost sm" style="flex:0 0 44px;" onclick="planMonth(1)">›</button></div>'+
@@ -613,6 +612,9 @@ function renderPlan(){
   html+='</div></div>';
   // 選択日のタイムスケジュール（時間軸で目視）
   html+='<div class="sec">'+esc(dateLabel(PLAN_SEL))+' の予定</div>';
+  // タップした日のすぐ下に追加ボタン（スマホで見やすい・iPhoneカレンダー風）
+  html+='<button class="btn primary" style="margin-bottom:8px;" onclick="openPicker(\'bkWith\',{title:\'だれの予約・施術を入れますか？\',allowNew:true})">＋ この日に予約・施術を入れる</button>';
+  html+='<div class="muted" style="font-size:11px;margin-bottom:6px;">下の時間帯をタップすると、その時刻で追加できます。</div>';
   html+=dayScheduleHtml(PLAN_SEL);
   html+='<button class="btn ghost accent" style="margin-top:10px;" onclick="openMoveForm(null,{date:\''+PLAN_SEL+'\',duration:15})">🚗 移動を追加</button>';
   html+='<button class="btn ghost accent" style="margin-top:8px;" onclick="showRouteMap(\''+PLAN_SEL+'\')">🗺 この日の動線を地図で見る</button>';
