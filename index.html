@@ -476,19 +476,36 @@ async function toggleFacDone(clientId, iso, t){
 }
 /* 施設の1訪問を開く＝中の全員リスト */
 function openFacVisit(clientId, iso, t){
-  var recs=facGroupRecs(clientId,iso,t); var allDone=recs.length&&recs.every(function(r){return !!exRec(r).done;});
+  var recs=facGroupRecs(clientId,iso,t); var c=clientById(clientId)||{}; var plArr=Array.isArray(c.price_list)?c.price_list:[];
+  var allDone=recs.length&&recs.every(function(r){return !!exRec(r).done;});
   var body='<div class="sheet-title">🏢 '+esc(clientName(clientId))+'　'+esc(dateLabel(iso))+(t?'　'+esc(t):'')+'</div>'+
-    '<div class="muted" style="margin-bottom:8px;">この訪問の利用者 '+recs.length+'名。名前をタップで個別編集。</div>'+
-    '<button class="btn '+(allDone?"ghost":"primary")+'" onclick="toggleFacDone(\''+clientId+'\',\''+iso+'\',\''+t+'\')">'+(allDone?"↩ 予定に戻す":"✅ 全員 施術終了")+'</button>'+
+    '<div class="muted" style="margin-bottom:8px;">利用者 '+recs.length+'名。<b>メニュー・料金・時間はここで直せます</b>（名前タップで詳細編集）。</div>'+
+    '<div class="hint">時間（全員）</div><select id="fv_time">'+timeOptions(t||defHM())+'</select>'+
+    '<button class="btn '+(allDone?"ghost":"primary")+'" style="margin-top:8px;" onclick="toggleFacDone(\''+clientId+'\',\''+iso+'\',\''+t+'\')">'+(allDone?"↩ 予定に戻す":"✅ 全員 施術終了")+'</button>'+
+    '<datalist id="fvMenuDL">'+plArr.map(function(p){return '<option value="'+esc(p.name)+'"></option>';}).join("")+'</datalist>'+
     recs.map(function(r){ var e=exRec(r); var rf=!!e.done;
-      return '<div class="item" style="cursor:pointer;" onclick="closeSheet();openRecordForm(\''+r.id+'\')"><div class="top"><div>'+
-        '<div class="name" style="font-size:14px;">'+(e.room?'🚪'+esc(e.room)+' ':'')+esc(e.nm||"お客様")+'</div>'+
-        '<div class="meta">✂️ '+esc(r.menu||"施術")+'　'+yen(r.amount)+(recFee(r)?'　🚗'+yen(recFee(r)):'')+(r.note?'　📝 '+esc(r.note):"")+'</div></div>'+
-        '<span class="pill '+(rf?"plan":"done")+'">'+(rf?"済":"予定")+'</span></div></div>';
+      return '<div class="item" data-rid="'+r.id+'">'+
+        '<div class="top"><div class="name" style="font-size:14px;cursor:pointer;" onclick="closeSheet();openRecordForm(\''+r.id+'\')">'+(e.room?'🚪'+esc(e.room)+' ':'')+esc(e.nm||"お客様")+' ›</div>'+
+          '<span class="pill '+(rf?"plan":"done")+'">'+(rf?"済":"予定")+'</span></div>'+
+        '<input class="fv_menu" list="fvMenuDL" value="'+esc(r.menu||"")+'" placeholder="メニュー" onchange="fvMenuChange(this,\''+clientId+'\')" style="margin-top:6px;">'+
+        '<input class="fv_amt" type="number" value="'+(r.amount||"")+'" placeholder="料金（円）" style="margin-top:6px;">'+
+      '</div>';
     }).join("")+
-    '<button class="btn ghost accent" style="margin-top:8px;" onclick="openFacilityBatch(\''+clientId+'\',{date:\''+iso+'\'})">＋ 利用者を追加・名簿を貼り付け</button>'+
+    '<button class="btn primary" style="margin-top:8px;" onclick="saveFacVisit(\''+clientId+'\',\''+iso+'\',\''+t+'\')">💾 保存</button>'+
+    '<button class="btn ghost accent" onclick="openFacilityBatch(\''+clientId+'\',{date:\''+iso+'\'})">＋ 利用者を追加・名簿を貼り付け</button>'+
     '<button class="btn ghost" onclick="closeSheet()">閉じる</button>';
   openSheet(body);
+}
+function fvMenuChange(inp, clientId){ var c=clientById(clientId)||{}; var pl=Array.isArray(c.price_list)?c.price_list:[]; var f=pl.find(function(p){return p.name===inp.value.trim();}); if(f&&f.price!=null){ var amt=inp.parentNode.querySelector(".fv_amt"); if(amt) amt.value=f.price; } }
+async function saveFacVisit(clientId, iso, t){
+  var newT=(el("fv_time")||{}).value||t;
+  var rows=document.querySelectorAll("#sheetBody .item[data-rid]"); var n=0;
+  for(var i=0;i<rows.length;i++){ var row=rows[i]; var rid=row.getAttribute("data-rid"); var rec=RC.find(function(x){return x.id===rid;}); if(!rec) continue;
+    var menu=row.querySelector(".fv_menu").value.trim(); var amt=Number(row.querySelector(".fv_amt").value)||0;
+    var p=Object.assign({},exRec(rec)); if(newT)p.t=newT; else delete p.t;
+    var res=await updateRecord(rid,{menu:menu, amount:amt, photos:p}); if(!res.error){ rec.menu=menu; rec.amount=amt; rec.photos=p; n++; }
+  }
+  closeSheet(); toast("💾 "+n+"件を更新しました"); await loadAll(); renderTab();
 }
 function timelineItemHtml(it){
   if(it.kind==="fac"){
