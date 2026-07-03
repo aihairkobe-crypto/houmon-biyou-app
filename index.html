@@ -303,9 +303,11 @@ function onboardExisting(){
     '<div class="muted" style="font-size:11px;margin-top:6px;">施設は登録後、施術入力の画面で<b>名簿をExcelから貼り付け</b>できます。</div>'+
     '<button class="btn ghost" onclick="closeSheet()">閉じる</button>');
 }
+function welcomeSeen(){ try{ return localStorage.getItem("welcome_"+(ME&&ME.id))==="1"; }catch(e){ return false; } }   // 案内画面を見たか
+function markWelcomeSeen(){ try{ localStorage.setItem("welcome_"+(ME&&ME.id),"1"); }catch(e){} }                       // 見たと記録
 function renderToday(){
   var v=el("view"); var tISO=todayISO();
-  if(!CL.length && !RC.length && !BK.length){ v.innerHTML=firstRunGuide(); return; }   // 完全な初回のみ案内
+  if(!CL.length && !RC.length && !BK.length && !welcomeSeen()){ markWelcomeSeen(); v.innerHTML=firstRunGuide(); return; }   // 本当の初回だけ案内→以降はホーム(メイン)へ直行
   var todays=dayTimeline(tISO);
   // 今月サマリ
   var recsM=RC.filter(function(r){return (r.date||"").slice(0,7)===curMonth() && recDone(r);});   // 施術終了のみ

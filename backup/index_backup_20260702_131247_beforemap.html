@@ -1,0 +1,873 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1">
+<title>訪問美容 楽々アプリ</title>
+<style>
+  :root{ --accent:#1d9e75; --accent-soft:#e7f5ee; --accent-text:#147a59; --line:#e5e7e6; --bg:#f4f6f5; --surface:#fff; --text:#1f2624; --muted:#6b7572; --hint:#9aa39f; --danger:#c0392b; --radius:14px; }
+  *{box-sizing:border-box;}
+  body{margin:0; font-family:-apple-system,"Hiragino Sans",sans-serif; background:var(--bg); color:var(--text); -webkit-text-size-adjust:100%;}
+  .wrap{max-width:480px; margin:0 auto; min-height:100vh;}
+  /* 上部バー */
+  .topbar{position:sticky; top:0; z-index:50; background:var(--surface); border-bottom:1px solid var(--line); display:flex; align-items:center; justify-content:space-between; padding:12px 16px;}
+  .topbar .t{font-size:16px; font-weight:700;}
+  .gear{border:none; background:none; font-size:20px; cursor:pointer; color:var(--muted);}
+  /* 本文 */
+  .view{padding:14px 16px 90px;}
+  h2.page{font-size:18px; margin:2px 0 12px;}
+  .sub{color:var(--muted); font-size:13px;}
+  .card{background:var(--surface); border:1px solid var(--line); border-radius:var(--radius); padding:14px; margin-bottom:10px;}
+  label{display:block;}
+  input, select{width:100%; padding:11px 12px; border:1px solid var(--line); border-radius:10px; font-size:15px; background:var(--surface); color:var(--text);}
+  .btn{display:block; width:100%; padding:13px; border:none; border-radius:12px; font-size:15px; font-weight:700; margin-top:10px; cursor:pointer;}
+  .btn.primary{background:var(--accent); color:#fff;}
+  .btn.ghost{background:var(--surface); border:1px solid var(--line); color:var(--text);}
+  .btn.ghost.accent{border-color:var(--accent); color:var(--accent-text);}
+  .btn.danger{background:#fbeaea; color:var(--danger);}
+  .btn.sm{padding:9px 12px; font-size:14px; margin-top:0; width:auto;}
+  .row{display:flex; gap:8px;} .row>*{flex:1;}
+  .muted{color:var(--muted); font-size:13px;}
+  .hint{font-size:12px; color:var(--hint); margin-bottom:3px;}
+  .msg{font-size:13px; padding:9px 12px; border-radius:10px; margin-top:10px;}
+  .msg.err{background:#fbeaea; color:var(--danger);} .msg.ok{background:var(--accent-soft); color:var(--accent-text);}
+  .warn{background:#fff7e6; border:1px solid #f0d9a8; color:#8a6d2f; font-size:13px; line-height:1.6; padding:10px 12px; border-radius:10px; margin-top:10px;}
+  .list-empty{color:var(--muted); font-size:13px; text-align:center; padding:24px 8px;}
+  .sec{font-size:12px; font-weight:700; color:var(--muted); margin:16px 2px 6px;}
+  /* 行カード */
+  .item{background:var(--surface); border:1px solid var(--line); border-radius:12px; padding:12px 13px; margin-bottom:8px;}
+  .item .top{display:flex; justify-content:space-between; align-items:flex-start; gap:8px;}
+  .item .name{font-weight:700; font-size:15px;}
+  .item .meta{color:var(--muted); font-size:12px; margin-top:3px; line-height:1.5;}
+  .item .rules{color:var(--danger); font-size:12px; margin-top:3px;}
+  .pill{font-size:11px; font-weight:700; padding:3px 9px; border-radius:12px; white-space:nowrap;}
+  .pill.plan{background:#eef1f0; color:var(--muted);} .pill.done{background:var(--accent-soft); color:var(--accent-text);}
+  .amt{font-weight:700; color:var(--accent-text);}
+  .cal{display:grid; grid-template-columns:repeat(7,1fr); gap:3px; margin-top:8px;}
+  .cal .wd{text-align:center; font-size:11px; color:var(--muted); padding:2px 0;}
+  .cal .cell{aspect-ratio:1/1; border-radius:9px; display:flex; flex-direction:column; align-items:center; justify-content:center; font-size:13px; cursor:pointer; border:1px solid transparent; background:var(--bg);}
+  .cal .cell.blank{background:transparent; cursor:default;}
+  .cal .cell.today{border-color:var(--accent);}
+  .cal .cell.sel{background:var(--accent); color:#fff;}
+  .cal .cell .dot{width:5px; height:5px; border-radius:50%; background:var(--accent); margin-top:3px;}
+  .cal .cell.sel .dot{background:#fff;}
+  .sched{position:relative; margin-top:8px; cursor:pointer;}
+  .sched-hline{position:absolute; left:44px; right:0; border-top:1px dashed var(--line);}
+  .sched-hlabel{position:absolute; left:0; transform:translateY(-50%); font-size:11px; color:var(--hint);}
+  .sched-ev{position:absolute; left:48px; right:2px; border-radius:8px; padding:3px 8px; font-size:12px; line-height:1.35; overflow:hidden; cursor:pointer; box-shadow:0 1px 2px rgba(0,0,0,.08); box-sizing:border-box;}
+  .sched-ev.plan{background:#eef1f0; color:var(--text); border-left:3px solid var(--muted);}
+  .sched-ev.done{background:var(--accent-soft); color:var(--accent-text); border-left:3px solid var(--accent);}
+  .sched-ev b{font-weight:700;}
+  /* タブバー */
+  .tabbar{position:fixed; left:0; right:0; bottom:0; z-index:60; background:var(--surface); border-top:1px solid var(--line); display:flex; max-width:480px; margin:0 auto;}
+  .tabbar button{flex:1; border:none; background:none; padding:8px 0 10px; font-size:11px; color:var(--muted); cursor:pointer; display:flex; flex-direction:column; align-items:center; gap:2px;}
+  .tabbar button .ic{font-size:20px;}
+  .tabbar button.on{color:var(--accent-text);}
+  /* シート（下から出るフォーム） */
+  .overlay{position:fixed; inset:0; background:rgba(0,0,0,.35); display:none; z-index:200; align-items:flex-end;}
+  .overlay.show{display:flex;}
+  .sheet{background:var(--surface); width:100%; max-width:480px; margin:0 auto; border-radius:18px 18px 0 0; max-height:90vh; overflow:auto; padding:8px 16px 28px;}
+  .sheet-handle{width:38px; height:4px; background:var(--line); border-radius:3px; margin:6px auto 12px;}
+  .sheet-title{font-size:16px; font-weight:700; margin-bottom:10px;}
+  /* セグメント */
+  .seg-wrap{display:flex; background:var(--bg); border-radius:12px; padding:3px;}
+  .seg{flex:1; border:none; background:none; padding:10px; border-radius:9px; font-size:15px; font-weight:700; color:var(--muted); cursor:pointer;}
+  .seg.on{background:var(--surface); color:var(--accent-text); box-shadow:0 1px 3px rgba(0,0,0,.1);}
+  /* 料金・チェック行 */
+  .price-row{display:flex; gap:6px; margin-top:6px; align-items:center;}
+  .price-row .pn{flex:2;} .price-row .pp{flex:1;}
+  .price-row .px{flex:0 0 40px; height:44px; border:1px solid var(--line); background:var(--surface); border-radius:10px; color:var(--muted); font-size:18px; cursor:pointer;}
+  .ba-row{border:1px solid var(--line); border-radius:12px; padding:10px 12px; margin-bottom:8px;}
+  .ba-row.on{border-color:var(--accent); background:var(--accent-soft);}
+  .ba-row label.chk{display:flex; align-items:center; gap:8px; font-size:15px; font-weight:600; cursor:pointer;}
+  .ba-row .chk input{width:20px; height:20px;}
+  .toast{position:fixed; left:50%; bottom:80px; transform:translateX(-50%) translateY(10px); background:#1f2624; color:#fff; font-size:14px; font-weight:600; padding:11px 18px; border-radius:22px; box-shadow:0 4px 16px rgba(0,0,0,.25); opacity:0; transition:opacity .25s, transform .25s; pointer-events:none; z-index:9999; max-width:90%; text-align:center;}
+  .toast.show{opacity:1; transform:translateX(-50%) translateY(0);}
+  .guide-step{display:flex; gap:10px; align-items:flex-start; padding:8px 0; border-top:1px solid #cbe7da;}
+  .guide-step .gnum{flex:0 0 26px; height:26px; border-radius:50%; background:var(--accent); color:#fff; font-weight:700; display:flex; align-items:center; justify-content:center; font-size:14px;}
+  .guide-step b{font-size:14px;}
+  .center-narrow{max-width:400px; margin:0 auto; padding:24px 18px;}
+  h1.brand{font-size:20px; text-align:center; margin:24px 0 4px;}
+</style>
+</head>
+<body>
+<div class="wrap" id="app"><div class="center-narrow"><div class="card">読み込み中…</div></div></div>
+<div class="overlay" id="overlay" onclick="if(event.target===this)closeSheet()"><div class="sheet"><div class="sheet-handle"></div><div id="sheetBody"></div></div></div>
+
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+<script>
+/* ===== 接続設定（このプロジェクト専用） ===== */
+var SUPABASE_URL = "https://dhgjaxhhdyxplnmubmvg.supabase.co";
+var SUPABASE_KEY = "sb_publishable_l1en0JjWFODzDm5VtnvpHg_fZDfmJ4K";
+var sb = supabase.createClient(SUPABASE_URL, SUPABASE_KEY);
+
+var APP=document.getElementById("app");
+var ME=null, PROFILE=null;
+var CL=[], BK=[], RC=[];      // 顧客 / 予約 / 売上
+var TAB="today";
+
+function esc(s){ return (s==null?"":String(s)).replace(/[&<>"]/g,function(c){return {"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;"}[c];}); }
+function el(id){ return document.getElementById(id); }
+function yen(n){ return "¥"+(Number(n)||0).toLocaleString(); }
+function showMsg(t,k){ var m=el("m"); if(m) m.innerHTML='<div class="msg '+(k||"err")+'">'+esc(t)+'</div>'; }
+
+/* ===== 日付ヘルパ ===== */
+function pad(n){ return String(n).padStart(2,"0"); }
+function nowHM(){ var d=new Date(); return pad(d.getHours())+":"+pad(d.getMinutes()); }
+function todayISO(){ var d=new Date(); return d.getFullYear()+"-"+pad(d.getMonth()+1)+"-"+pad(d.getDate()); }
+function curMonth(){ var d=new Date(); return d.getFullYear()+"-"+pad(d.getMonth()+1); }
+function shiftMonth(ym,delta){ var p=ym.split("-"); var d=new Date(+p[0],+p[1]-1+delta,1); return d.getFullYear()+"-"+pad(d.getMonth()+1); }
+var WK=["日","月","火","水","木","金","土"];
+function dateLabel(d){ if(!d) return "日付未定"; var p=d.split("-"); if(p.length!==3) return d; var dt=new Date(+p[0],+p[1]-1,+p[2]); return (+p[1])+"月"+(+p[2])+"日（"+WK[dt.getDay()]+"）"; }
+function monthLabel(ym){ var p=ym.split("-"); return (+p[0])+"年"+(+p[1])+"月"; }
+
+/* ===== トースト ===== */
+var toastTimer=null;
+function toast(msg){ var t=el("toast"); if(!t){ t=document.createElement("div"); t.id="toast"; t.className="toast"; document.body.appendChild(t); } t.textContent=msg; t.classList.add("show"); clearTimeout(toastTimer); toastTimer=setTimeout(function(){ t.classList.remove("show"); },2600); }
+
+/* ===== シート（下から出るフォーム） ===== */
+function openSheet(html){ el("sheetBody").innerHTML=html; el("overlay").classList.add("show"); document.querySelector("#overlay .sheet").scrollTop=0; }
+function closeSheet(){ el("overlay").classList.remove("show"); el("sheetBody").innerHTML=""; }
+
+/* ===== 起動 ===== */
+async function boot(){
+  var s=await sb.auth.getSession();
+  ME=s.data.session?s.data.session.user:null;
+  if(!ME){ renderAuth(); return; }
+  await loadProfile();
+  if(!PROFILE){ await ensurePersonalSpace(); await loadProfile(); }
+  if(!PROFILE){ renderAuth(); return; }
+  loadStdMenu();
+  await loadAll();
+  renderApp();
+  subscribeRealtime();
+}
+async function loadProfile(){ var r=await sb.from("profiles").select("*").eq("id",ME.id).maybeSingle(); PROFILE=r.data||null; }
+async function ensurePersonalSpace(){
+  var nm=(ME.user_metadata&&ME.user_metadata.name)?ME.user_metadata.name:((ME.email||"マイ").split("@")[0]);
+  await sb.rpc("create_org_and_join",{ org_name:(nm+"の空間"), display_name:nm });
+}
+async function loadAll(){
+  var a=await sb.from("clients").select("*").order("created_at",{ascending:true});
+  CL=a.error?[]:(a.data||[]);
+  var b=await sb.from("bookings").select("*");
+  BK=b.error?[]:(b.data||[]);
+  var c=await sb.from("records").select("*");
+  RC=c.error?[]:(c.data||[]);
+}
+
+/* ===== ログイン / 新規登録 ===== */
+function setAuthMode(mmode){ var e=el("email"),p=el("pw"),n=el("nm"); if(e)window._ae=e.value; if(p)window._ap=p.value; if(n)window._an=n.value; window._am=mmode; renderAuth(); }
+function renderAuth(){
+  var mode=window._am||"signin", su=(mode==="signup");
+  APP.innerHTML='<div class="center-narrow">'+
+    '<h1 class="brand">訪問美容 楽々アプリ</h1><div class="sub" style="text-align:center;margin-bottom:16px;">予約・顧客・売上まで、これひとつ。<br>訪問美容のためのオールインワン</div>'+
+    '<div class="card">'+
+    '<div class="seg-wrap" style="margin-bottom:12px;">'+
+      '<button class="seg'+(su?"":" on")+'" onclick="setAuthMode(\'signin\')">ログイン</button>'+
+      '<button class="seg'+(su?" on":"")+'" onclick="setAuthMode(\'signup\')">新規登録</button>'+
+    '</div>'+
+    (su?'<div class="hint">お名前</div><input id="nm" placeholder="例：板谷 直澄" value="'+esc(window._an||"")+'">':"")+
+    '<div class="hint" style="margin-top:'+(su?"8px":"0")+';">メールアドレス</div><input id="email" type="email" autocomplete="username" placeholder="you@example.com" value="'+esc(window._ae||"")+'">'+
+    '<div class="hint" style="margin-top:8px;">パスワード</div><input id="pw" type="password" autocomplete="'+(su?"new-password":"current-password")+'" placeholder="6文字以上" value="'+esc(window._ap||"")+'">'+
+    (su?'<div class="warn">⚠️ この<b>メールとパスワード</b>は次回のログインに必要です。必ず控えてください。</div>':"")+
+    '<button class="btn primary" onclick="'+(su?"doSignUp()":"doSignIn()")+'">'+(su?"登録して始める":"ログイン")+'</button>'+
+    '<div id="m"></div>'+
+    '</div></div>';
+}
+async function doSignIn(){
+  var email=el("email").value.trim(), pw=el("pw").value;
+  if(!email||!pw){ showMsg("メールとパスワードを入力してください"); return; }
+  showMsg("ログイン中…","ok");
+  var r=await sb.auth.signInWithPassword({email:email,password:pw});
+  if(r.error){ showMsg("ログインできません："+esc(r.error.message)); return; }
+  ME=r.data.user; window._ae=window._ap=""; boot();
+}
+async function doSignUp(){
+  var name=el("nm").value.trim(), email=el("email").value.trim(), pw=el("pw").value;
+  if(!name){ showMsg("お名前を入力してください"); return; }
+  if(!email||pw.length<6){ showMsg("メールと6文字以上のパスワードを入力してください"); return; }
+  showMsg("登録中…","ok");
+  var r=await sb.auth.signUp({email:email,password:pw,options:{data:{name:name}}});
+  if(r.error){ showMsg("登録エラー："+esc(r.error.message)); return; }
+  if(!r.data.session){ showMsg("確認メールが有効です。Supabaseでメール確認をオフにするか、Add user(Auto Confirm)で作成してください。"); return; }
+  ME=r.data.user; window._ae=window._ap=window._an=""; boot();
+}
+
+/* ===== アプリ本体（上部バー＋タブ） ===== */
+function renderApp(){
+  APP.innerHTML=
+    '<div class="topbar"><div class="t" id="topTitle"></div><button class="gear" onclick="openSettings()">⚙️</button></div>'+
+    '<div class="view" id="view"></div>'+
+    '<div class="tabbar">'+
+      tabBtn("today","🏠","今日")+tabBtn("plan","📅","予定")+tabBtn("clients","👥","顧客")+tabBtn("sales","💰","売上")+
+    '</div>';
+  renderTab();
+}
+function tabBtn(id,ic,label){ return '<button class="'+(TAB===id?"on":"")+'" onclick="switchTab(\''+id+'\')"><span class="ic">'+ic+'</span>'+label+'</button>'; }
+function switchTab(t){ TAB=t; renderApp(); window.scrollTo(0,0); }
+function renderTab(){
+  var titles={today:"今日",plan:"予定",clients:"顧客・施設",sales:"売上"};
+  el("topTitle").textContent=titles[TAB]||"";
+  if(TAB==="today") renderToday();
+  else if(TAB==="plan") renderPlan();
+  else if(TAB==="clients") renderClients();
+  else if(TAB==="sales") renderSales();
+}
+
+/* ===== 予約・売上の紐付けヘルパ ===== */
+function clientById(id){ return CL.find(function(x){return x.id===id;}); }
+function clientName(id){ var c=clientById(id); return c?c.name:"（未設定）"; }
+/* 追加項目（名前・時間・区分）は既存の photos(jsonb) 列に格納＝SQL不要。{nm,t,pk} */
+function exRec(r){ var e=r&&r.photos; return (e&&typeof e==="object"&&!Array.isArray(e))?e:{}; }
+function recExtra(o){ var x={}; if(o.nm)x.nm=o.nm; if(o.t)x.t=o.t; if(o.pk)x.pk=o.pk; return x; }
+function recordWho(r){ var e=exRec(r); if(r.client_id){ return e.nm?(esc(clientName(r.client_id))+' ／ '+esc(e.nm)):esc(clientName(r.client_id)); } var pk=e.pk?("["+esc(e.pk)+"] "):""; return pk+(e.nm?esc(e.nm):"お客様"); }
+/* DBにまだ無い列があっても保存が止まらないよう、足りない列を外して再試行。
+   ただし捨てた項目は「黙って消さず」に警告する（初期設定SQLの未実行を知らせる） */
+var COLJP={member_name:"お客様名",place_kind:"区分",time:"時間"};
+function stripCol(rows, col){ return (Array.isArray(rows)?rows:[rows]).map(function(o){ var c=Object.assign({},o); delete c[col]; return c; }); }
+function warnDropped(dropped){ if(dropped.length){ toast("⚠️ "+dropped.map(function(c){return COLJP[c]||c;}).join("・")+" は未保存（設定→データ準備のSQLを実行してください）"); } }
+async function insertRecords(rows){
+  var dropped=[];
+  async function go(rw){ var r=await sb.from("records").insert(rw); var m=r.error&&r.error.message&&r.error.message.match(/Could not find the '(\w+)' column/); if(m){ dropped.push(m[1]); return await go(stripCol(rw,m[1])); } return r; }
+  var res=await go(rows); if(!res.error) warnDropped(dropped); return res;
+}
+async function updateRecord(id, data){
+  var dropped=[];
+  async function go(d){ var r=await sb.from("records").update(d).eq("id",id); var m=r.error&&r.error.message&&r.error.message.match(/Could not find the '(\w+)' column/); if(m){ dropped.push(m[1]); var d2=Object.assign({},d); delete d2[m[1]]; return await go(d2); } return r; }
+  var res=await go(data); if(!res.error) warnDropped(dropped); return res;
+}
+function isFacility(c){ return c && (c.kind==="施設"||c.kind==="病院"); }
+function recordsForBooking(bid){ return RC.filter(function(r){return r.booking_id===bid;}); }
+
+/* ===== 今日タブ ===== */
+function startAddClient(kind){ TAB="clients"; renderApp(); openClientForm(null, kind||"施設"); }
+function firstRunGuide(){
+  return '<div class="card" style="background:var(--accent-soft);border-color:#cbe7da;">'+
+    '<div style="font-weight:700;font-size:17px;">ようこそ！🎉</div>'+
+    '<div class="muted" style="margin:4px 0 12px;">訪問美容の<b>予約・顧客・売上</b>を、これひとつで。<br>難しい準備はいりません。気軽に始めましょう。</div>'+
+    '<div class="guide-step"><span class="gnum">1</span><div><b>お客様・施設を登録</b><div class="muted">よく行く先やお客様。あとからでもOK。</div></div></div>'+
+    '<div class="guide-step"><span class="gnum">2</span><div><b>予約を作る</b><div class="muted">訪問の予定を入れます（任意）。</div></div></div>'+
+    '<div class="guide-step"><span class="gnum">3</span><div><b>施術を記録</b><div class="muted">施術したら料金を記録。売上に自動で集計。</div></div></div>'+
+    '</div>'+
+    '<div class="sec">まずはここから（どれでもOK）</div>'+
+    '<button class="btn primary" onclick="openQuickRecord()">🏃 とりあえず使ってみる</button>'+
+    '<button class="btn ghost accent" onclick="openClientForm(null,\'個人\')">🧑 新規のお客様を登録</button>'+
+    '<button class="btn ghost accent" onclick="openClientForm(null,\'施設\')">🏢 施設・訪問先を登録</button>'+
+    '<button class="btn ghost" onclick="openHelp()">❓ 詳しい使い方を見る</button>';
+}
+function renderToday(){
+  var v=el("view"); var tISO=todayISO();
+  if(!CL.length && !RC.length && !BK.length){ v.innerHTML=firstRunGuide(); return; }   // 完全な初回のみ案内
+  var todays=dayTimeline(tISO);
+  // 今月サマリ
+  var recsM=RC.filter(function(r){return (r.date||"").slice(0,7)===curMonth();});
+  var sumM=recsM.reduce(function(a,r){return a+(r.amount||0);},0);
+  var html='<div class="card" style="background:var(--accent-soft);border-color:#cbe7da;display:flex;justify-content:space-between;align-items:center;">'+
+      '<div><div class="hint" style="margin:0;">'+esc(dateLabel(tISO))+'</div><div style="font-weight:700;font-size:15px;">今月の売上</div></div>'+
+      '<div class="amt" style="font-size:20px;">'+yen(sumM)+'</div></div>';
+  html+='<button class="btn primary" onclick="openPicker(\'recWith\',{title:\'だれの施術を記録しますか？\',allowNew:true})">＋ 今日の施術を記録</button>';
+  html+='<button class="btn ghost accent" onclick="openClientForm(null,\'個人\')">＋ 新しいお客様・施設を登録</button>';
+  html+='<div class="sec">今日の訪問</div>';
+  if(!todays.length){ html+='<div class="list-empty">今日の予定・記録はありません。<br>上のボタンから記録できます。</div>'; }
+  else { todays.forEach(function(it){ html+=timelineItemHtml(it); }); }
+  v.innerHTML=html;
+}
+
+/* ===== その日のタイムスケジュール（時間軸で目視） ===== */
+function hm2min(t){ if(!t) return null; var p=String(t).split(":"); return (+p[0])*60+(+(p[1]||0)); }
+function itDur(it){ return it.kind==="bk" ? (it.b.duration||60) : 30; }   // 記録は30分の目安ブロック
+function dayScheduleHtml(iso){
+  var items=dayTimeline(iso);
+  var timed=items.filter(function(it){return it.t;});
+  var untimed=items.filter(function(it){return !it.t;});
+  var startH=9, endH=18;
+  timed.forEach(function(it){ var m=hm2min(it.t); var sh=Math.floor(m/60); if(sh<startH)startH=sh; var eh=Math.ceil((m+itDur(it))/60); if(eh>endH)endH=eh; });
+  if(endH<=startH) endH=startH+1;
+  var hourH=48, ppm=hourH/60, top0=startH*60, PAD=8;
+  var h='<div class="muted" style="font-size:11px;margin:2px 0 4px;">空いた時間をタップすると、その時刻に追加できます</div>';
+  h+='<div class="sched" data-start="'+startH+'" style="height:'+((endH-startH)*hourH+PAD*2)+'px;" onclick="schedClick(event,\''+iso+'\')">';
+  for(var hh=startH; hh<=endH; hh++){ var y=(hh-startH)*hourH+PAD; h+='<div class="sched-hline" style="top:'+y+'px;"></div><div class="sched-hlabel" style="top:'+y+'px;">'+pad(hh)+':00</div>'; }
+  timed.forEach(function(it){
+    var m=hm2min(it.t), top=(m-top0)*ppm+PAD, hgt=Math.max(itDur(it)*ppm, 34);
+    var isBk=it.kind==="bk";
+    var done=isBk?recordsForBooking(it.b.id).length>0:true;
+    var label=isBk?esc(clientName(it.b.client_id)):recordWho(it.r);
+    var sub=isBk?(it.b.duration?it.b.duration+'分':''):(esc(it.r.menu||'')+(it.r.amount?'　'+yen(it.r.amount):''));
+    var onclick=isBk?"openBookingForm('"+it.b.id+"')":"openRecordForm('"+it.r.id+"')";
+    h+='<div class="sched-ev '+(done?"done":"plan")+'" style="top:'+top+'px;height:'+hgt+'px;" onclick="event.stopPropagation();'+onclick+'">'+
+      '<b>'+esc(it.t)+'</b> '+label+(sub?'<div style="opacity:.8;">'+sub+'</div>':'')+'</div>';
+  });
+  h+='</div>';
+  if(untimed.length){
+    h+='<div class="hint" style="margin-top:12px;">時間未設定</div>';
+    untimed.forEach(function(it){ h+=timelineItemHtml(it); });
+  }
+  return h;
+}
+/* 空き時間タップ→その時刻に予約/施術を追加 */
+function schedClick(ev, iso){
+  var sched=ev.currentTarget; var rect=sched.getBoundingClientRect();
+  var startH=+sched.getAttribute("data-start")||9;
+  var y=ev.clientY-rect.top-8; if(y<0)y=0;              // PAD=8
+  var min=startH*60 + y/(48/60); min=Math.round(min/15)*15;   // 15分単位
+  var t=pad(Math.floor(min/60))+":"+pad(min%60);
+  openNewAt(iso, t);
+}
+function openNewAt(iso, t){
+  window._newAt={iso:iso, t:t};
+  openSheet('<div class="sheet-title">'+esc(dateLabel(iso))+'　'+esc(t)+'</div>'+
+    '<div class="muted" style="margin-bottom:8px;">この時間に追加します。</div>'+
+    '<button class="btn primary" onclick="newBookingAt()">＋ 予約を作る</button>'+
+    '<button class="btn ghost accent" onclick="newRecordAt()">💴 施術を記録</button>'+
+    '<button class="btn ghost" onclick="closeSheet()">キャンセル</button>');
+}
+function newBookingAt(){ openPicker('bkAtPick',{title:'予約する施設・お客様を選ぶ',allowNew:true}); }
+function bkAtPick(id){ var a=window._newAt||{}; openBookingForm(null,{client_id:id, date:a.iso, time:a.t}); }
+function newRecordAt(){ openPicker('rcAtPick',{title:'だれの施術を記録しますか？',allowNew:true}); }
+function rcAtPick(id){ var a=window._newAt||{}; var c=clientById(id); if(isFacility(c)) openFacilityBatch(id,{date:a.iso}); else openRecordForm(null,{client_id:id, date:a.iso, time:a.t}); }
+
+/* ===== 予約＋記録を「その日」に束ねる共通処理 ===== */
+function dayTimeline(iso){
+  return BK.filter(function(b){return b.date===iso;}).map(function(b){return {t:b.time||"",kind:"bk",b:b};})
+    .concat(RC.filter(function(r){return r.date===iso && !r.booking_id;}).map(function(r){return {t:exRec(r).t||"",kind:"rc",r:r};}))
+    .sort(function(a,b){return (a.t||"").localeCompare(b.t||"");});
+}
+function timelineItemHtml(it){
+  if(it.kind==="bk"){
+    var b=it.b; var recs=recordsForBooking(b.id); var done=recs.length>0;
+    var tot=recs.reduce(function(a,r){return a+(r.amount||0);},0);
+    return '<div class="item"><div class="top">'+
+      '<div><div class="name">'+(b.time?esc(b.time)+'　':'')+esc(clientName(b.client_id))+'</div>'+
+        (b.memo?'<div class="meta">📝 '+esc(b.memo)+'</div>':"")+
+        (done?'<div class="meta">💴 '+recs.length+'件　'+yen(tot)+'</div>':"")+'</div>'+
+      '<span class="pill '+(done?"done":"plan")+'">'+(done?"入力済":"予定")+'</span></div>'+
+      '<div class="row" style="margin-top:10px;"><button class="btn '+(done?"ghost accent":"primary")+' sm" onclick="recFromBooking(\''+b.id+'\')">'+(done?"施術を追加/確認":"▶ 施術を記録")+'</button>'+
+        '<button class="btn ghost sm" onclick="openBookingForm(\''+b.id+'\')">予約を編集</button></div>'+
+      '</div>';
+  }
+  var r=it.r;
+  return '<div class="item" onclick="openRecordForm(\''+r.id+'\')"><div class="top">'+
+    '<div><div class="name">'+(exRec(r).t?esc(exRec(r).t)+'　':'')+recordWho(r)+'</div>'+
+      '<div class="meta">✂️ '+esc(r.menu||"施術")+'　'+yen(r.amount)+(r.note?'　📝 '+esc(r.note):"")+'</div></div>'+
+    '<span class="pill done">記録済</span></div></div>';
+}
+
+/* ===== 予定タブ（カレンダー） ===== */
+var PLAN_MONTH=null, PLAN_SEL=null;
+function planSelect(iso){ PLAN_SEL=iso; renderPlan(); }
+function planMonth(d){ PLAN_MONTH=shiftMonth(PLAN_MONTH||curMonth(), d); renderPlan(); }
+function dateHasEntries(iso){ return BK.some(function(b){return b.date===iso;}) || RC.some(function(r){return r.date===iso && !r.booking_id;}); }
+function renderPlan(){
+  var v=el("view");
+  if(!PLAN_MONTH) PLAN_MONTH=curMonth();
+  if(!PLAN_SEL) PLAN_SEL=todayISO();
+  var ym=PLAN_MONTH, p=ym.split("-"), first=new Date(+p[0],+p[1]-1,1).getDay(), days=new Date(+p[0],+p[1],0).getDate();
+  var html='<button class="btn primary" onclick="openPicker(\'bkWith\',{title:\'予約する施設・お客様を選ぶ\',allowNew:true})">＋ 予約を作る</button>';
+  // カレンダー
+  html+='<div class="card">'+
+    '<div class="row" style="align-items:center;"><button class="btn ghost sm" style="flex:0 0 44px;" onclick="planMonth(-1)">‹</button>'+
+      '<div style="text-align:center;font-weight:700;">'+esc(monthLabel(ym))+'</div>'+
+      '<button class="btn ghost sm" style="flex:0 0 44px;" onclick="planMonth(1)">›</button></div>'+
+    '<div class="cal">'+["日","月","火","水","木","金","土"].map(function(w){return '<div class="wd">'+w+'</div>';}).join("");
+  for(var i=0;i<first;i++){ html+='<div class="cell blank"></div>'; }
+  for(var d=1;d<=days;d++){
+    var iso=ym+"-"+pad(d);
+    var cls="cell"+(iso===todayISO()?" today":"")+(iso===PLAN_SEL?" sel":"");
+    html+='<div class="'+cls+'" onclick="planSelect(\''+iso+'\')">'+d+(dateHasEntries(iso)?'<span class="dot"></span>':"")+'</div>';
+  }
+  html+='</div></div>';
+  // 選択日のタイムスケジュール（時間軸で目視）
+  html+='<div class="sec">'+esc(dateLabel(PLAN_SEL))+' の予定</div>';
+  html+=dayScheduleHtml(PLAN_SEL);
+  v.innerHTML=html;
+}
+
+/* ===== 顧客タブ ===== */
+function renderClients(){
+  var v=el("view");
+  var html='<div class="row"><button class="btn primary" onclick="openClientForm(null,\'個人\')">＋ 個人</button><button class="btn primary" onclick="openClientForm(null,\'施設\')">＋ 施設・訪問先</button></div>'+
+    '<input id="clSearch" placeholder="🔍 名前で探す" style="margin-top:10px;" oninput="renderClientList()">'+
+    '<div id="clList" style="margin-top:6px;"></div>';
+  v.innerHTML=html; renderClientList();
+}
+function renderClientList(){
+  var box=el("clList"); if(!box) return;
+  var q=(el("clSearch")&&el("clSearch").value.trim())||"";
+  var groups=[["施設","🏢 施設・訪問先"],["病院","🏥 病院"],["個人","🧑 個人"]];
+  var html="";
+  groups.forEach(function(g){
+    var items=CL.filter(function(c){return (c.kind||"個人")===g[0] && (!q||(c.name||"").indexOf(q)>=0);});
+    if(!items.length) return;
+    html+='<div class="sec">'+g[1]+'（'+items.length+'）</div>';
+    items.forEach(function(c){
+      var pl=Array.isArray(c.price_list)?c.price_list:[];
+      var plTxt=pl.map(function(p){return esc(p.name)+" "+yen(p.price);}).join(" / ");
+      html+='<div class="item"><div class="top"><div>'+
+        '<div class="name">'+esc(c.name)+'</div>'+
+        (c.address?'<div class="meta">📍 '+esc(c.address)+'</div>':"")+
+        (c.rules?'<div class="rules">⚠️ '+esc(c.rules)+'</div>':"")+
+        (plTxt?'<div class="meta">💴 '+plTxt+'</div>':"")+'</div></div>'+
+        '<div class="row" style="margin-top:10px;">'+
+          '<button class="btn ghost sm" style="width:auto;" onclick="openClientForm(\''+c.id+'\')">編集</button>'+
+          '<button class="btn ghost accent sm" style="width:auto;" onclick="bkWith(\''+c.id+'\')">📅 予約</button>'+
+          '<button class="btn ghost accent sm" style="width:auto;" onclick="recWith(\''+c.id+'\')">💴 施術</button>'+
+        '</div></div>';
+    });
+  });
+  if(!html) html='<div class="list-empty">まだ登録がありません。<br>契約先の施設や、よく行くお客様を登録しておきましょう。</div>';
+  box.innerHTML=html;
+}
+
+/* ===== 売上タブ ===== */
+var SALES_MONTH=null;
+function renderSales(){
+  var v=el("view"); if(!SALES_MONTH) SALES_MONTH=curMonth();
+  var recs=RC.filter(function(r){return (r.date||"").slice(0,7)===SALES_MONTH;})
+    .sort(function(a,b){return (b.date||"").localeCompare(a.date||"");});
+  var tot=recs.reduce(function(a,r){return a+(r.amount||0);},0);
+  var html='<div class="card" style="background:var(--accent-soft);border-color:#cbe7da;">'+
+    '<div class="row" style="align-items:center;">'+
+      '<button class="btn ghost sm" style="flex:0 0 44px;" onclick="salesMonth(-1)">‹</button>'+
+      '<div style="text-align:center;font-weight:700;">'+esc(monthLabel(SALES_MONTH))+'</div>'+
+      '<button class="btn ghost sm" style="flex:0 0 44px;" onclick="salesMonth(1)">›</button>'+
+    '</div>'+
+    '<div style="display:flex;justify-content:space-between;align-items:center;margin-top:8px;border-top:1px solid #cbe7da;padding-top:8px;">'+
+      '<span style="font-weight:700;">売上合計（'+recs.length+'件）</span><span class="amt" style="font-size:20px;">'+yen(tot)+'</span></div>'+
+    '</div>';
+  if(!recs.length){ html+='<div class="list-empty">この月の売上はまだありません。</div>'; v.innerHTML=html; return; }
+  var lastD="";
+  recs.forEach(function(r){
+    if(r.date!==lastD){ html+='<div class="sec">📅 '+esc(dateLabel(r.date))+'</div>'; lastD=r.date; }
+    var who=recordWho(r);
+    html+='<div class="item" onclick="openRecordForm(\''+r.id+'\')"><div class="top">'+
+      '<div><div class="name">'+who+'</div>'+
+        '<div class="meta">'+(exRec(r).t?'🕐 '+esc(exRec(r).t)+'　':'')+'✂️ '+esc(r.menu||"（メニュー未記入）")+(r.note?'　📝 '+esc(r.note):"")+'</div></div>'+
+      '<span class="amt">'+yen(r.amount)+'</span></div></div>';
+  });
+  v.innerHTML=html;
+}
+function salesMonth(d){ SALES_MONTH=shiftMonth(SALES_MONTH||curMonth(),d); renderSales(); }
+
+/* ===== 顧客を選ぶ（シート） ===== */
+function openPicker(onpickFn, opts){
+  opts=opts||{}; window._pickFn=onpickFn; window._pickNew=!!opts.allowNew;
+  var body='<div class="sheet-title">'+esc(opts.title||"施設・お客様を選ぶ")+'</div>'+
+    (opts.allowQuick?'<button class="btn ghost accent" onclick="quickFromPicker()">🏃 顧客登録なしで記録</button>':"")+
+    '<input id="pkSearch" placeholder="🔍 名前で探す" oninput="renderPickList()" style="margin-top:'+(opts.allowQuick?"8px":"0")+';">'+
+    (opts.allowNew?'<button class="btn ghost accent" onclick="pickNew()">➕ 新しい顧客・施設を登録</button>':"")+
+    '<div id="pkList" style="margin-top:8px;"></div>'+
+    '<button class="btn ghost" onclick="closeSheet()">閉じる</button>';
+  openSheet(body); renderPickList();
+}
+function renderPickList(){
+  var box=el("pkList"); if(!box) return;
+  var q=(el("pkSearch")&&el("pkSearch").value.trim())||"";
+  var groups=[["施設","🏢 施設・訪問先"],["病院","🏥 病院"],["個人","🧑 個人"]];
+  var html="";
+  groups.forEach(function(g){
+    var items=CL.filter(function(c){return (c.kind||"個人")===g[0] && (!q||(c.name||"").indexOf(q)>=0);});
+    if(!items.length) return;
+    html+='<div class="sec">'+g[1]+'</div>';
+    items.forEach(function(c){
+      html+='<div class="item" onclick="pickChoose(\''+c.id+'\')"><div class="name">'+esc(c.name)+'</div>'+
+        (c.address?'<div class="meta">📍 '+esc(c.address)+'</div>':"")+'</div>';
+    });
+  });
+  if(!html) html='<div class="list-empty">見つかりません。'+(window._pickNew?'<br>上の「➕新しい顧客・施設を登録」から追加できます。':'')+'</div>';
+  box.innerHTML=html;
+}
+function pickChoose(id){ var fn=window._pickFn; closeSheet(); if(fn&&window[fn]) window[fn](id); }
+function pickNew(){
+  var fn=window._pickFn||"";   // 登録後に続ける処理（予約/記録）
+  openSheet('<div class="sheet-title">新しい顧客・施設を登録</div>'+
+    '<div class="hint">区分</div><div class="seg-wrap" id="pn_kind" style="margin-bottom:8px;">'+
+      ["個人","施設","病院"].map(function(k){return '<button class="seg'+(k==="個人"?" on":"")+'" onclick="cfKind(this)">'+k+'</button>';}).join("")+'</div>'+
+    '<input id="pn_name" placeholder="名前（例：山田 花子 / 〇〇苑）">'+
+    '<div id="m"></div>'+
+    '<button class="btn primary" onclick="pickNewSave(\''+fn+'\')">登録して進む</button>'+
+    '<button class="btn ghost" onclick="closeSheet()">キャンセル</button>');
+  setTimeout(function(){ var n=el("pn_name"); if(n) n.focus(); }, 50);
+}
+async function pickNewSave(fn){
+  var name=el("pn_name").value.trim(); if(!name){ showMsg("名前を入力してください"); return; }
+  var kEl=document.querySelector("#pn_kind .seg.on"); var kind=kEl?kEl.textContent:"個人";
+  var r=await sb.from("clients").insert({ org_id:PROFILE.org_id, kind:kind, name:name, billing:(kind==="個人"?"個別":"一括") }).select().single();
+  if(r.error){ showMsg("登録エラー："+esc(r.error.message)); return; }
+  CL.push(r.data); toast("🆕 「"+name+"」を登録しました");
+  closeSheet(); if(fn&&window[fn]) window[fn](r.data.id);
+}
+function bkWith(id){ openBookingForm(null,{client_id:id}); }
+function recWith(id){ var c=clientById(id); if(isFacility(c)) openFacilityBatch(id,{date:todayISO()}); else openRecordForm(null,{client_id:id,date:todayISO()}); }
+function quickFromPicker(){ closeSheet(); openQuickRecord(); }
+
+/* ===== 登録せず サッと売上記録（決まった顧客がいない人向け） ===== */
+function openQuickRecord(prefill){
+  prefill=prefill||{};
+  var body='<div class="sheet-title">施術をすぐ記録</div>'+
+    '<div class="muted" style="margin-bottom:8px;">お名前を入れると<b>顧客にも自動登録</b>されます。予定・売上にちゃんと積まれます。</div>'+
+    '<div class="hint">区分</div><div class="seg-wrap" id="qr_kind" style="margin-bottom:8px;">'+
+      ["在宅","施設","病院"].map(function(k){return '<button class="seg'+(k==="在宅"?" on":"")+'" onclick="cfKind(this)">'+k+'</button>';}).join("")+'</div>'+
+    '<div class="row"><div><div class="hint">日付</div><input id="qr_date" type="date" value="'+esc(prefill.date||todayISO())+'"></div>'+
+      '<div><div class="hint">時間</div><input id="qr_time" type="time" value="'+esc(prefill.time||nowHM())+'"></div></div>'+
+    '<div class="hint" style="margin-top:8px;">お客様名（任意）</div><input id="qr_name" placeholder="例：〇〇様（空欄でもOK）">'+
+    '<div class="hint" style="margin-top:8px;">メニュー'+(STD_MENU.length?'（標準メニューから選ぶと料金が入ります）':'')+'</div>'+
+    (STD_MENU.length?'<select id="qr_menusel" onchange="qrMenu()">'+menuOptionsFor(null,"")+'</select>':'')+
+    '<input id="qr_menu" placeholder="例：カット"'+(STD_MENU.length?' style="margin-top:6px;"':'')+'>'+
+    '<div class="hint" style="margin-top:8px;">料金（円）</div><input id="qr_amount" type="number" placeholder="0">'+
+    '<div class="hint" style="margin-top:8px;">メモ</div><input id="qr_note" placeholder="任意">'+
+    '<div id="m"></div>'+
+    '<button class="btn primary" onclick="saveQuick()">保存</button>'+
+    '<button class="btn ghost" onclick="closeSheet()">キャンセル</button>';
+  openSheet(body);
+}
+async function saveQuick(){
+  var kEl=document.querySelector("#qr_kind .seg.on"); var kind=kEl?kEl.textContent:"在宅";
+  var name=el("qr_name").value.trim();
+  // 名前を入れたら顧客(個人)に自動登録。同名がいれば再利用して紐づける
+  var clientId=null, created=false;
+  if(name){
+    var ex=CL.find(function(c){return (c.kind||"個人")==="個人" && c.name===name;});
+    if(ex){ clientId=ex.id; }
+    else { var cr=await sb.from("clients").insert({org_id:PROFILE.org_id,kind:"個人",name:name,billing:"個別"}).select().single(); if(cr.error){ showMsg("顧客登録エラー："+esc(cr.error.message)); return; } clientId=cr.data.id; created=true; }
+  }
+  var data={ org_id:PROFILE.org_id, client_id:clientId, booking_id:null, member_id:null, staff_id:ME.id,
+    menu:el("qr_menu").value.trim(), amount:Number(el("qr_amount").value)||0,
+    note:el("qr_note").value.trim(), date:el("qr_date").value,
+    photos:recExtra({ nm:(clientId?"":name), t:el("qr_time").value, pk:kind }) };
+  var r=await insertRecords(data);
+  if(r.error){ showMsg("保存エラー："+esc(r.error.message)); return; }
+  closeSheet(); toast(created?("💴 記録し「"+name+"」を顧客に登録しました"):"💴 施術を記録しました"); await loadAll(); renderTab();
+}
+
+/* ===== 予約フォーム ===== */
+function openBookingForm(id, prefill){
+  var b=id?(BK.find(function(x){return x.id===id;})||{}):(prefill||{});
+  var c=clientById(b.client_id)||{};
+  var body='<div class="sheet-title">'+(id?"予約を編集":"予約を作る")+'</div>'+
+    '<div class="card" style="margin-bottom:10px;padding:10px 12px;"><b>'+esc(c.name||"（顧客未設定）")+'</b>'+(c.address?'<div class="meta">📍 '+esc(c.address)+'</div>':"")+'</div>'+
+    '<input type="hidden" id="bf_client" value="'+esc(b.client_id||"")+'">'+
+    '<div class="hint">日付</div><input id="bf_date" type="date" value="'+esc(b.date||todayISO())+'">'+
+    '<div class="row" style="margin-top:8px;">'+
+      '<div><div class="hint">時間</div><input id="bf_time" type="time" value="'+esc(b.time||"10:00")+'"></div>'+
+      '<div><div class="hint">所要(分)</div><input id="bf_dur" type="number" step="15" value="'+(b.duration||60)+'"></div>'+
+    '</div>'+
+    '<div class="hint" style="margin-top:8px;">メモ</div><input id="bf_memo" value="'+esc(b.memo||"")+'" placeholder="任意">'+
+    '<div id="m"></div>'+
+    '<button class="btn primary" onclick="saveBooking(\''+(id||"")+'\')">保存</button>'+
+    (id?'<button class="btn ghost accent" onclick="recFromBooking(\''+id+'\')">💴 この予約の施術を記録</button>':"")+
+    (id?'<button class="btn danger" onclick="delBooking(\''+id+'\')">削除</button>':"")+
+    '<button class="btn ghost" onclick="closeSheet()">キャンセル</button>';
+  openSheet(body);
+}
+async function saveBooking(id){
+  var client=el("bf_client").value; if(!client){ showMsg("顧客が未設定です"); return; }
+  var data={ org_id:PROFILE.org_id, client_id:client, date:el("bf_date").value, time:(el("bf_time").value||"10:00"),
+    duration:Number(el("bf_dur").value)||0, staff_ids:[ME.id], memo:el("bf_memo").value.trim() };
+  var r=id?await sb.from("bookings").update(data).eq("id",id):await sb.from("bookings").insert(data);
+  if(r.error){ showMsg("保存エラー："+esc(r.error.message)); return; }
+  closeSheet(); toast("📅 予約を保存しました"); await reloadBookings();
+}
+async function delBooking(id){
+  if(!confirm("この予約を削除しますか？")) return;
+  var r=await sb.from("bookings").delete().eq("id",id);
+  if(r.error){ showMsg("削除エラー："+esc(r.error.message)); return; }
+  closeSheet(); toast("🗑 予約を削除しました"); await reloadBookings();
+}
+function recFromBooking(bid){
+  var b=BK.find(function(x){return x.id===bid;}); if(!b) return;
+  var c=clientById(b.client_id);
+  if(isFacility(c)) openFacilityBatch(b.client_id,{date:b.date,booking_id:b.id});
+  else openRecordForm(null,{client_id:b.client_id,date:b.date,booking_id:b.id});
+}
+
+/* ===== 売上（個人・単体） ===== */
+/* 標準メニュー（マイ料金表）＝この端末に保存。お客様ごとの料金表があればそちら優先 */
+var STD_MENU=[];
+function loadStdMenu(){ try{ STD_MENU=JSON.parse(localStorage.getItem("stdmenu_"+(ME&&ME.id))||"[]"); }catch(e){ STD_MENU=[]; } if(!Array.isArray(STD_MENU)) STD_MENU=[]; }
+function usedMenus(){   // 過去に記録したメニューを候補化（メニュー名ごとに最新の料金）
+  var recs=RC.slice().sort(function(a,b){return (b.date||"").localeCompare(a.date||"");});
+  var seen={}, out=[];
+  recs.forEach(function(r){ var m=(r.menu||"").trim(); if(!m||seen[m]) return; seen[m]=true; out.push({name:m, price:r.amount||0}); });
+  return out;
+}
+function priceListFor(clientId){
+  var c=clientById(clientId);
+  if(c&&Array.isArray(c.price_list)&&c.price_list.length) return c.price_list;   // 顧客個別の料金表
+  if(STD_MENU&&STD_MENU.length) return STD_MENU;                                  // 標準メニュー
+  return usedMenus();                                                             // 過去の記録から自動
+}
+function menuOptionsFor(clientId, selMenu){
+  var opts='<option value="">（自由入力）</option>';
+  priceListFor(clientId).forEach(function(p){ opts+='<option value="'+esc(p.name)+'" data-price="'+(p.price||0)+'"'+(p.name===selMenu?" selected":"")+'>'+esc(p.name)+' '+yen(p.price)+'</option>'; });
+  return opts;
+}
+function openRecordForm(id, prefill){
+  var rec=id?(RC.find(function(x){return x.id===id;})||{}):(prefill||{});
+  var c=clientById(rec.client_id)||{};
+  var hasPl=priceListFor(rec.client_id).length;   // お客様の料金表 or 標準メニューがあれば選択式
+  var body='<div class="sheet-title">'+(id?"施術を編集":"施術を記録")+'</div>'+
+    '<div class="card" style="margin-bottom:10px;padding:10px 12px;"><b>'+esc(c.name||"（顧客）")+'</b>'+
+      (exRec(rec).nm?'<div class="meta">👤 '+esc(exRec(rec).nm)+'</div>':"")+'</div>'+
+    '<input type="hidden" id="rf_client" value="'+esc(rec.client_id||"")+'">'+
+    '<input type="hidden" id="rf_booking" value="'+esc(rec.booking_id||"")+'">'+
+    '<input type="hidden" id="rf_mid" value="'+esc(rec.member_id||"")+'">'+
+    '<input type="hidden" id="rf_mname" value="'+esc(exRec(rec).nm||"")+'">'+
+    '<input type="hidden" id="rf_pk" value="'+esc(exRec(rec).pk||"")+'">'+
+    '<div class="row"><div><div class="hint">日付</div><input id="rf_date" type="date" value="'+esc(rec.date||todayISO())+'"></div>'+
+      '<div><div class="hint">時間</div><input id="rf_time" type="time" value="'+esc(rec.time||exRec(rec).t||nowHM())+'"></div></div>'+
+    '<div class="hint" style="margin-top:8px;">メニュー'+(hasPl?'（料金表から選ぶと料金が入ります）':'')+'</div>'+
+    (hasPl?'<select id="rf_menusel" onchange="rfMenu()">'+menuOptionsFor(rec.client_id, rec.menu)+'</select>':'')+
+    '<input id="rf_menu" value="'+esc(rec.menu||"")+'" placeholder="メニュー（例：カット）" style="margin-top:'+(hasPl?'6px':'0')+';">'+
+    '<div class="hint" style="margin-top:8px;">料金（円）</div><input id="rf_amount" type="number" value="'+(rec.amount||"")+'" placeholder="0">'+
+    '<div class="hint" style="margin-top:8px;">メモ・カルテ</div><input id="rf_note" value="'+esc(rec.note||"")+'" placeholder="任意">'+
+    '<div id="m"></div>'+
+    '<button class="btn primary" onclick="saveRecord(\''+(id||"")+'\')">保存</button>'+
+    (id?'<button class="btn danger" onclick="delRecord(\''+id+'\')">削除</button>':"")+
+    '<button class="btn ghost" onclick="closeSheet()">キャンセル</button>';
+  openSheet(body);
+}
+function rfMenu(){ var sel=el("rf_menusel"); var opt=sel.options[sel.selectedIndex]; if(!opt||!opt.value) return; el("rf_menu").value=opt.value; var p=opt.getAttribute("data-price"); if(p!=null) el("rf_amount").value=p; }
+function qrMenu(){ var sel=el("qr_menusel"); var opt=sel.options[sel.selectedIndex]; if(!opt||!opt.value) return; el("qr_menu").value=opt.value; var p=opt.getAttribute("data-price"); if(p!=null) el("qr_amount").value=p; }
+async function saveRecord(id){
+  var client=el("rf_client").value||null;   // 顧客なし（その場記録）も保存OK。名前はphotos.nmに残る
+  var data={ org_id:PROFILE.org_id, client_id:client, booking_id:el("rf_booking").value||null,
+    member_id:el("rf_mid").value||null, staff_id:ME.id,
+    menu:el("rf_menu").value.trim(), amount:Number(el("rf_amount").value)||0,
+    note:el("rf_note").value.trim(), date:el("rf_date").value,
+    photos:recExtra({nm:el("rf_mname").value, t:el("rf_time").value, pk:el("rf_pk").value}) };
+  var r=id?await updateRecord(id,data):await insertRecords(data);
+  if(r.error){ showMsg("保存エラー："+esc(r.error.message)); return; }
+  closeSheet(); toast("💴 施術を記録しました"); await reloadRecords();
+}
+async function delRecord(id){
+  if(!confirm("この売上・カルテを削除しますか？")) return;
+  var r=await sb.from("records").delete().eq("id",id);
+  if(r.error){ showMsg("削除エラー："+esc(r.error.message)); return; }
+  closeSheet(); toast("🗑 削除しました"); await reloadRecords();
+}
+
+/* ===== 施設：その日の売上まとめ入力 ===== */
+async function openFacilityBatch(clientId, opts){
+  opts=opts||{}; var c=clientById(clientId)||{}; var iso=opts.date||todayISO();
+  window._batch={ clientId:clientId, bookingId:opts.booking_id||null };
+  openSheet('<div class="sheet-title">読み込み中…</div>');
+  var rm=await sb.from("members_t").select("*").eq("client_id",clientId).order("created_at",{ascending:true});
+  var roster=rm.error?[]:(rm.data||[]);
+  // 前回の訪問で対応した人＝自動チェック（毎回ゼロ入力にしない）
+  var lr=await sb.from("records").select("member_id,menu,amount,date").eq("client_id",clientId).order("date",{ascending:false}).limit(80);
+  var recs=lr.error?[]:(lr.data||[]); var lastDate=recs.length?recs[0].date:null;
+  var pre={}; recs.forEach(function(r){ if(r.date===lastDate && r.member_id) pre[r.member_id]={menu:r.menu,amount:r.amount}; });
+  var pl=Array.isArray(c.price_list)?c.price_list:[];
+  var rowsHtml=roster.map(function(m){ return batchRow(m,pl,pre[m.id]); }).join("");
+  var body='<div class="sheet-title">'+esc(c.name)+'　'+esc(dateLabel(iso))+'</div>'+
+    '<div class="muted" style="margin-bottom:8px;">その日 <b>対応した人だけ</b> にチェック → まとめて保存。'+(lastDate?'<br>（前回対応した方は自動でチェック済み）':'')+'</div>'+
+    '<div class="hint">日付</div><input id="ba_date" type="date" value="'+esc(iso)+'">'+
+    '<div id="ba_rows" style="margin-top:10px;">'+(rowsHtml||'<div class="muted">名簿が空です。下の「＋利用者を追加」から。</div>')+'</div>'+
+    '<button class="btn ghost accent" onclick="batchAdd()">➕ その場で利用者を追加</button>'+
+    '<div id="m"></div>'+
+    '<button class="btn primary" onclick="saveBatch()">まとめて保存</button>'+
+    '<button class="btn ghost" onclick="closeSheet()">キャンセル</button>';
+  openSheet(body);
+}
+function batchRow(m, pl, pre){
+  var on=!!pre; var selMenu=pre?pre.menu:"";
+  var menuOpts='<option value="">（メニュー）</option>'+pl.map(function(p){ return '<option value="'+esc(p.name)+'" data-price="'+(p.price||0)+'"'+(p.name===selMenu?" selected":"")+'>'+esc(p.name)+' '+yen(p.price)+'</option>'; }).join("");
+  return '<div class="ba-row'+(on?" on":"")+'" data-mid="'+(m.id||"")+'" data-name="'+esc(m.name)+'">'+
+    '<label class="chk"><input type="checkbox" class="ba_chk"'+(on?" checked":"")+' onchange="batchToggle(this)"> <b>'+esc(m.name)+'</b></label>'+
+    '<div class="ba-detail" style="display:'+(on?"block":"none")+';margin-top:8px;">'+
+      '<select class="ba_menu" onchange="batchMenu(this)">'+menuOpts+'</select>'+
+      '<input class="ba_amount" type="number" placeholder="料金（円）" value="'+(pre&&pre.amount!=null?pre.amount:"")+'" style="margin-top:6px;">'+
+    '</div></div>';
+}
+function batchToggle(chk){ var row=chk.closest(".ba-row"); row.querySelector(".ba-detail").style.display=chk.checked?"block":"none"; row.classList.toggle("on",chk.checked); }
+function batchMenu(sel){ var opt=sel.options[sel.selectedIndex]; if(!opt) return; var row=sel.closest(".ba-row"); var p=opt.getAttribute("data-price"); if(p!=null&&p!=="") row.querySelector(".ba_amount").value=p; var chk=row.querySelector(".ba_chk"); if(!chk.checked){ chk.checked=true; batchToggle(chk); } }
+async function batchAdd(){
+  var name=prompt("追加する利用者名を入力してください"); if(!name||!name.trim()) return; name=name.trim();
+  var keep=confirm("この方を名簿にも残しますか？\n（OK＝名簿に残す / キャンセル＝今回だけ）");
+  var mid="";
+  if(keep){ var r=await sb.from("members_t").insert({org_id:PROFILE.org_id,client_id:window._batch.clientId,name:name}).select().single(); if(r.error){ showMsg("追加エラー："+esc(r.error.message)); return; } mid=r.data.id; }
+  var c=clientById(window._batch.clientId)||{}; var pl=Array.isArray(c.price_list)?c.price_list:[];
+  var tmp=document.createElement("div"); tmp.innerHTML=batchRow({id:mid,name:name},pl,{menu:"",amount:""});
+  var node=tmp.firstChild; el("ba_rows").appendChild(node);
+}
+async function saveBatch(){
+  var date=el("ba_date").value; var rows=document.querySelectorAll("#ba_rows .ba-row"); var payload=[];
+  Array.prototype.forEach.call(rows,function(row){
+    if(!row.querySelector(".ba_chk").checked) return;
+    payload.push({ org_id:PROFILE.org_id, client_id:window._batch.clientId, booking_id:window._batch.bookingId||null,
+      member_id:row.getAttribute("data-mid")||null, staff_id:ME.id,
+      menu:row.querySelector(".ba_menu").value.trim(), amount:Number(row.querySelector(".ba_amount").value)||0, date:date,
+      photos:recExtra({nm:row.getAttribute("data-name")||""}) });
+  });
+  if(!payload.length){ showMsg("その日 対応した人にチェックを入れてください"); return; }
+  var r=await insertRecords(payload);
+  if(r.error){ showMsg("保存エラー："+esc(r.error.message)); return; }
+  closeSheet(); toast("💴 "+payload.length+"件の施術を記録しました"); await reloadRecords();
+}
+
+/* ===== 顧客フォーム（＋施設の利用者名簿） ===== */
+function openClientForm(id, presetKind){
+  var c=id?(clientById(id)||{}):{kind:presetKind||"個人"};
+  var pl=Array.isArray(c.price_list)?c.price_list:[];
+  var body='<div class="sheet-title">'+(id?"顧客・施設を編集":"顧客・施設を登録")+'</div>'+
+    '<div class="hint">区分</div><div class="seg-wrap" id="cf_kind" style="margin-bottom:8px;">'+
+      ["個人","施設","病院"].map(function(k){return '<button class="seg'+(k===(c.kind||"個人")?" on":"")+'" onclick="cfKind(this)">'+k+'</button>';}).join("")+'</div>'+
+    '<input id="cf_name" value="'+esc(c.name||"")+'" placeholder="名前（例：〇〇苑 / 山田 花子）">'+
+    '<input id="cf_addr" value="'+esc(c.address||"")+'" placeholder="住所（任意）" style="margin-top:6px;">'+
+    '<input id="cf_phone" value="'+esc(c.phone||"")+'" placeholder="電話（任意）" style="margin-top:6px;">'+
+    '<input id="cf_rules" value="'+esc(c.rules||"")+'" placeholder="注意・ルール（例：13時以降 / P1台）" style="margin-top:6px;">'+
+    '<div class="hint" style="margin-top:10px;">料金表（メニュー・値段）</div>'+
+    '<div id="cf_prices">'+(pl.length?pl.map(function(p){return priceRow(p.name,p.price);}).join(""):priceRow("",""))+'</div>'+
+    '<button class="btn ghost sm" style="width:auto;" onclick="addPriceRow()">＋ メニューを追加</button>'+
+    '<div id="cf_rosterSec" style="display:'+((c.kind==="施設"||c.kind==="病院")?"block":"none")+';">'+
+      '<div class="hint" style="margin-top:14px;">利用者（入居者）の名簿</div>'+
+      '<div class="muted" style="font-size:11px;margin-bottom:4px;">いつもの名簿（候補）。訪問ごとに“その日対応した人”を選びます。入退居は随時ここで直せます。</div>'+
+      (id?'<div id="cf_members"><div class="muted">読み込み中…</div></div>'
+         :'<div id="cf_newmembers">'+newMemberRow("")+'</div><button class="btn ghost sm" style="width:auto;" onclick="addNewMemberRow()">＋ 利用者を追加</button>')+
+    '</div>'+
+    (id?'<div class="hint" style="margin-top:14px;">来店履歴（カルテ）</div>'+clientHistoryHtml(id):'')+
+    '<div id="m"></div>'+
+    '<button class="btn primary" onclick="saveClient(\''+(id||"")+'\')">保存</button>'+
+    (id?'<button class="btn danger" onclick="delClient(\''+id+'\')">削除</button>':"")+
+    '<button class="btn ghost" onclick="closeSheet()">キャンセル</button>';
+  openSheet(body);
+  if(id&&(c.kind==="施設"||c.kind==="病院")) loadRoster(id);
+}
+function clientHistoryHtml(id){
+  var recs=RC.filter(function(r){return r.client_id===id;})
+    .sort(function(a,b){return (b.date||"").localeCompare(a.date||"")||((exRec(b).t||"").localeCompare(exRec(a).t||""));});
+  if(!recs.length) return '<div class="muted" style="font-size:12px;padding:4px 0;">まだ来店履歴はありません。</div>';
+  var total=recs.reduce(function(a,r){return a+(r.amount||0);},0);
+  var h='<div class="muted" style="font-size:12px;margin-bottom:4px;">全'+recs.length+'回・累計 '+yen(total)+'</div>';
+  h+=recs.map(function(r){ var e=exRec(r);
+    return '<div class="item" style="cursor:pointer;" onclick="closeSheet();openRecordForm(\''+r.id+'\')">'+
+      '<div class="name" style="font-size:14px;">'+esc(dateLabel(r.date))+(e.t?'　'+esc(e.t):'')+(e.nm?'　'+esc(e.nm):'')+'</div>'+
+      '<div class="meta">✂️ '+esc(r.menu||"（メニュー未記入）")+'　'+yen(r.amount)+(r.note?'　📝 '+esc(r.note):"")+'</div></div>';
+  }).join("");
+  return h;
+}
+function cfKind(b){
+  var p=b.parentNode; Array.prototype.forEach.call(p.children,function(x){x.classList.remove("on");}); b.classList.add("on");
+  var sec=el("cf_rosterSec"); if(sec){ var k=b.textContent; sec.style.display=(k==="施設"||k==="病院")?"block":"none"; }
+}
+function newMemberRow(name){ return '<div class="price-row"><input class="cf_nm" value="'+esc(name||"")+'" placeholder="利用者名（例：田中 花子）"><button class="px" onclick="this.parentNode.remove()">×</button></div>'; }
+function addNewMemberRow(){ var b=el("cf_newmembers"); if(b) b.insertAdjacentHTML("beforeend", newMemberRow("")); }
+function priceRow(name,price){ return '<div class="price-row"><input class="pn" value="'+esc(name||"")+'" placeholder="メニュー（例：カット）"><input class="pp" type="number" value="'+(price!=null&&price!==""?price:"")+'" placeholder="円"><button class="px" onclick="this.parentNode.remove()">×</button></div>'; }
+function addPriceRow(){ el("cf_prices").insertAdjacentHTML("beforeend", priceRow("","")); }
+function collectPrices(){ var out=[]; Array.prototype.forEach.call(document.querySelectorAll("#cf_prices .price-row"),function(r){ var n=r.querySelector(".pn").value.trim(); var p=Number(r.querySelector(".pp").value)||0; if(n) out.push({name:n,price:p}); }); return out; }
+async function saveClient(id){
+  var name=el("cf_name").value.trim(); if(!name){ showMsg("名前を入力してください"); return; }
+  var kEl=document.querySelector("#cf_kind .seg.on"); var kind=kEl?kEl.textContent:"個人";
+  var data={ org_id:PROFILE.org_id, kind:kind, name:name, address:el("cf_addr").value.trim(), phone:el("cf_phone").value.trim(), rules:el("cf_rules").value.trim(), billing:(kind==="個人"?"個別":"一括"), price_list:collectPrices() };
+  if(id){
+    var r=await sb.from("clients").update(data).eq("id",id);
+    if(r.error){ showMsg("保存エラー："+esc(r.error.message)); return; }
+  } else {
+    var r=await sb.from("clients").insert(data).select().single();
+    if(r.error){ showMsg("保存エラー："+esc(r.error.message)); return; }
+    // 新規施設なら、同じ画面で入れた利用者名簿もまとめて登録
+    if(kind==="施設"||kind==="病院"){
+      var names=[]; Array.prototype.forEach.call(document.querySelectorAll("#cf_newmembers .cf_nm"),function(inp){ var n=inp.value.trim(); if(n) names.push({org_id:PROFILE.org_id,client_id:r.data.id,name:n}); });
+      if(names.length) await sb.from("members_t").insert(names);
+    }
+  }
+  closeSheet(); toast("💾 保存しました"); await reloadClients();
+}
+async function delClient(id){
+  if(!confirm("この顧客・施設を削除しますか？（関連する予約・売上も消えます）")) return;
+  var r=await sb.from("clients").delete().eq("id",id);
+  if(r.error){ showMsg("削除エラー："+esc(r.error.message)); return; }
+  closeSheet(); toast("🗑 削除しました"); await loadAll(); renderTab();
+}
+/* 施設の利用者名簿 */
+async function loadRoster(clientId){
+  var box=el("cf_members"); if(!box) return;
+  var r=await sb.from("members_t").select("*").eq("client_id",clientId).order("created_at",{ascending:true});
+  var rows=r.error?[]:(r.data||[]);
+  var list=rows.map(function(m){ return '<div class="price-row"><input class="pn" value="'+esc(m.name)+'" onchange="rosterRename(\''+m.id+'\',this.value)"><button class="px" onclick="rosterDel(\''+m.id+'\',\''+clientId+'\')">×</button></div>'; }).join("");
+  box.innerHTML=(rows.length?list:'<div class="muted" style="font-size:12px;padding:4px 0;">まだ利用者が登録されていません。</div>')+
+    '<div class="price-row" style="margin-top:8px;"><input id="rm_name" class="pn" placeholder="利用者名（例：田中 花子）"><button class="btn ghost accent sm" style="width:auto;" onclick="rosterAdd(\''+clientId+'\')">追加</button></div>';
+}
+async function rosterAdd(clientId){ var name=el("rm_name").value.trim(); if(!name){ showMsg("利用者名を入力してください"); return; } var r=await sb.from("members_t").insert({org_id:PROFILE.org_id,client_id:clientId,name:name}); if(r.error){ showMsg("追加エラー："+esc(r.error.message)); return; } loadRoster(clientId); }
+async function rosterRename(id,name){ name=(name||"").trim(); if(!name) return; await sb.from("members_t").update({name:name}).eq("id",id); }
+async function rosterDel(id,clientId){ if(!confirm("この利用者を削除しますか？")) return; var r=await sb.from("members_t").delete().eq("id",id); if(r.error){ showMsg("削除エラー："+esc(r.error.message)); return; } loadRoster(clientId); }
+
+/* ===== 部分リロード ===== */
+async function reloadClients(){ var a=await sb.from("clients").select("*").order("created_at",{ascending:true}); CL=a.error?CL:(a.data||[]); renderTab(); }
+async function reloadBookings(){ var b=await sb.from("bookings").select("*"); BK=b.error?BK:(b.data||[]); renderTab(); }
+async function reloadRecords(){ var c=await sb.from("records").select("*"); RC=c.error?RC:(c.data||[]); renderTab(); }
+
+/* ===== 自動更新（Realtime） ===== */
+var RT=null, rtTimer=null, rtFlags={};
+function subscribeRealtime(){
+  if(RT||!PROFILE) return;
+  RT=sb.channel("me-"+PROFILE.org_id)
+    .on("postgres_changes",{event:"*",schema:"public",table:"bookings"},function(){ rtBump("bk"); })
+    .on("postgres_changes",{event:"*",schema:"public",table:"records"},function(){ rtBump("rc"); })
+    .on("postgres_changes",{event:"*",schema:"public",table:"clients"},function(){ rtBump("cl"); })
+    .subscribe();
+}
+function rtBump(f){ rtFlags[f]=1; clearTimeout(rtTimer); rtTimer=setTimeout(async function(){ if(rtFlags.cl){ var a=await sb.from("clients").select("*").order("created_at",{ascending:true}); CL=a.error?CL:(a.data||[]);} if(rtFlags.bk){ var b=await sb.from("bookings").select("*"); BK=b.error?BK:(b.data||[]);} if(rtFlags.rc){ var c=await sb.from("records").select("*"); RC=c.error?RC:(c.data||[]);} rtFlags={}; if(!el("overlay").classList.contains("show")) renderTab(); },500); }
+function unsubscribeRealtime(){ if(RT){ sb.removeChannel(RT); RT=null; } }
+
+/* ===== 使い方・ヘルプ ===== */
+function helpItem(title, body){ return '<div class="card"><div style="font-weight:700;font-size:14px;margin-bottom:4px;">'+title+'</div><div class="muted" style="font-size:13px;line-height:1.7;">'+body+'</div></div>'; }
+function openHelp(){
+  var body='<div class="sheet-title">使い方・ヘルプ</div>'+
+    '<div class="muted" style="margin-bottom:8px;">訪問美容の <b>予約・顧客・売上</b> をこれひとつで管理できます。</div>'+
+    helpItem("① 始め方（3ステップ）","1. <b>顧客・施設を登録</b>（顧客タブ）<br>2. <b>予約を作る</b>（予定タブ／任意）<br>3. <b>施術を記録</b>（今日タブ）→ 料金が<b>売上に自動集計</b>されます。")+
+    helpItem("🏢 施設の使い方","施設を登録する画面で、<b>利用者（入居者）の名簿</b>も一緒に入れられます（あとから編集も可）。<br>訪問したら「施術を記録」で名簿が出るので、<b>その日対応した人だけチェック</b>してまとめて保存。<br>※名簿は候補。前回対応した人は<b>自動でチェック済み</b>になります。入退居は随時直せます。")+
+    helpItem("🏃 すぐ記録（お試し・単発）","初回ガイドの「とりあえず使ってみる」から、顧客を選ばずに施術だけ先に記録できます。記録は予定・売上にちゃんと積まれます。")+
+    helpItem("📅 予約","先の予定も入れられます。予約をタップ→「この予約の施術を記録」で、顧客や日付が引き継がれてラクに記録できます。")+
+    helpItem("💰 売上の見方","売上タブで、月ごとの合計と一覧が見られます。上の ‹ › で月を切り替え。")+
+    helpItem("📱 複数の端末・自動更新","同じアカウントでログインすれば、どの端末でも同じデータ。変更は自動で反映されます（電波がある時）。")+
+    helpItem("🧹 データのリセット","設定 → 「データをすべてリセット」で、自分のデータを全部消せます（元に戻せません）。")+
+    '<button class="btn ghost" onclick="closeSheet()">閉じる</button>';
+  openSheet(body);
+}
+
+/* ===== 標準メニュー（マイ料金表） ===== */
+function openStdMenu(){
+  var body='<div class="sheet-title">標準メニュー（料金表）</div>'+
+    '<div class="muted" style="margin-bottom:8px;">よく使うメニューと料金を登録しておくと、<b>どのお客様の記録でも選べます</b>（施設など個別の料金表を設定した先は、そちらが優先）。</div>'+
+    '<div id="sm_rows">'+(STD_MENU.length?STD_MENU.map(function(p){return priceRow(p.name,p.price);}).join(""):priceRow("",""))+'</div>'+
+    '<button class="btn ghost sm" style="width:auto;" onclick="el(\'sm_rows\').insertAdjacentHTML(\'beforeend\', priceRow(\'\',\'\'))">＋ メニューを追加</button>'+
+    '<div id="m"></div>'+
+    '<button class="btn primary" onclick="saveStdMenuForm()">保存</button>'+
+    '<button class="btn ghost" onclick="closeSheet()">閉じる</button>';
+  openSheet(body);
+}
+function saveStdMenuForm(){
+  var out=[]; Array.prototype.forEach.call(document.querySelectorAll("#sm_rows .price-row"),function(r){ var n=r.querySelector(".pn").value.trim(); var p=Number(r.querySelector(".pp").value)||0; if(n) out.push({name:n,price:p}); });
+  STD_MENU=out; localStorage.setItem("stdmenu_"+ME.id, JSON.stringify(out));
+  closeSheet(); toast("🧾 標準メニューを保存しました");
+}
+
+/* ===== 設定 ===== */
+function openSettings(){
+  var body='<div class="sheet-title">設定</div>'+
+    '<div class="card"><div class="hint">お名前</div><div style="font-weight:700;">'+esc(PROFILE.name||"")+'</div>'+
+      '<div class="hint" style="margin-top:8px;">メール</div><div>'+esc(ME.email||"")+'</div></div>'+
+    '<button class="btn ghost accent" onclick="openStdMenu()">🧾 標準メニュー（料金表）</button>'+
+    '<button class="btn ghost accent" onclick="openHelp()">❓ 使い方・ヘルプ</button>'+
+    '<div class="card"><div class="hint">組織リンク（今後）</div><div class="muted" style="font-size:12px;">サロン等で使う場合、ここに組織コードを入れると情報を共有できるようにする予定です。</div></div>'+
+    '<button class="btn danger" onclick="resetAll()">🧹 自分のデータをすべてリセット</button>'+
+    '<div class="muted" style="font-size:12px;text-align:center;">顧客・予約・施術の記録を全部消します。元に戻せません。</div>'+
+    '<button class="btn ghost" onclick="doSignOut()" style="color:var(--hint);">ログアウト</button>'+
+    '<button class="btn ghost" onclick="closeSheet()">閉じる</button>';
+  openSheet(body);
+}
+async function resetAll(){
+  if(!confirm("⚠️ 自分の【顧客・利用者・予約・売上】をすべて削除します。\n元に戻せません。よろしいですか？")) return;
+  if(!confirm("最終確認：本当に全部削除しますか？")) return;
+  var org=PROFILE.org_id, tables=["records","bookings","members_t","clients"];
+  for(var i=0;i<tables.length;i++){ var r=await sb.from(tables[i]).delete().eq("org_id",org); if(r.error){ alert("リセットエラー："+r.error.message); return; } }
+  await loadAll(); closeSheet(); toast("🧹 リセットしました"); renderTab();
+}
+async function doSignOut(){ unsubscribeRealtime(); await sb.auth.signOut(); ME=null; PROFILE=null; closeSheet(); renderAuth(); }
+
+boot();
+</script>
+</body>
+</html>
