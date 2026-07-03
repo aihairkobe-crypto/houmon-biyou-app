@@ -233,14 +233,14 @@ function renderApp(){
     '<div class="topbar"><div class="t" id="topTitle"></div><button class="gear" onclick="openSettings()">⚙️</button></div>'+
     '<div class="view" id="view"></div>'+
     '<div class="tabbar">'+
-      tabBtn("today","🏠","今日")+tabBtn("plan","📅","予定")+tabBtn("clients","👥","顧客")+tabBtn("sales","💰","売上")+
+      tabBtn("today","🏠","ホーム")+tabBtn("plan","📅","予定")+tabBtn("clients","👥","顧客")+tabBtn("sales","💰","売上")+
     '</div>';
   renderTab();
 }
 function tabBtn(id,ic,label){ return '<button class="'+(TAB===id?"on":"")+'" onclick="switchTab(\''+id+'\')"><span class="ic">'+ic+'</span>'+label+'</button>'; }
 function switchTab(t){ TAB=t; renderApp(); window.scrollTo(0,0); }
 function renderTab(){
-  var titles={today:"今日",plan:"予定",clients:"顧客・施設",sales:"売上"};
+  var titles={today:"ホーム",plan:"予定",clients:"顧客・施設",sales:"売上"};
   el("topTitle").textContent=titles[TAB]||"";
   if(TAB==="today") renderToday();
   else if(TAB==="plan") renderPlan();
