@@ -66,9 +66,11 @@
   .sched-resize::after{content:""; position:absolute; left:50%; bottom:3px; width:22px; height:3px; margin-left:-11px; border-radius:2px; background:rgba(0,0,0,.18);}
   /* タブバー */
   .tabbar{position:fixed; left:0; right:0; bottom:0; z-index:60; background:var(--surface); border-top:1px solid var(--line); display:flex; max-width:480px; margin:0 auto;}
-  .tabbar button{flex:1; border:none; background:none; padding:8px 0 10px; font-size:11px; color:var(--muted); cursor:pointer; display:flex; flex-direction:column; align-items:center; gap:2px;}
+  .tabbar button{position:relative; flex:1; border:none; background:none; padding:8px 0 10px; font-size:11px; color:var(--muted); cursor:pointer; display:flex; flex-direction:column; align-items:center; gap:2px;}
   .tabbar button .ic{font-size:20px;}
-  .tabbar button.on{color:var(--accent-text);}
+  .tabbar button.on{color:var(--accent-text); font-weight:700; background:var(--accent-soft);}
+  .tabbar button.on::before{content:""; position:absolute; top:0; left:22%; right:22%; height:3px; border-radius:0 0 4px 4px; background:var(--accent);}
+  .tabbar button.on .ic{transform:scale(1.12);}
   /* シート（下から出るフォーム） */
   .overlay{position:fixed; inset:0; background:rgba(0,0,0,.35); display:none; z-index:200; align-items:flex-end;}
   .overlay.show{display:flex;}
