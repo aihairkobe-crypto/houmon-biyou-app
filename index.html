@@ -1283,19 +1283,24 @@ function analyzeBulk(){
 }
 function openBulkMap(){
   var gc=window._bulkGC;
-  openSheet('<div class="sheet-title">列の割り当て</div>'+
-    '<div class="muted" style="margin-bottom:8px;">どの列が何かを選んでください（次回から記憶します）。</div>'+
-    '<div class="hint">氏名</div>'+colSelect("bm_name",gc,gc.map.name)+
-    '<div class="hint" style="margin-top:6px;">部屋番号（任意）</div>'+colSelect("bm_room",gc,gc.map.room)+
-    '<div class="hint" style="margin-top:6px;">メニュー（任意）</div>'+colSelect("bm_menu",gc,gc.map.menu)+
-    '<div class="hint" style="margin-top:6px;">料金（任意・空欄は料金表から自動）</div>'+colSelect("bm_amount",gc,gc.map.amount)+
-    '<div class="hint" style="margin-top:6px;">特記・メモ（任意）</div>'+colSelect("bm_note",gc,gc.map.note)+
-    '<div class="hint" style="margin-top:10px;">プレビュー</div><div id="bm_prev"></div>'+
+  openSheet('<div class="sheet-title">取り込む内容の確認</div>'+
+    '<div class="muted" style="margin-bottom:8px;">この内容で取り込みます。よければ下の「取り込む」を押してください。</div>'+
+    '<div id="bm_prev"></div>'+
+    '<button class="btn ghost sm" style="width:auto;margin-top:10px;" onclick="toggleBulkCols()">🔧 名前や料金がずれている時はこちら</button>'+
+    '<div id="bm_cols" style="display:none;margin-top:6px;padding:10px 12px;background:var(--bg);border-radius:10px;">'+
+      '<div class="muted" style="font-size:11px;margin-bottom:6px;">貼り付けた表の「どの列が何か」を選び直せます（次回から記憶）。</div>'+
+      '<div class="hint">氏名</div>'+colSelect("bm_name",gc,gc.map.name)+
+      '<div class="hint" style="margin-top:6px;">部屋番号（任意）</div>'+colSelect("bm_room",gc,gc.map.room)+
+      '<div class="hint" style="margin-top:6px;">メニュー（任意）</div>'+colSelect("bm_menu",gc,gc.map.menu)+
+      '<div class="hint" style="margin-top:6px;">料金（任意）</div>'+colSelect("bm_amount",gc,gc.map.amount)+
+      '<div class="hint" style="margin-top:6px;">特記・メモ（任意）</div>'+colSelect("bm_note",gc,gc.map.note)+
+    '</div>'+
     '<div id="m"></div>'+
-    '<button class="btn primary" onclick="saveBulkMapped()">この割り当てで取り込む</button>'+
+    '<button class="btn primary" onclick="saveBulkMapped()">この内容で取り込む</button>'+
     '<button class="btn ghost" onclick="facilityBulkPaste()">戻る</button>');
   renderBulkPreview();
 }
+function toggleBulkCols(){ var e=el("bm_cols"); if(e) e.style.display=(e.style.display==="none"?"block":"none"); }
 function bulkMapNow(){ var v=function(id){ var e=el(id); return (e&&e.value!=="")?+e.value:null; }; return {name:v("bm_name"),menu:v("bm_menu"),amount:v("bm_amount"),note:v("bm_note"),room:v("bm_room")}; }
 function bulkRowsFrom(gc,mp){
   return gc.body.map(function(r){
