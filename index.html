@@ -1111,6 +1111,7 @@ async function openFacilityBatch(clientId, opts){
         '<input id="ba_bulkamt" type="number" placeholder="料金" style="flex:0 0 90px;">'+
         '<button class="btn primary sm" style="flex:0 0 auto;" onclick="batchApplyAll()">適用</button></div>'+
     '</div>':'')+
+    '<datalist id="baMenuDL">'+pl.map(function(p){ return '<option value="'+esc(p.name)+'"></option>'; }).join("")+'</datalist>'+
     '<div id="ba_rows" style="margin-top:10px;">'+(rowsHtml||'<div class="list-empty">まだ利用者がいません。<br>下の「📋 名簿を貼り付け」か「＋ 利用者を追加」で、この日の人を入れてください。</div>')+'</div>'+
     '<button class="btn ghost accent" onclick="facilityBulkPaste()">📋 名簿を貼り付け（Excelからコピー）</button>'+
     '<button class="btn ghost accent" onclick="batchAdd()">➕ その場で利用者を追加</button>'+
@@ -1129,18 +1130,21 @@ async function clearFacilityRoster(){
 }
 function batchRow(m, pl, pre){
   var on=!!pre; var selMenu=pre?pre.menu:"";
-  var menuOpts='<option value="">（メニュー）</option>'+pl.map(function(p){ return '<option value="'+esc(p.name)+'" data-price="'+(p.price||0)+'"'+(p.name===selMenu?" selected":"")+'>'+esc(p.name)+' '+yen(p.price)+'</option>'; }).join("");
-  // 料金表に無いメニュー（貼り付け等）も選択肢に入れて表示できるように
-  if(selMenu && !pl.some(function(p){return p.name===selMenu;})){ menuOpts+='<option value="'+esc(selMenu)+'" selected>'+esc(selMenu)+'</option>'; }
   var room=pre&&pre.room?pre.room:"";
   return '<div class="ba-row'+(on?" on":"")+'" data-mid="'+(m.id||"")+'" data-name="'+esc(m.name)+'" data-note="'+esc(pre&&pre.note?pre.note:"")+'">'+
     '<label class="chk"><input type="checkbox" class="ba_chk"'+(on?" checked":"")+' onchange="batchToggle(this)"> <b>'+(room?'🚪'+esc(room)+' ':'')+esc(m.name)+'</b></label>'+
     '<div class="ba-detail" style="display:'+(on?"block":"none")+';margin-top:8px;">'+
       '<input class="ba_room" placeholder="部屋番号（任意）" value="'+esc(room)+'">'+
-      '<select class="ba_menu" onchange="batchMenu(this)" style="margin-top:6px;">'+menuOpts+'</select>'+
+      '<input class="ba_menu" list="baMenuDL" onchange="batchMenuInput(this)" placeholder="メニュー（例：カット）" value="'+esc(selMenu)+'" style="margin-top:6px;">'+
       '<input class="ba_amount" type="number" placeholder="料金（円）" value="'+(pre&&pre.amount!=null?pre.amount:"")+'" style="margin-top:6px;">'+
       (pre&&pre.note?'<div class="meta" style="margin-top:6px;">📝 '+esc(pre.note)+'</div>':"")+
     '</div></div>';
+}
+/* メニューを自由入力。料金表に一致すれば料金を自動セット */
+function batchMenuInput(inp){
+  var row=inp.closest(".ba-row"); var c=clientById(window._batch.clientId)||{}; var pl=Array.isArray(c.price_list)?c.price_list:[];
+  var f=pl.find(function(p){return p.name===inp.value.trim();}); if(f && f.price!=null){ row.querySelector(".ba_amount").value=f.price; }
+  var chk=row.querySelector(".ba_chk"); if(inp.value.trim() && !chk.checked){ chk.checked=true; batchToggle(chk); }
 }
 function batchToggle(chk){ var row=chk.closest(".ba-row"); row.querySelector(".ba-detail").style.display=chk.checked?"block":"none"; row.classList.toggle("on",chk.checked); }
 function batchMenu(sel){ var opt=sel.options[sel.selectedIndex]; if(!opt) return; var row=sel.closest(".ba-row"); var p=opt.getAttribute("data-price"); if(p!=null&&p!=="") row.querySelector(".ba_amount").value=p; var chk=row.querySelector(".ba_chk"); if(!chk.checked){ chk.checked=true; batchToggle(chk); } }
