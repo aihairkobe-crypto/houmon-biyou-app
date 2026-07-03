@@ -505,6 +505,31 @@ function dayTimeline(iso){
   });
   return items.sort(function(a,b){return (a.t||"").localeCompare(b.t||"");});
 }
+/* 予約の重なりチェック（一人では同時に対応できない前提。団体＝同施設・同時刻は正常なので除外） */
+function overlapMin(aS,aD,bS,bD){ return aS < bS+bD && bS < aS+aD; }   // 時間帯が重なるか
+function conflictLabel(it){
+  if(it.kind==="bk") return (it.t||"")+"　"+clientName(it.b.client_id);
+  if(it.kind==="fac") return (it.t||"")+"　🏢"+clientName(it.clientId)+"（"+it.recs.length+"名）";
+  return (it.t||"")+"　"+recordWho(it.r);
+}
+function findConflict(o){
+  if(!o.date||!o.time) return null;
+  var start=hm2min(o.time); if(start==null) return null;
+  var dur=Number(o.dur)||30;
+  var items=dayTimeline(o.date);
+  for(var i=0;i<items.length;i++){ var it=items[i]; if(!it.t) continue;
+    if(it.kind==="bk" && it.b && it.b.id===o.exBookingId) continue;                          // 編集中の予約は除外
+    if(it.kind==="rc" && it.r && it.r.id===o.exRecId) continue;                               // 編集中の記録は除外
+    if(it.kind==="fac" && o.clientId && it.clientId===o.clientId && it.t===o.time) continue;  // 同施設・同時刻＝同じ団体
+    var s2=hm2min(it.t); if(s2==null) continue;
+    if(overlapMin(start,dur,s2,itDur(it))) return conflictLabel(it);
+  }
+  return null;
+}
+function confirmIfConflict(o){
+  var c=findConflict(o); if(!c) return true;
+  return confirm("⚠️ この時間は他の予定と重なっています。\n\n既にある予定： "+c+"\n\nこのまま入れますか？");
+}
 /* 施設グループの補助 */
 function menuSummary(recs){ var map={},order=[]; recs.forEach(function(r){ var m=(r.menu||"").trim()||"施術"; if(!(m in map)){map[m]=0;order.push(m);} map[m]++; }); return order.map(function(m){ return map[m]>1?(m+"×"+map[m]):m; }).join("・"); }
 function facGroupRecs(clientId, iso, t){ return RC.filter(function(r){ return r.client_id===clientId && r.date===iso && !r.booking_id && (exRec(r).t||"")===t; }); }
@@ -921,6 +946,7 @@ async function saveQuick(){
   var kEl=document.querySelector("#qr_kind .seg.on"); var kind=kEl?kEl.textContent:"在宅";
   var ckind={"在宅":"個人","施設":"施設","病院":"病院"}[kind]||"個人";   // 区分→顧客の種別
   var name=el("qr_name").value.trim();
+  if(!confirmIfConflict({date:el("qr_date").value, time:el("qr_time").value, dur:Number(el("qr_dur").value)||30})) return;   // 重複チェック（顧客登録の前に）
   var addr=el("qr_addr").value.trim(), phone=el("qr_phone").value.trim(), rules=el("qr_rules").value.trim();
   // 名前を入れたら顧客に自動登録（住所・電話・注意も丸ごと）。同名がいれば再利用し、入れた情報は反映（手修正＝正）
   var clientId=null, created=false;
@@ -970,6 +996,7 @@ async function saveBooking(id){
   var client=el("bf_client").value; if(!client){ showMsg("顧客が未設定です"); return; }
   var data={ org_id:PROFILE.org_id, client_id:client, date:el("bf_date").value, time:(el("bf_time").value||"10:00"),
     duration:Number(el("bf_dur").value)||0, staff_ids:[ME.id], memo:el("bf_memo").value.trim() };
+  if(!confirmIfConflict({date:data.date, time:data.time, dur:data.duration||60, clientId:client, exBookingId:id})) return;   // 重複チェック
   var r=id?await sb.from("bookings").update(data).eq("id",id):await sb.from("bookings").insert(data);
   if(r.error){ showMsg("保存エラー："+esc(r.error.message)); return; }
   // お客様情報（住所・電話）も一緒に更新。住所を変えたら地図の座標キャッシュを消す
@@ -1120,6 +1147,7 @@ async function saveRecord(id){
     menu:el("rf_menu").value.trim(), amount:Number(el("rf_amount").value)||0,
     note:el("rf_note").value.trim(), date:el("rf_date").value,
     photos:recExtra({nm:el("rf_mname").value, t:el("rf_time").value, pk:el("rf_pk").value, dur:Number(el("rf_dur").value)||0, room:(el("rf_room")?el("rf_room").value.trim():""), fee:(el("rf_fee")?Number(el("rf_fee").value)||0:0)}) };
+  if(!confirmIfConflict({date:data.date, time:el("rf_time").value, dur:Number(el("rf_dur").value)||30, clientId:client, exRecId:id})) return;   // 重複チェック
   var r=id?await updateRecord(id,data):await insertRecords(data);
   if(r.error){ showMsg("保存エラー："+esc(r.error.message)); return; }
   // お客様情報（住所・電話・注意）も一緒に更新。住所を変えたら地図の座標キャッシュを消して次回再変換
@@ -1264,6 +1292,7 @@ async function saveBatch(){
       photos:recExtra({nm:row.getAttribute("data-name")||"", room:(row.querySelector(".ba_room")?row.querySelector(".ba_room").value.trim():""), t:time}) });
   });
   if(!payload.length){ showMsg("その日 対応した人にチェックを入れてください"); return; }
+  if(!confirmIfConflict({date:date, time:time, dur:60, clientId:window._batch.clientId})) return;   // 重複チェック（他の予定との重なり。同施設同時刻の団体は除外）
   var r=await insertRecords(payload);
   if(r.error){ showMsg("保存エラー："+esc(r.error.message)); return; }
   // 施設のお客様情報（住所・電話）も反映。住所変更で地図の座標キャッシュを消す
