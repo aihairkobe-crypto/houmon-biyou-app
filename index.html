@@ -1088,15 +1088,19 @@ async function openFacilityBatch(clientId, opts){
   var roster=rm.error?[]:(rm.data||[]);
   window._batch.roster=roster;
   var pl=Array.isArray(c.price_list)?c.price_list:[];
-  // この訪問のリストだけを行として表示（名簿members_tには溜め込まない＝利用者は毎回変わる前提）
-  var rowsHtml="";
+  // 入力途中の下書きを復元＋新規貼り付け分をマージ（画面から離れても消えない）
+  var draft=loadBatchDraft(); var resuming=false; var srcRows=[];
+  if(draft && draft.clientId===clientId){ srcRows=(draft.rows||[]).slice(); resuming=true;
+    iso=draft.date||iso; defTime=draft.time||defTime; if(draft.addr!=null&&opts.addr==null)defAddr=draft.addr; if(draft.phone!=null&&opts.phone==null)defPhone=draft.phone; }
   if(window._batchExtraRows && window._batchExtraRows.length){
-    rowsHtml=window._batchExtraRows.map(function(r){ return batchRow({id:"",name:r.name}, pl, {menu:r.menu||"", amount:(r.amount!=null?r.amount:(r.menu?priceOfMenu(pl,r.menu):null)), note:r.note||"", room:r.room||""}); }).join("");
+    window._batchExtraRows.forEach(function(r){ srcRows.push({name:r.name, mid:"", room:r.room||"", menu:r.menu||"", amount:(r.amount!=null?String(r.amount):(r.menu?String(priceOfMenu(pl,r.menu)||""):"")), note:r.note||"", checked:true}); });
     window._batchExtraRows=null;
   }
+  var rowsHtml=srcRows.map(function(r){ return batchRow({id:r.mid||"",name:r.name}, pl, {menu:r.menu||"", amount:(r.amount!==""&&r.amount!=null?Number(r.amount):null), note:r.note||"", room:r.room||"", checked:r.checked}); }).join("");
   var hasRows=rowsHtml!=="";
   var body='<div class="sheet-title">'+esc(c.name)+'　'+esc(dateLabel(iso))+'</div>'+
-    '<div class="muted" style="margin-bottom:8px;">この日に来る<b>利用者リストを入力</b>（毎回変わってOK）。<b>📋名簿を貼り付け</b>か「＋利用者を追加」で入れて、まとめて保存。保存分は履歴・領収書の元として残ります。</div>'+
+    (resuming?'<div class="msg ok" style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px;">📝 入力途中を復元しました<button class="btn ghost sm" style="width:auto;" onclick="discardBatchDraft()">🗑 破棄して新規</button></div>':'')+
+    '<div class="muted" style="margin-bottom:8px;">この日に来る<b>利用者リストを入力</b>（毎回変わってOK）。<b>📋名簿を貼り付け</b>か「＋利用者を追加」で入れて、まとめて保存。保存分は履歴・領収書の元として残ります。<br>※入力は<b>自動保存</b>。途中で閉じても続きから再開できます。</div>'+
     '<div class="hint">お客様情報（ここで直すと顧客に反映・地図にも使われます）</div>'+
     '<input id="ba_caddr" value="'+esc(defAddr)+'" placeholder="住所（例：神戸市中央区元町通5-7-4-202）">'+
     '<input id="ba_cphone" value="'+esc(defPhone)+'" placeholder="電話（任意）" style="margin-top:6px;">'+
@@ -1120,7 +1124,22 @@ async function openFacilityBatch(clientId, opts){
     (roster.length?'<button class="btn ghost sm" style="width:auto;color:var(--danger);margin-top:6px;" onclick="clearFacilityRoster()">🧹 以前の登録名簿を消す（'+roster.length+'件）</button>':"")+
     '<button class="btn ghost" onclick="closeSheet()">キャンセル</button>';
   openSheet(body);
+  wireBatchAutosave();
 }
+/* ===== 施設一括入力の下書き自動保存（途中で離れても消えない） ===== */
+function batchDraftKey(){ return "batchdraft_"+(ME&&ME.id); }
+function loadBatchDraft(){ try{ return JSON.parse(localStorage.getItem(batchDraftKey())||"null"); }catch(e){ return null; } }
+function clearBatchDraft(){ try{ localStorage.removeItem(batchDraftKey()); }catch(e){} }
+function readBatchRows(){ var rows=[]; Array.prototype.forEach.call(document.querySelectorAll("#ba_rows .ba-row"),function(row){
+  rows.push({ name:row.getAttribute("data-name")||"", mid:row.getAttribute("data-mid")||"", note:row.getAttribute("data-note")||"",
+    checked:!!(row.querySelector(".ba_chk")&&row.querySelector(".ba_chk").checked), room:(row.querySelector(".ba_room")||{}).value||"",
+    menu:(row.querySelector(".ba_menu")||{}).value||"", amount:(row.querySelector(".ba_amount")||{}).value||"" }); }); return rows; }
+function captureBatchDraft(){ if(!window._batch||!el("ba_rows")) return;
+  try{ localStorage.setItem(batchDraftKey(), JSON.stringify({ clientId:window._batch.clientId, date:(el("ba_date")||{}).value||"", time:(el("ba_time")||{}).value||"", addr:(el("ba_caddr")||{}).value||"", phone:(el("ba_cphone")||{}).value||"", rows:readBatchRows(), ts:Date.now() })); }catch(e){} }
+function wireBatchAutosave(){ if(window._baWired) return; window._baWired=true; var sb2=document.getElementById("sheetBody"); if(!sb2) return;
+  var fn=function(){ if(window._batch&&el("ba_rows")){ clearTimeout(window._baT); window._baT=setTimeout(captureBatchDraft,400); } };
+  sb2.addEventListener("input",fn); sb2.addEventListener("change",fn); }
+function discardBatchDraft(){ if(!confirm("入力途中の内容を破棄して、新規で始めますか？")) return; clearBatchDraft(); var b=window._batch||{}; openFacilityBatch(b.clientId,{date:b.date, booking_id:b.bookingId}); }
 async function clearFacilityRoster(){
   var b=window._batch||{}; if(!b.clientId) return;
   if(!confirm("以前に登録された名簿（"+((b.roster||[]).length)+"件）を全部消します。\n※記録した売上・履歴は消えません。よろしいですか？")) return;
@@ -1129,7 +1148,7 @@ async function clearFacilityRoster(){
   window._batch.roster=[]; toast("🧹 以前の名簿を消しました"); reopenFacilityBatch();
 }
 function batchRow(m, pl, pre){
-  var on=!!pre; var selMenu=pre?pre.menu:"";
+  var on=pre?(pre.checked!==false):false; var selMenu=pre?pre.menu:"";
   var room=pre&&pre.room?pre.room:"";
   return '<div class="ba-row'+(on?" on":"")+'" data-mid="'+(m.id||"")+'" data-name="'+esc(m.name)+'" data-note="'+esc(pre&&pre.note?pre.note:"")+'">'+
     '<label class="chk"><input type="checkbox" class="ba_chk"'+(on?" checked":"")+' onchange="batchToggle(this)"> <b>'+(room?'🚪'+esc(room)+' ':'')+esc(m.name)+'</b></label>'+
@@ -1150,7 +1169,7 @@ function batchToggle(chk){ var row=chk.closest(".ba-row"); row.querySelector(".b
 function batchMenu(sel){ var opt=sel.options[sel.selectedIndex]; if(!opt) return; var row=sel.closest(".ba-row"); var p=opt.getAttribute("data-price"); if(p!=null&&p!=="") row.querySelector(".ba_amount").value=p; var chk=row.querySelector(".ba_chk"); if(!chk.checked){ chk.checked=true; batchToggle(chk); } }
 function batchMenuOptions(pl){ return '<option value="">（メニュー）</option>'+pl.map(function(p){ return '<option value="'+esc(p.name)+'" data-price="'+(p.price||0)+'">'+esc(p.name)+' '+yen(p.price)+'</option>'; }).join(""); }
 /* 全員チェック / 解除 */
-function batchCheckAll(on){ Array.prototype.forEach.call(document.querySelectorAll("#ba_rows .ba-row"),function(row){ var chk=row.querySelector(".ba_chk"); chk.checked=on; batchToggle(chk); }); }
+function batchCheckAll(on){ Array.prototype.forEach.call(document.querySelectorAll("#ba_rows .ba-row"),function(row){ var chk=row.querySelector(".ba_chk"); chk.checked=on; batchToggle(chk); }); captureBatchDraft(); }
 /* チェック中の全員に、同じメニュー・料金を一括適用 */
 function batchApplyAll(){
   var me=el("ba_bulkmenu"); var menu=me?me.value.trim():"";
@@ -1162,7 +1181,7 @@ function batchApplyAll(){
     var aEl=row.querySelector(".ba_amount"); if(aEl){ if(amt!=null) aEl.value=amt; else if(price!=null) aEl.value=price; }
   });
   if(!n){ showMsg("先にチェックを入れてください（「✓ 全員チェック」でもOK）"); return; }
-  toast(n+"人に適用しました");
+  toast(n+"人に適用しました"); captureBatchDraft();
 }
 async function batchAdd(){
   var name=prompt("追加する利用者名を入力してください"); if(!name||!name.trim()) return; name=name.trim();
@@ -1171,7 +1190,7 @@ async function batchAdd(){
   if(keep){ var r=await sb.from("members_t").insert({org_id:PROFILE.org_id,client_id:window._batch.clientId,name:name}).select().single(); if(r.error){ showMsg("追加エラー："+esc(r.error.message)); return; } mid=r.data.id; }
   var c=clientById(window._batch.clientId)||{}; var pl=Array.isArray(c.price_list)?c.price_list:[];
   var tmp=document.createElement("div"); tmp.innerHTML=batchRow({id:mid,name:name},pl,{menu:"",amount:""});
-  var node=tmp.firstChild; el("ba_rows").appendChild(node);
+  var node=tmp.firstChild; el("ba_rows").appendChild(node); captureBatchDraft();
 }
 async function saveBatch(){
   var date=el("ba_date").value; var time=(el("ba_time")?el("ba_time").value:""); var rows=document.querySelectorAll("#ba_rows .ba-row"); var payload=[];
@@ -1193,7 +1212,7 @@ async function saveBatch(){
     if(newAddr!==(oldC.address||"")){ cu.lat=null; cu.lng=null; }
     try{ await sb.from("clients").update(cu).eq("id",window._batch.clientId); }catch(e){}
   }
-  closeSheet(); toast("💴 "+payload.length+"件の施術を記録しました"); await loadAll(); renderTab();
+  clearBatchDraft(); closeSheet(); toast("💴 "+payload.length+"件の施術を記録しました"); await loadAll(); renderTab();
 }
 /* ===== 施設名簿をExcelからコピペで一括取り込み ===== */
 function priceOfMenu(pl, menu){ var f=(pl||[]).find(function(p){return p.name===menu;}); return f?f.price:null; }
@@ -1202,6 +1221,7 @@ function reopenFacilityBatch(){ var b=window._batch||{};
   openFacilityBatch(b.clientId,{ date:(el("ba_date")?el("ba_date").value:b.date), time:(el("ba_time")?el("ba_time").value:null), addr:(el("ba_caddr")?el("ba_caddr").value:null), phone:(el("ba_cphone")?el("ba_cphone").value:null), booking_id:b.bookingId });
 }
 function facilityBulkPaste(){
+  captureBatchDraft();   // 貼り付け画面へ移る前に、今入力済みの行を下書き保存
   openSheet('<div class="sheet-title">📋 名簿を貼り付け</div>'+
     '<div class="muted" style="margin-bottom:8px;">Excel・スプレッドシートで<b>取り込みたい行を選んでコピー</b>し、下に貼り付け → 「解析」。<b>見出し行も一緒に</b>コピーすると列を自動で見分けます。</div>'+
     '<button class="btn ghost accent" onclick="downloadRosterTemplate()">📥 入力用の雛形をダウンロード（Excel可）</button>'+
