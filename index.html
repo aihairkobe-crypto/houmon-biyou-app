@@ -278,8 +278,9 @@ function firstRunGuide(){
     '<div class="guide-step"><span class="gnum">3</span><div><b>施術を記録</b><div class="muted">施術したら料金を記録。売上に自動で集計。</div></div></div>'+
     '</div>'+
     '<div class="sec">まずはここから（どれでもOK）</div>'+
-    '<button class="btn primary" onclick="openQuickRecord()">🏃 とりあえず使ってみる</button>'+
-    '<button class="btn ghost accent" onclick="openClientForm(null,\'個人\')">🧑 新規のお客様を登録</button>'+
+    '<button class="btn primary" onclick="openPicker(\'recWith\',{title:\'だれの施術を入力しますか？\',allowNew:true})">💴 施術情報を入力</button>'+
+    '<button class="btn ghost accent" onclick="openPicker(\'bkWith\',{title:\'だれの予約を入れますか？\',allowNew:true})">📅 予約を入力</button>'+
+    '<button class="btn ghost accent" onclick="openClientForm(null,\'個人\')">🧑 お客様を登録</button>'+
     '<button class="btn ghost accent" onclick="openClientForm(null,\'施設\')">🏢 施設・訪問先を登録</button>'+
     '<button class="btn ghost" onclick="openHelp()">❓ 詳しい使い方を見る</button>';
 }
@@ -293,7 +294,8 @@ function renderToday(){
   var html='<div class="card" style="background:var(--accent-soft);border-color:#cbe7da;display:flex;justify-content:space-between;align-items:center;">'+
       '<div><div class="hint" style="margin:0;">'+esc(dateLabel(tISO))+'</div><div style="font-weight:700;font-size:15px;">今月の売上</div></div>'+
       '<div class="amt" style="font-size:20px;">'+yen(sumM)+'</div></div>';
-  html+='<button class="btn primary" onclick="openPicker(\'recWith\',{title:\'だれの施術を記録しますか？\',allowNew:true})">＋ 今日の施術を記録</button>';
+  html+='<button class="btn primary" onclick="openPicker(\'recWith\',{title:\'だれの施術を入力しますか？\',allowNew:true})">💴 施術情報を入力</button>';
+  html+='<button class="btn ghost accent" onclick="openPicker(\'bkWith\',{title:\'だれの予約を入れますか？\',allowNew:true})">📅 予約を入力</button>';
   html+='<button class="btn ghost accent" onclick="openClientForm(null,\'個人\')">＋ 新しいお客様・施設を登録</button>';
   html+='<div class="sec">今日の訪問</div>';
   if(!todays.length){ html+='<div class="list-empty">今日の予定・記録はありません。<br>上のボタンから記録できます。</div>'; }
@@ -401,8 +403,8 @@ function openNewAt(iso, t){
   window._newAt={iso:iso, t:t};
   openSheet('<div class="sheet-title">'+esc(dateLabel(iso))+'　'+esc(t)+'</div>'+
     '<div class="muted" style="margin-bottom:8px;">この時間に追加します。</div>'+
-    '<button class="btn primary" onclick="newBookingAt()">＋ 予約を作る</button>'+
-    '<button class="btn ghost accent" onclick="newRecordAt()">💴 施術を記録</button>'+
+    '<button class="btn primary" onclick="newBookingAt()">📅 予約を入力</button>'+
+    '<button class="btn ghost accent" onclick="newRecordAt()">💴 施術情報を入力</button>'+
     '<button class="btn ghost accent" onclick="newMoveAt()">🚗 移動を入れる</button>'+
     '<button class="btn ghost" onclick="closeSheet()">キャンセル</button>');
 }
@@ -528,7 +530,7 @@ function renderPlan(){
   if(!PLAN_MONTH) PLAN_MONTH=curMonth();
   if(!PLAN_SEL) PLAN_SEL=todayISO();
   var ym=PLAN_MONTH, p=ym.split("-"), first=new Date(+p[0],+p[1]-1,1).getDay(), days=new Date(+p[0],+p[1],0).getDate();
-  var html='<button class="btn primary" onclick="openPicker(\'bkWith\',{title:\'予約する施設・お客様を選ぶ\',allowNew:true})">＋ 予約を作る</button>';
+  var html='<button class="btn primary" onclick="openPicker(\'bkWith\',{title:\'だれの予約を入れますか？\',allowNew:true})">📅 予約を入力</button>';
   // カレンダー
   html+='<div class="card">'+
     '<div class="row" style="align-items:center;"><button class="btn ghost sm" style="flex:0 0 44px;" onclick="planMonth(-1)">‹</button>'+
@@ -1432,7 +1434,7 @@ function openHelp(){
     '<div class="muted" style="margin-bottom:8px;">訪問美容の <b>予約・顧客・売上</b> をこれひとつで管理できます。</div>'+
     helpItem("① 始め方（3ステップ）","1. <b>顧客・施設を登録</b>（顧客タブ）<br>2. <b>予約を作る</b>（予定タブ／任意）<br>3. <b>施術を記録</b>（今日タブ）→ 料金が<b>売上に自動集計</b>されます。")+
     helpItem("🏢 施設の使い方","施設を登録する画面で、<b>利用者（入居者）の名簿</b>も一緒に入れられます（あとから編集も可）。<br>訪問したら「施術を記録」で名簿が出るので、<b>その日対応した人だけチェック</b>してまとめて保存。<br>※名簿は候補。前回対応した人は<b>自動でチェック済み</b>になります。入退居は随時直せます。")+
-    helpItem("🏃 すぐ記録（お試し・単発）","初回ガイドの「とりあえず使ってみる」から、顧客を選ばずに施術だけ先に記録できます。記録は予定・売上にちゃんと積まれます。")+
+    helpItem("💴 施術情報を入力 / 📅 予約を入力","今日タブ・予定タブ・顧客タブのどこからでも、同じ<b>施術カード</b>（住所・時間・メニュー・料金・出張料など）で入力できます。施設は選ぶと団体入力（名簿貼り付け・全員一括）になります。")+
     helpItem("📅 予約","先の予定も入れられます。予約をタップ→「この予約の施術を記録」で、顧客や日付が引き継がれてラクに記録できます。")+
     helpItem("💰 売上の見方","売上タブで、月ごとの合計と一覧が見られます。上の ‹ › で月を切り替え。")+
     helpItem("📱 複数の端末・自動更新","同じアカウントでログインすれば、どの端末でも同じデータ。変更は自動で反映されます（電波がある時）。")+
