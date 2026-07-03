@@ -969,17 +969,18 @@ function saveColorSettings(){
   applyStateColors(); closeSheet(); toast("🎨 色を保存しました"); renderTab();
 }
 function resetColors(){ STATE_COLORS=Object.assign({},STATE_COLORS_DEFAULT); try{ localStorage.removeItem("statecolors_"+(ME&&ME.id)); }catch(e){} applyStateColors(); openColorSettings(); }
-function usedMenus(){   // 過去に記録したメニューを候補化（メニュー名ごとに最新の料金）
-  var recs=RC.slice().sort(function(a,b){return (b.date||"").localeCompare(a.date||"");});
+function usedMenusFor(clientId){   // その顧客の過去メニューだけ（全体を寄せ集めない）
+  if(!clientId) return [];
+  var recs=RC.filter(function(r){return r.client_id===clientId;}).sort(function(a,b){return (b.date||"").localeCompare(a.date||"");});
   var seen={}, out=[];
   recs.forEach(function(r){ var m=(r.menu||"").trim(); if(!m||seen[m]) return; seen[m]=true; out.push({name:m, price:r.amount||0}); });
   return out;
 }
 function priceListFor(clientId){
   var c=clientById(clientId);
-  if(c&&Array.isArray(c.price_list)&&c.price_list.length) return c.price_list;   // 顧客個別の料金表
-  if(STD_MENU&&STD_MENU.length) return STD_MENU;                                  // 標準メニュー
-  return usedMenus();                                                             // 過去の記録から自動
+  if(c&&Array.isArray(c.price_list)&&c.price_list.length) return c.price_list;   // ①顧客/施設の料金表
+  if(STD_MENU&&STD_MENU.length) return STD_MENU;                                  // ②標準メニュー（マイ料金表）
+  return usedMenusFor(clientId);                                                  // ③この顧客の過去メニューのみ
 }
 function menuOptionsFor(clientId, selMenu){
   var opts='<option value="">（自由入力）</option>';
