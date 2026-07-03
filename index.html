@@ -797,7 +797,7 @@ function quickFromPicker(){ closeSheet(); openQuickRecord(); }
 /* ===== 登録せず サッと売上記録（決まった顧客がいない人向け） ===== */
 function openQuickRecord(prefill){
   prefill=prefill||{};
-  var body='<div class="sheet-title">施術をすぐ記録</div>'+
+  var body='<div class="sheet-title">🗂 施術カード（その場・かんたん）</div>'+
     '<div class="muted" style="margin-bottom:8px;">ここで入れた<b>お客様情報（住所など）も丸ごと登録</b>されます。あとから顧客タブでいつでも編集できます。</div>'+
     '<div class="hint">区分</div><div class="seg-wrap" id="qr_kind" style="margin-bottom:8px;">'+
       ["在宅","施設","病院"].map(function(k){return '<button class="seg'+(k==="在宅"?" on":"")+'" onclick="qrKind(this)">'+k+'</button>';}).join("")+'</div>'+
@@ -1011,7 +1011,7 @@ function openRecordForm(id, prefill){
   var rec=id?(RC.find(function(x){return x.id===id;})||{}):(prefill||{});
   var c=clientById(rec.client_id)||{};
   var hasPl=priceListFor(rec.client_id).length;   // お客様の料金表 or 標準メニューがあれば選択式
-  var body='<div class="sheet-title">'+(id?"施術を編集":"施術を記録")+'</div>'+
+  var body='<div class="sheet-title">🗂 施術カード'+(id?"（編集）":"")+'</div>'+
     '<div class="card" style="margin-bottom:10px;padding:10px 12px;"><b>'+esc(c.name||"（顧客）")+'</b>'+
       (exRec(rec).nm?'<div class="meta">👤 '+esc(exRec(rec).nm)+'</div>':"")+'</div>'+
     '<input type="hidden" id="rf_client" value="'+esc(rec.client_id||"")+'">'+
