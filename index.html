@@ -243,7 +243,9 @@ function clientById(id){ return CL.find(function(x){return x.id===id;}); }
 function clientName(id){ var c=clientById(id); return c?c.name:"（未設定）"; }
 /* 追加項目（名前・時間・区分）は既存の photos(jsonb) 列に格納＝SQL不要。{nm,t,pk} */
 function exRec(r){ var e=r&&r.photos; return (e&&typeof e==="object"&&!Array.isArray(e))?e:{}; }
-function recExtra(o){ var x={}; if(o.nm)x.nm=o.nm; if(o.t)x.t=o.t; if(o.pk)x.pk=o.pk; if(o.dur)x.dur=o.dur; if(o.travel)x.travel=o.travel; if(o.room)x.room=o.room; return x; }
+function recExtra(o){ var x={}; if(o.nm)x.nm=o.nm; if(o.t)x.t=o.t; if(o.pk)x.pk=o.pk; if(o.dur)x.dur=o.dur; if(o.travel)x.travel=o.travel; if(o.room)x.room=o.room; if(o.fee)x.fee=o.fee; return x; }
+function recFee(r){ return Number(exRec(r).fee)||0; }   // 訪問出張料
+function recTotal(r){ return (r.amount||0)+recFee(r); }   // 施術料＋出張料
 function recordWho(r){ var e=exRec(r); var room=e.room?('🚪'+esc(e.room)+' '):""; if(r.client_id){ return e.nm?(esc(clientName(r.client_id))+' ／ '+room+esc(e.nm)):esc(clientName(r.client_id)); } var pk=e.pk?("["+esc(e.pk)+"] "):""; return pk+room+(e.nm?esc(e.nm):"お客様"); }
 /* DBにまだ無い列があっても保存が止まらないよう、足りない列を外して再試行。
    ただし捨てた項目は「黙って消さず」に警告する（初期設定SQLの未実行を知らせる） */
@@ -287,7 +289,7 @@ function renderToday(){
   var todays=dayTimeline(tISO);
   // 今月サマリ
   var recsM=RC.filter(function(r){return (r.date||"").slice(0,7)===curMonth() && recDone(r);});   // 施術終了のみ
-  var sumM=recsM.reduce(function(a,r){return a+(r.amount||0);},0);
+  var sumM=recsM.reduce(function(a,r){return a+recTotal(r);},0);
   var html='<div class="card" style="background:var(--accent-soft);border-color:#cbe7da;display:flex;justify-content:space-between;align-items:center;">'+
       '<div><div class="hint" style="margin:0;">'+esc(dateLabel(tISO))+'</div><div style="font-weight:700;font-size:15px;">今月の売上</div></div>'+
       '<div class="amt" style="font-size:20px;">'+yen(sumM)+'</div></div>';
@@ -434,7 +436,7 @@ async function delMove(id){
   closeSheet(); toast("🗑 削除しました"); await reloadTimeBlocks();
 }
 function newBookingAt(){ openPicker('bkAtPick',{title:'予約する施設・お客様を選ぶ',allowNew:true}); }
-function bkAtPick(id){ var a=window._newAt||{}; var c=clientById(id); if(isFacility(c)){ openFacilityBatch(id,{date:a.iso, time:a.t}); } else { openBookingForm(null,{client_id:id, date:a.iso, time:a.t}); } }
+function bkAtPick(id){ var a=window._newAt||{}; var c=clientById(id); if(isFacility(c)){ openFacilityBatch(id,{date:a.iso, time:a.t}); } else { openRecordForm(null,{client_id:id, date:a.iso, time:a.t}); } }
 function newRecordAt(){ openPicker('rcAtPick',{title:'だれの施術を記録しますか？',allowNew:true}); }
 function rcAtPick(id){ var a=window._newAt||{}; var c=clientById(id); if(isFacility(c)) openFacilityBatch(id,{date:a.iso}); else openRecordForm(null,{client_id:id, date:a.iso, time:a.t}); }
 
@@ -471,7 +473,7 @@ function openFacVisit(clientId, iso, t){
     recs.map(function(r){ var e=exRec(r); var rf=!!e.done;
       return '<div class="item" style="cursor:pointer;" onclick="closeSheet();openRecordForm(\''+r.id+'\')"><div class="top"><div>'+
         '<div class="name" style="font-size:14px;">'+(e.room?'🚪'+esc(e.room)+' ':'')+esc(e.nm||"お客様")+'</div>'+
-        '<div class="meta">✂️ '+esc(r.menu||"施術")+'　'+yen(r.amount)+(r.note?'　📝 '+esc(r.note):"")+'</div></div>'+
+        '<div class="meta">✂️ '+esc(r.menu||"施術")+'　'+yen(r.amount)+(recFee(r)?'　🚗'+yen(recFee(r)):'')+(r.note?'　📝 '+esc(r.note):"")+'</div></div>'+
         '<span class="pill '+(rf?"plan":"done")+'">'+(rf?"済":"予定")+'</span></div></div>';
     }).join("")+
     '<button class="btn ghost accent" style="margin-top:8px;" onclick="openFacilityBatch(\''+clientId+'\',{date:\''+iso+'\'})">＋ 利用者を追加・名簿を貼り付け</button>'+
@@ -508,7 +510,7 @@ function timelineItemHtml(it){
   var r=it.r; var rfin=!!exRec(r).done;
   return '<div class="item"><div class="top">'+
     '<div style="cursor:pointer;" onclick="openRecordForm(\''+r.id+'\')"><div class="name">'+(exRec(r).t?esc(exRec(r).t)+'　':'')+recordWho(r)+'</div>'+
-      '<div class="meta">✂️ '+esc(r.menu||"施術")+'　'+yen(r.amount)+(r.note?'　📝 '+esc(r.note):"")+'</div></div>'+
+      '<div class="meta">✂️ '+esc(r.menu||"施術")+'　'+yen(r.amount)+(recFee(r)?'　🚗'+yen(recFee(r)):'')+(r.note?'　📝 '+esc(r.note):"")+'</div></div>'+
     '<span class="pill '+(rfin?"plan":"done")+'">'+(rfin?"施術終了":"予定")+'</span></div>'+
     '<div class="row" style="margin-top:10px;">'+
       '<button class="btn '+(rfin?"ghost":"primary")+' sm" onclick="toggleRecordDone(\''+r.id+'\')">'+(rfin?"↩ 予定に戻す":"✅ 施術終了")+'</button>'+
@@ -689,7 +691,8 @@ function renderSales(){
   var v=el("view"); if(!SALES_MONTH) SALES_MONTH=curMonth();
   var recs=RC.filter(function(r){return (r.date||"").slice(0,7)===SALES_MONTH && recDone(r);})   // 施術終了のみ売上に反映
     .sort(function(a,b){return (b.date||"").localeCompare(a.date||"");});
-  var tot=recs.reduce(function(a,r){return a+(r.amount||0);},0);
+  var tot=recs.reduce(function(a,r){return a+recTotal(r);},0);
+  var feeTot=recs.reduce(function(a,r){return a+recFee(r);},0);
   var html='<div class="card" style="background:var(--accent-soft);border-color:#cbe7da;">'+
     '<div class="row" style="align-items:center;">'+
       '<button class="btn ghost sm" style="flex:0 0 44px;" onclick="salesMonth(-1)">‹</button>'+
@@ -698,6 +701,7 @@ function renderSales(){
     '</div>'+
     '<div style="display:flex;justify-content:space-between;align-items:center;margin-top:8px;border-top:1px solid #cbe7da;padding-top:8px;">'+
       '<span style="font-weight:700;">売上合計（'+recs.length+'件）</span><span class="amt" style="font-size:20px;">'+yen(tot)+'</span></div>'+
+      (feeTot?'<div class="muted" style="font-size:12px;margin-top:2px;">🚗 うち訪問出張料 '+yen(feeTot)+'</div>':"")+
       '<div class="muted" style="font-size:11px;margin-top:4px;">※「施術終了」にした分だけ売上に反映されます</div>'+
     '</div>';
   if(!recs.length){ html+='<div class="list-empty">この月の売上はまだありません。<br>予定を「✅施術終了」にすると、ここに反映されます。</div>'; v.innerHTML=html; return; }
@@ -710,7 +714,7 @@ function renderSales(){
     var who=recordWho(r);
     html+='<div class="item" onclick="openRecordForm(\''+r.id+'\')"><div class="top">'+
       '<div><div class="name">'+who+'</div>'+
-        '<div class="meta">'+(exRec(r).t?'🕐 '+esc(exRec(r).t)+'　':'')+'✂️ '+esc(r.menu||"（メニュー未記入）")+(r.note?'　📝 '+esc(r.note):"")+'</div></div>'+
+        '<div class="meta">'+(exRec(r).t?'🕐 '+esc(exRec(r).t)+'　':'')+'✂️ '+esc(r.menu||"（メニュー未記入）")+(recFee(r)?'　🚗'+yen(recFee(r)):'')+(r.note?'　📝 '+esc(r.note):"")+'</div></div>'+
       '<span class="amt">'+yen(r.amount)+'</span></div></div>';
   });
   v.innerHTML=html;
@@ -786,7 +790,7 @@ async function pickNewSave(fn){
   CL.push(r.data); toast("🆕 「"+name+"」を登録しました");
   closeSheet(); if(fn&&window[fn]) window[fn](r.data.id);
 }
-function bkWith(id){ var c=clientById(id); if(isFacility(c)){ openFacilityBatch(id,{date:(window.PLAN_SEL||todayISO())}); } else { openBookingForm(null,{client_id:id}); } }
+function bkWith(id){ var c=clientById(id); if(isFacility(c)){ openFacilityBatch(id,{date:(window.PLAN_SEL||todayISO())}); } else { openRecordForm(null,{client_id:id, date:(window.PLAN_SEL||todayISO())}); } }
 function recWith(id){ var c=clientById(id); if(isFacility(c)) openFacilityBatch(id,{date:todayISO()}); else openRecordForm(null,{client_id:id,date:todayISO()}); }
 function quickFromPicker(){ closeSheet(); openQuickRecord(); }
 
@@ -809,6 +813,7 @@ function openQuickRecord(prefill){
       menuChipsHtml(null,"qr_menu","qr_amount")+
       '<input id="qr_menu" placeholder="例：カット">'+
       '<div class="hint" style="margin-top:8px;">料金（円）</div><input id="qr_amount" type="number" placeholder="0">'+
+      '<div class="hint" style="margin-top:8px;">🚗 訪問出張料（円・任意）</div><input id="qr_fee" type="number" placeholder="0">'+
       '<div class="hint" style="margin-top:8px;">メモ</div><input id="qr_note" placeholder="任意">'+
     '</div>'+
     '<div id="qr_facmode" style="display:none;"><div class="muted" style="margin-top:8px;">🏢 施設・病院は<b>次の画面で利用者リストを入力</b>します（Excel貼り付け・全員一括もOK）。上の名前に<b>施設名</b>を入れてください。</div></div>'+
@@ -860,7 +865,7 @@ async function saveQuick(){
   var data={ org_id:PROFILE.org_id, client_id:clientId, booking_id:null, member_id:null, staff_id:ME.id,
     menu:el("qr_menu").value.trim(), amount:Number(el("qr_amount").value)||0,
     note:el("qr_note").value.trim(), date:el("qr_date").value,
-    photos:recExtra({ nm:(clientId?"":name), t:el("qr_time").value, pk:kind, dur:Number(el("qr_dur").value)||0 }) };
+    photos:recExtra({ nm:(clientId?"":name), t:el("qr_time").value, pk:kind, dur:Number(el("qr_dur").value)||0, fee:(el("qr_fee")?Number(el("qr_fee").value)||0:0) }) };
   var r=await insertRecords(data);
   if(r.error){ showMsg("保存エラー："+esc(r.error.message)); return; }
   closeSheet(); toast(created?("💴 記録し「"+name+"」を顧客に登録しました"):"💴 施術を記録しました"); await loadAll(); renderTab();
@@ -1026,6 +1031,7 @@ function openRecordForm(id, prefill){
     menuChipsHtml(rec.client_id,"rf_menu","rf_amount")+
     '<input id="rf_menu" value="'+esc(rec.menu||"")+'" placeholder="メニュー（例：カット）">'+
     '<div class="hint" style="margin-top:8px;">料金（円）</div><input id="rf_amount" type="number" value="'+(rec.amount||"")+'" placeholder="0">'+
+    '<div class="hint" style="margin-top:8px;">🚗 訪問出張料（円・任意）</div><input id="rf_fee" type="number" value="'+(Number(exRec(rec).fee)||"")+'" placeholder="0">'+
     '<div class="hint" style="margin-top:8px;">メモ・カルテ</div><input id="rf_note" value="'+esc(rec.note||"")+'" placeholder="任意">'+
     '<div id="m"></div>'+
     '<button class="btn primary" onclick="saveRecord(\''+(id||"")+'\')">保存</button>'+
@@ -1042,7 +1048,7 @@ async function saveRecord(id){
     member_id:el("rf_mid").value||null, staff_id:ME.id,
     menu:el("rf_menu").value.trim(), amount:Number(el("rf_amount").value)||0,
     note:el("rf_note").value.trim(), date:el("rf_date").value,
-    photos:recExtra({nm:el("rf_mname").value, t:el("rf_time").value, pk:el("rf_pk").value, dur:Number(el("rf_dur").value)||0, room:(el("rf_room")?el("rf_room").value.trim():"")}) };
+    photos:recExtra({nm:el("rf_mname").value, t:el("rf_time").value, pk:el("rf_pk").value, dur:Number(el("rf_dur").value)||0, room:(el("rf_room")?el("rf_room").value.trim():""), fee:(el("rf_fee")?Number(el("rf_fee").value)||0:0)}) };
   var r=id?await updateRecord(id,data):await insertRecords(data);
   if(r.error){ showMsg("保存エラー："+esc(r.error.message)); return; }
   // お客様情報（住所・電話・注意）も一緒に更新。住所を変えたら地図の座標キャッシュを消して次回再変換
@@ -1321,7 +1327,7 @@ function clientHistoryHtml(id){
     return '<div class="item">'+
       '<div style="cursor:pointer;" onclick="closeSheet();openRecordForm(\''+r.id+'\')">'+
         '<div class="name" style="font-size:14px;">'+esc(dateLabel(r.date))+(e.t?'　'+esc(e.t):'')+(e.nm?'　'+esc(e.nm):'')+'</div>'+
-        '<div class="meta">✂️ '+esc(r.menu||"（メニュー未記入）")+'　'+yen(r.amount)+(r.note?'　📝 '+esc(r.note):"")+'</div>'+
+        '<div class="meta">✂️ '+esc(r.menu||"（メニュー未記入）")+'　'+yen(r.amount)+(recFee(r)?'　🚗'+yen(recFee(r)):'')+(r.note?'　📝 '+esc(r.note):"")+'</div>'+
       '</div>'+
       '<button class="btn ghost accent sm" style="width:auto;margin-top:8px;" onclick="reuseToBooking(\''+r.client_id+'\',\''+r.id+'\')">🔁 この内容で次回予約</button>'+
     '</div>';
