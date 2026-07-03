@@ -277,14 +277,20 @@ function firstRunGuide(){
     '<div class="guide-step"><span class="gnum">2</span><div><b>予約を作る</b><div class="muted">訪問の予定を入れます（任意）。</div></div></div>'+
     '<div class="guide-step"><span class="gnum">3</span><div><b>施術を記録</b><div class="muted">施術したら料金を記録。売上に自動で集計。</div></div></div>'+
     '</div>'+
-    '<div class="sec">まずはここから（どれでもOK）</div>'+
-    '<button class="btn primary" onclick="openClientForm(null,\'個人\')">① お客様・施設を登録</button>'+
-    '<div class="muted" style="font-size:11px;margin:-2px 0 6px;">相手の情報を登録（住所・料金表など）。一度登録すれば次から選ぶだけ。<b>売上にはなりません。</b></div>'+
-    '<button class="btn ghost accent" onclick="openPicker(\'bkWith\',{title:\'だれの予約を入れますか？\',allowNew:true})">② 📅 予約を入力</button>'+
-    '<div class="muted" style="font-size:11px;margin:-2px 0 6px;">これからの訪問予定を入れる（任意）。</div>'+
-    '<button class="btn ghost accent" onclick="openPicker(\'recWith\',{title:\'だれの施術を入力しますか？\',allowNew:true})">③ 💴 施術情報を入力</button>'+
-    '<div class="muted" style="font-size:11px;margin:-2px 0 6px;">やった施術と料金を記録 → <b>売上に集計されます。</b></div>'+
+    '<div class="sec">まずはここから</div>'+
+    '<button class="btn primary" onclick="openPicker(\'bkWith\',{title:\'だれの予約を入れますか？\',allowNew:true})">📅 予約を入力</button>'+
+    '<div class="muted" style="font-size:11px;margin:-2px 0 8px;">相手はその場で登録もできます。まずは1件入れてみましょう。</div>'+
+    '<button class="btn ghost accent" onclick="onboardExisting()">📋 既にお客様・施設をお持ちの方はこちら</button>'+
     '<button class="btn ghost" onclick="openHelp()">❓ 詳しい使い方を見る</button>';
+}
+/* 既に顧客・施設リストがある人向け＝先に登録 */
+function onboardExisting(){
+  openSheet('<div class="sheet-title">お持ちの情報を登録</div>'+
+    '<div class="muted" style="margin-bottom:8px;">よく行く<b>お客様・施設</b>を先に登録しておくと、予約・施術がすぐ選べます。</div>'+
+    '<button class="btn ghost accent" onclick="openClientForm(null,\'個人\')">🧑 お客様（個人）を登録</button>'+
+    '<button class="btn ghost accent" onclick="openClientForm(null,\'施設\')">🏢 施設・訪問先を登録</button>'+
+    '<div class="muted" style="font-size:11px;margin-top:6px;">施設は登録後、施術入力の画面で<b>名簿をExcelから貼り付け</b>できます。</div>'+
+    '<button class="btn ghost" onclick="closeSheet()">閉じる</button>');
 }
 function renderToday(){
   var v=el("view"); var tISO=todayISO();
