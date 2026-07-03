@@ -117,6 +117,12 @@ var sb = supabase.createClient(SUPABASE_URL, SUPABASE_KEY);
 var APP=document.getElementById("app");
 var ME=null, PROFILE=null;
 var CL=[], BK=[], RC=[], TB=[];      // 顧客 / 予約 / 売上 / 移動ブロック(time_blocks)
+var TIME_UNIT=5;                     // 時間の単位（分）。5/10/15/30
+function loadTimeUnit(){ try{ var u=parseInt(localStorage.getItem("timeunit_"+(ME&&ME.id))||"5",10); TIME_UNIT=([5,10,15,30].indexOf(u)>=0)?u:5; }catch(e){ TIME_UNIT=5; } }
+function snapUnit(min){ return Math.round(min/TIME_UNIT)*TIME_UNIT; }
+function setTimeUnit(u){ TIME_UNIT=u; try{ localStorage.setItem("timeunit_"+(ME&&ME.id), String(u)); }catch(e){}
+  var seg=el("tu_seg"); if(seg){ Array.prototype.forEach.call(seg.children,function(b){ b.classList.toggle("on", b.textContent===(u+"分")); }); }
+  toast("⏱ 時間の単位を"+u+"分にしました"); }
 var TAB="today";
 
 function esc(s){ return (s==null?"":String(s)).replace(/[&<>"]/g,function(c){return {"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;"}[c];}); }
@@ -131,7 +137,7 @@ function defHM(){ var d=new Date(); return pad(d.getHours())+":00"; }   // 初�
 /* 5分刻みの時間ドロップダウン（ネイティブtimeのstepが効かない端末対策） */
 function timeOptions(sel){
   var opts="", found=false;
-  for(var h=5; h<=22; h++){ for(var m=0;m<60;m+=5){ var v=pad(h)+":"+pad(m); if(v===sel)found=true; opts+='<option value="'+v+'"'+(v===sel?" selected":"")+'>'+v+'</option>'; } }
+  for(var h=5; h<=22; h++){ for(var m=0;m<60;m+=TIME_UNIT){ var v=pad(h)+":"+pad(m); if(v===sel)found=true; opts+='<option value="'+v+'"'+(v===sel?" selected":"")+'>'+v+'</option>'; } }
   if(sel && !found){ opts='<option value="'+esc(sel)+'" selected>'+esc(sel)+'（そのまま）</option>'+opts; }
   return opts;
 }
@@ -159,7 +165,7 @@ async function boot(){
   if(!PROFILE){ await ensurePersonalSpace(); await loadProfile(); }
   if(!PROFILE){ renderAuth(); return; }
   loadStdMenu();
-  loadStateColors(); applyStateColors();
+  loadTimeUnit(); loadStateColors(); applyStateColors();
   await loadAll();
   renderApp();
   subscribeRealtime();
@@ -380,8 +386,8 @@ async function schedUp(ev){
   d.block.style.opacity=""; d.block.style.zIndex=""; d.block.style.cursor="grab";
   if(!d.moved){ if(d.mode!=="resize") schedOpen(d.block); return; }
   var ppm=48/60, PAD=8, top0=d.startH*60;
-  if(d.mode==="resize"){ var newH=parseFloat(d.block.style.height)||16; var dur=Math.round((newH/ppm)/5)*5; if(dur<5)dur=5; await resizeSchedItem(d.block, dur); }
-  else { var newTop=parseFloat(d.block.style.top)||PAD; var min=Math.round(((newTop-PAD)/ppm+top0)/5)*5; if(min<0)min=0; if(min>1435)min=1435; await moveSchedItem(d.block, pad(Math.floor(min/60))+":"+pad(min%60)); }
+  if(d.mode==="resize"){ var newH=parseFloat(d.block.style.height)||16; var dur=snapUnit(newH/ppm); if(dur<TIME_UNIT)dur=TIME_UNIT; await resizeSchedItem(d.block, dur); }
+  else { var newTop=parseFloat(d.block.style.top)||PAD; var min=snapUnit((newTop-PAD)/ppm+top0); if(min<0)min=0; if(min>1435)min=1435; await moveSchedItem(d.block, pad(Math.floor(min/60))+":"+pad(min%60)); }
 }
 async function resizeSchedItem(block, dur){
   var kind=block.getAttribute("data-mv");
@@ -420,7 +426,7 @@ function schedClick(ev, iso){
   var sched=ev.currentTarget; var rect=sched.getBoundingClientRect();
   var startH=+sched.getAttribute("data-start")||9;
   var y=ev.clientY-rect.top-8; if(y<0)y=0;              // PAD=8
-  var min=startH*60 + y/(48/60); min=Math.round(min/15)*15;   // 15分単位
+  var min=startH*60 + y/(48/60); min=snapUnit(min);   // 時間の単位でスナップ
   var t=pad(Math.floor(min/60))+":"+pad(min%60);
   openNewAt(iso, t);
 }
@@ -441,7 +447,7 @@ function openMoveForm(id, prefill){
     '<div class="muted" style="margin-bottom:8px;">移動の時間を予定表に入れます。次の訪問先までの移動などにどうぞ。</div>'+
     '<div class="row"><div><div class="hint">日付</div><input id="mv_date" type="date" value="'+esc(m.date||todayISO())+'"></div>'+
       '<div><div class="hint">開始時間</div><select id="mv_time">'+timeOptions(m.time||defHM())+'</select></div></div>'+
-    '<div class="hint" style="margin-top:8px;">移動時間（分）</div><input id="mv_dur" type="number" step="5" value="'+(m.duration||15)+'">'+
+    '<div class="hint" style="margin-top:8px;">移動時間（分）</div><input id="mv_dur" type="number" step="'+TIME_UNIT+'" value="'+(m.duration||15)+'">'+
     '<div class="hint" style="margin-top:8px;">メモ（任意）</div><input id="mv_label" value="'+esc(m.label||"")+'" placeholder="例：〇〇苑へ移動 / 休憩">'+
     '<div id="m"></div>'+
     '<button class="btn primary" onclick="saveMove(\''+(id||"")+'\')">保存</button>'+
@@ -498,7 +504,7 @@ function openFacVisit(clientId, iso, t){
   var body='<div class="sheet-title">🏢 '+esc(clientName(clientId))+'　'+esc(dateLabel(iso))+(t?'　'+esc(t):'')+'</div>'+
     '<div class="muted" style="margin-bottom:8px;">利用者 '+recs.length+'名。<b>メニュー・料金・時間はここで直せます</b>（名前タップで詳細編集）。</div>'+
     '<div class="row"><div><div class="hint">時間（全員）</div><select id="fv_time">'+timeOptions(t||defHM())+'</select></div>'+
-      '<div><div class="hint">施術時間（分）</div><input id="fv_dur" type="number" step="5" value="'+(Number(exRec(recs[0]||{}).dur)||60)+'"></div></div>'+
+      '<div><div class="hint">施術時間（分）</div><input id="fv_dur" type="number" step="'+TIME_UNIT+'" value="'+(Number(exRec(recs[0]||{}).dur)||60)+'"></div></div>'+
     '<button class="btn '+(allDone?"ghost":"primary")+'" style="margin-top:8px;" onclick="toggleFacDone(\''+clientId+'\',\''+iso+'\',\''+t+'\')">'+(allDone?"↩ 予定に戻す":"✅ 全員 施術終了")+'</button>'+
     '<datalist id="fvMenuDL">'+plArr.map(function(p){return '<option value="'+esc(p.name)+'"></option>';}).join("")+'</datalist>'+
     recs.map(function(r){ var e=exRec(r); var rf=!!e.done;
@@ -848,7 +854,7 @@ function openQuickRecord(prefill){
       ["在宅","施設","病院"].map(function(k){return '<button class="seg'+(k==="在宅"?" on":"")+'" onclick="qrKind(this)">'+k+'</button>';}).join("")+'</div>'+
     '<div class="row"><div><div class="hint">日付</div><input id="qr_date" type="date" value="'+esc(prefill.date||todayISO())+'"></div>'+
       '<div><div class="hint">時間</div><select id="qr_time">'+timeOptions(prefill.time||defHM())+'</select></div></div>'+
-    '<div class="hint" style="margin-top:8px;">施術時間（分）</div><input id="qr_dur" type="number" step="5" value="'+(prefill.dur||60)+'">'+
+    '<div class="hint" style="margin-top:8px;">施術時間（分）</div><input id="qr_dur" type="number" step="'+TIME_UNIT+'" value="'+(prefill.dur||60)+'">'+
     '<div class="hint" style="margin-top:8px;" id="qr_namehint">お客様名（任意）</div><input id="qr_name" placeholder="例：〇〇様（空欄でもOK）">'+
     '<div class="hint" style="margin-top:8px;">住所（地図に出す・任意）</div><input id="qr_addr" placeholder="例：神戸市中央区元町通5-7-4-202">'+
     '<div class="hint" style="margin-top:8px;">電話（任意）</div><input id="qr_phone" placeholder="任意">'+
@@ -929,7 +935,7 @@ function openBookingForm(id, prefill){
     '<div class="hint">日付</div><input id="bf_date" type="date" value="'+esc(b.date||todayISO())+'">'+
     '<div class="row" style="margin-top:8px;">'+
       '<div><div class="hint">時間</div><select id="bf_time">'+timeOptions(b.time||"10:00")+'</select></div>'+
-      '<div><div class="hint">所要(分)</div><input id="bf_dur" type="number" step="15" value="'+(b.duration||60)+'"></div>'+
+      '<div><div class="hint">所要(分)</div><input id="bf_dur" type="number" step="'+TIME_UNIT+'" value="'+(b.duration||60)+'"></div>'+
     '</div>'+
     '<div class="hint" style="margin-top:8px;">メモ</div><input id="bf_memo" value="'+esc(b.memo||"")+'" placeholder="任意">'+
     '<div id="m"></div>'+
@@ -1070,7 +1076,7 @@ function openRecordForm(id, prefill){
       '<input id="rf_crules" value="'+esc(c.rules||"")+'" placeholder="注意・ルール（任意）" style="margin-top:6px;margin-bottom:4px;">':'')+
     '<div class="row"><div><div class="hint">日付</div><input id="rf_date" type="date" value="'+esc(rec.date||todayISO())+'"></div>'+
       '<div><div class="hint">時間</div><select id="rf_time">'+timeOptions(rec.time||exRec(rec).t||defHM())+'</select></div></div>'+
-    '<div class="hint" style="margin-top:8px;">施術時間（分）</div><input id="rf_dur" type="number" step="5" value="'+(Number(exRec(rec).dur)||60)+'">'+
+    '<div class="hint" style="margin-top:8px;">施術時間（分）</div><input id="rf_dur" type="number" step="'+TIME_UNIT+'" value="'+(Number(exRec(rec).dur)||60)+'">'+
     '<div class="hint" style="margin-top:8px;">部屋番号（任意）</div><input id="rf_room" value="'+esc(exRec(rec).room||"")+'" placeholder="例：305">'+
     '<div class="hint" style="margin-top:8px;">メニュー'+(hasPl?'（下のボタンをタップで料金も自動入力）':'')+'</div>'+
     menuChipsHtml(rec.client_id,"rf_menu","rf_amount")+
@@ -1540,6 +1546,8 @@ function openSettings(){
     '<button class="btn ghost accent" onclick="openStdMenu()">🧾 標準メニュー（料金表）</button>'+
     '<button class="btn ghost accent" onclick="downloadRosterTemplate()">📥 名簿の雛形をダウンロード</button>'+
     '<div class="muted" style="font-size:11px;margin:-2px 0 6px;">施設や協力スタッフに配って、同じ形式で名簿をもらえます（そのまま取り込み可）。</div>'+
+    '<div class="hint" style="margin-top:4px;">⏱ 時間の単位（予約・ドラッグ移動/伸縮の刻み）</div>'+
+    '<div class="seg-wrap" id="tu_seg" style="margin-bottom:8px;">'+[5,10,15,30].map(function(u){return '<button class="seg'+(TIME_UNIT===u?" on":"")+'" onclick="setTimeUnit('+u+')">'+u+'分</button>';}).join("")+'</div>'+
     '<button class="btn ghost accent" onclick="openColorSettings()">🎨 表示の色（予定・施術終了・移動）</button>'+
     '<button class="btn ghost accent" onclick="openHelp()">❓ 使い方・ヘルプ</button>'+
     '<div class="card"><div class="hint">組織リンク（今後）</div><div class="muted" style="font-size:12px;">サロン等で使う場合、ここに組織コードを入れると情報を共有できるようにする予定です。</div></div>'+
