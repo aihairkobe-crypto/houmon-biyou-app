@@ -307,23 +307,33 @@ function renderToday(){
   // 今月サマリ
   var recsM=RC.filter(function(r){return (r.date||"").slice(0,7)===curMonth() && recDone(r);});   // 施術終了のみ
   var sumM=recsM.reduce(function(a,r){return a+recTotal(r);},0);
+  // 今日のサマリ
+  var tRecs=RC.filter(function(r){return r.date===tISO;});
+  var tSales=tRecs.filter(recDone).reduce(function(a,r){return a+recTotal(r);},0);
+  var pending=todays.filter(function(it){ return !itemDone(it); }).length;
+  var feeM=recsM.reduce(function(a,r){return a+recFee(r);},0);
   var html='<div class="card" style="background:var(--accent-soft);border-color:#cbe7da;display:flex;justify-content:space-between;align-items:center;">'+
-      '<div><div class="hint" style="margin:0;">'+esc(dateLabel(tISO))+'</div><div style="font-weight:700;font-size:15px;">今月の売上</div></div>'+
-      '<div class="amt" style="font-size:20px;">'+yen(sumM)+'</div></div>';
-  html+='<button class="btn primary" onclick="openPicker(\'recWith\',{title:\'だれの施術を入力しますか？\',allowNew:true})">💴 施術情報を入力</button>';
-  html+='<button class="btn ghost accent" onclick="openPicker(\'bkWith\',{title:\'だれの予約を入れますか？\',allowNew:true})">📅 予約を入力</button>';
-  html+='<div class="muted" style="font-size:11px;margin:2px 2px 0;">※新しいお客様・施設は、上の入力画面の「＋新しい顧客・施設を登録」か「👥顧客」タブから登録できます。</div>';
-  html+='<div class="sec">今日の訪問</div>';
-  if(!todays.length){ html+='<div class="list-empty">今日の予定・記録はありません。<br>上のボタンから記録できます。</div>'; }
+      '<div><div class="hint" style="margin:0;">'+esc(monthLabel(curMonth()))+'</div><div style="font-weight:700;font-size:15px;">今月の売上</div>'+(feeM?'<div class="muted" style="font-size:11px;">🚗 うち出張料 '+yen(feeM)+'</div>':'')+'</div>'+
+      '<div class="amt" style="font-size:22px;">'+yen(sumM)+'</div></div>';
+  // 今日のダッシュ
+  html+='<div class="card" style="display:flex;justify-content:space-between;text-align:center;padding:12px;">'+
+      '<div style="flex:1;"><div class="hint" style="margin:0;">今日の訪問</div><div style="font-weight:700;font-size:18px;">'+todays.length+'<span style="font-size:12px;">件</span></div></div>'+
+      '<div style="flex:1;border-left:1px solid var(--line);"><div class="hint" style="margin:0;">今日の売上</div><div class="amt" style="font-size:18px;">'+yen(tSales)+'</div></div>'+
+      '<div style="flex:1;border-left:1px solid var(--line);"><div class="hint" style="margin:0;">未終了</div><div style="font-weight:700;font-size:18px;color:'+(pending?'var(--accent-text)':'var(--muted)')+';">'+pending+'<span style="font-size:12px;">件</span></div></div>'+
+    '</div>';
+  html+='<div class="sec">'+esc(dateLabel(tISO))+' の訪問</div>';
+  if(!todays.length){ html+='<div class="list-empty">今日の予定・記録はありません。<br>予約・施術の入力は「📅 予定」タブから。</div>'; }
   else { todays.forEach(function(it){ html+=timelineItemHtml(it); }); }
   html+='<button class="btn ghost accent" style="margin-top:10px;" onclick="showRouteMap(\''+tISO+'\')">🗺 今日の動線を地図で見る</button>';
   html+='<div id="routeMap" style="display:none;margin-top:8px;"></div>';
+  html+='<button class="btn primary" style="margin-top:10px;" onclick="switchTab(\'plan\')">📅 予定タブで予約・施術を入力</button>';
   v.innerHTML=html;
 }
 
 /* ===== その日のタイムスケジュール（時間軸で目視） ===== */
 function hm2min(t){ if(!t) return null; var p=String(t).split(":"); return (+p[0])*60+(+(p[1]||0)); }
 function itDur(it){ return it.kind==="bk" ? (it.b.duration||60) : it.kind==="fac" ? (Number(exRec(it.recs[0]).dur)||60) : (Number(exRec(it.r).dur)||30); }   // 施術時間(分)
+function itemDone(it){ return it.kind==="bk" ? (it.b.status==="施術終了") : it.kind==="fac" ? it.recs.every(function(r){return !!exRec(r).done;}) : !!exRec(it.r).done; }
 function movesForDay(iso){ return TB.filter(function(m){return m.date===iso && m.time;}); }   // 独立した移動ブロック
 function dayScheduleHtml(iso){
   var items=dayTimeline(iso);
@@ -579,7 +589,8 @@ function renderPlan(){
   if(!PLAN_MONTH) PLAN_MONTH=curMonth();
   if(!PLAN_SEL) PLAN_SEL=todayISO();
   var ym=PLAN_MONTH, p=ym.split("-"), first=new Date(+p[0],+p[1]-1,1).getDay(), days=new Date(+p[0],+p[1],0).getDate();
-  var html='<button class="btn primary" onclick="openPicker(\'bkWith\',{title:\'だれの予約を入れますか？\',allowNew:true})">📅 予約を入力</button>';
+  var html='<div class="row"><button class="btn primary" onclick="openPicker(\'bkWith\',{title:\'だれの予約を入れますか？\',allowNew:true})">📅 予約を入力</button>'+
+    '<button class="btn ghost accent" onclick="openPicker(\'recWith\',{title:\'だれの施術を入力しますか？\',allowNew:true})">💴 施術を入力</button></div>';
   // カレンダー
   html+='<div class="card">'+
     '<div class="row" style="align-items:center;"><button class="btn ghost sm" style="flex:0 0 44px;" onclick="planMonth(-1)">‹</button>'+
