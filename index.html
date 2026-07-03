@@ -446,8 +446,7 @@ function openNewAt(iso, t){
   window._newAt={iso:iso, t:t};
   openSheet('<div class="sheet-title">'+esc(dateLabel(iso))+'　'+esc(t)+'</div>'+
     '<div class="muted" style="margin-bottom:8px;">この時間に追加します。</div>'+
-    '<button class="btn primary" onclick="newBookingAt()">📅 予約を入力</button>'+
-    '<button class="btn ghost accent" onclick="newRecordAt()">💴 施術情報を入力</button>'+
+    '<button class="btn primary" onclick="newBookingAt()">＋ 予約・施術を入力</button>'+
     '<button class="btn ghost accent" onclick="newMoveAt()">🚗 移動を入れる</button>'+
     '<button class="btn ghost" onclick="closeSheet()">キャンセル</button>');
 }
@@ -591,8 +590,7 @@ function renderPlan(){
   if(!PLAN_MONTH) PLAN_MONTH=curMonth();
   if(!PLAN_SEL) PLAN_SEL=todayISO();
   var ym=PLAN_MONTH, p=ym.split("-"), first=new Date(+p[0],+p[1]-1,1).getDay(), days=new Date(+p[0],+p[1],0).getDate();
-  var html='<div class="row"><button class="btn primary" onclick="openPicker(\'bkWith\',{title:\'だれの予約を入れますか？\',allowNew:true})">📅 予約を入力</button>'+
-    '<button class="btn ghost accent" onclick="openPicker(\'recWith\',{title:\'だれの施術を入力しますか？\',allowNew:true})">💴 施術を入力</button></div>';
+  var html='<button class="btn primary" onclick="openPicker(\'bkWith\',{title:\'だれの予約・施術を入れますか？\',allowNew:true})">＋ 予約・施術を入力</button>';
   // カレンダー
   html+='<div class="card">'+
     '<div class="row" style="align-items:center;"><button class="btn ghost sm" style="flex:0 0 44px;" onclick="planMonth(-1)">‹</button>'+
