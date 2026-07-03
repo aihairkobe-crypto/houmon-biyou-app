@@ -279,9 +279,11 @@ function firstRunGuide(){
     '</div>'+
     '<div class="sec">まずはここから（どれでもOK）</div>'+
     '<button class="btn primary" onclick="openClientForm(null,\'個人\')">① お客様・施設を登録</button>'+
-    '<div class="muted" style="font-size:11px;margin:-2px 0 6px;">登録画面で「個人／施設／病院」を選べます。</div>'+
+    '<div class="muted" style="font-size:11px;margin:-2px 0 6px;">相手の情報を登録（住所・料金表など）。一度登録すれば次から選ぶだけ。<b>売上にはなりません。</b></div>'+
     '<button class="btn ghost accent" onclick="openPicker(\'bkWith\',{title:\'だれの予約を入れますか？\',allowNew:true})">② 📅 予約を入力</button>'+
+    '<div class="muted" style="font-size:11px;margin:-2px 0 6px;">これからの訪問予定を入れる（任意）。</div>'+
     '<button class="btn ghost accent" onclick="openPicker(\'recWith\',{title:\'だれの施術を入力しますか？\',allowNew:true})">③ 💴 施術情報を入力</button>'+
+    '<div class="muted" style="font-size:11px;margin:-2px 0 6px;">やった施術と料金を記録 → <b>売上に集計されます。</b></div>'+
     '<button class="btn ghost" onclick="openHelp()">❓ 詳しい使い方を見る</button>';
 }
 function renderToday(){
