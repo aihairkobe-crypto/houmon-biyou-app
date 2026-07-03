@@ -638,8 +638,8 @@ function renderPlan(){
   // 選択日のタイムスケジュール（時間軸で目視）
   html+='<div class="sec">'+esc(dateLabel(PLAN_SEL))+' の予定</div>';
   // タップした日のすぐ下に追加ボタン（スマホで見やすい・iPhoneカレンダー風）
-  html+='<button class="btn primary" style="margin-bottom:8px;" onclick="openPicker(\'bkWith\',{title:\'だれの予約・施術を入れますか？\',allowNew:true})">＋ この日に予約・施術を入れる</button>';
-  html+='<div class="muted" style="font-size:11px;margin-bottom:6px;">下の時間帯をタップすると、その時刻で追加できます。</div>';
+  html+='<button class="btn primary" style="margin-bottom:8px;" onclick="openPicker(\'bkWith\',{title:\'だれの予約・施術を入れますか？\',allowNew:true})">＋ 予約・施術を入れる</button>';
+  html+='<div class="muted" style="font-size:11px;margin-bottom:6px;">日付・時間はフォームで自由に変えられます（選んだ日が初期値）。下の時間帯タップでその時刻に追加も可。</div>';
   html+=dayScheduleHtml(PLAN_SEL);
   html+='<button class="btn ghost accent" style="margin-top:10px;" onclick="openMoveForm(null,{date:\''+PLAN_SEL+'\',duration:15})">🚗 移動を追加</button>';
   html+='<button class="btn ghost accent" style="margin-top:8px;" onclick="showRouteMap(\''+PLAN_SEL+'\')">🗺 この日の動線を地図で見る</button>';
