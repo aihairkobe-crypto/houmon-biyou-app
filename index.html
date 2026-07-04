@@ -1145,7 +1145,7 @@ function readLane(fieldId){ var e=el(fieldId); var v=(e&&e.value)?e.value:defaul
 function openLanes(){
   var rows=LANES.map(function(l){ return laneRow(l); }).join("");
   openSheet('<div class="sheet-title">👥 枠・担当</div>'+
-    '<div class="muted" style="margin-bottom:8px;">他のスタッフ（ヘルパー）や、サロン予約・訪問など、<b>別の予約枠が必要なとき</b>に追加できます。<b>別の枠どうしなら同じ時間でも重複になりません</b>（並行して予約OK）。</div>'+
+    '<div class="muted" style="margin-bottom:8px;">他のスタッフや、サロン予約・訪問など、<b>別の予約枠が必要なとき</b>に追加できます。<b>別の枠どうしなら同じ時間でも重複になりません</b>（並行して予約OK）。</div>'+
     '<div id="ln_rows">'+rows+'</div>'+
     '<button class="btn ghost accent sm" style="width:auto;" onclick="addLaneRow()">＋ 枠を追加</button>'+
     '<button class="btn primary" style="margin-top:10px;" onclick="saveLanesForm()">保存</button>'+
@@ -1701,7 +1701,7 @@ function openSettings(){
       '<div class="hint" style="margin-top:8px;">お名前</div><div>'+esc((ORGP&&ORGP.name)||PROFILE.name||"")+'</div>'+
       '<div class="hint" style="margin-top:8px;">メール</div><div>'+esc(ME.email||"")+'</div></div>'+
     '<button class="btn ghost accent" onclick="openOrgProfile()">🏪 お店・組織情報</button>'+
-    '<button class="btn ghost accent" onclick="openLanes()">👥 枠・担当（訪問枠/サロン枠/ヘルパー）</button>'+
+    '<button class="btn ghost accent" onclick="openLanes()">👥 枠・担当（訪問枠/サロン枠など）</button>'+
     '<button class="btn ghost accent" onclick="openStdMenu()">🧾 標準メニュー（デフォルト料金表）</button>'+
     '<button class="btn ghost accent" onclick="downloadRosterTemplate()">📥 名簿の雛形をダウンロード</button>'+
     '<div class="muted" style="font-size:11px;margin:-2px 0 6px;">施設や協力スタッフに配って、同じ形式で名簿をもらえます（そのまま取り込み可）。</div>'+
