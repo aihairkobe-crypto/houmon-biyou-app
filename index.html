@@ -258,7 +258,7 @@ function clientById(id){ return CL.find(function(x){return x.id===id;}); }
 function clientName(id){ var c=clientById(id); return c?c.name:"（未設定）"; }
 /* 追加項目（名前・時間・区分）は既存の photos(jsonb) 列に格納＝SQL不要。{nm,t,pk} */
 function exRec(r){ var e=r&&r.photos; return (e&&typeof e==="object"&&!Array.isArray(e))?e:{}; }
-function recExtra(o){ var x={}; if(o.nm)x.nm=o.nm; if(o.t)x.t=o.t; if(o.pk)x.pk=o.pk; if(o.dur)x.dur=o.dur; if(o.travel)x.travel=o.travel; if(o.room)x.room=o.room; if(o.fee)x.fee=o.fee; return x; }
+function recExtra(o){ var x={}; if(o.nm)x.nm=o.nm; if(o.t)x.t=o.t; if(o.pk)x.pk=o.pk; if(o.dur)x.dur=o.dur; if(o.travel)x.travel=o.travel; if(o.room)x.room=o.room; if(o.fee)x.fee=o.fee; if(o.lane)x.lane=o.lane; return x; }
 function recFee(r){ return Number(exRec(r).fee)||0; }   // 訪問出張料
 function recTotal(r){ return (r.amount||0)+recFee(r); }   // 施術料＋出張料
 function recordWho(r){ var e=exRec(r); var room=e.room?('🚪'+esc(e.room)+' '):""; if(r.client_id){ return e.nm?(esc(clientName(r.client_id))+' ／ '+room+esc(e.nm)):esc(clientName(r.client_id)); } var pk=e.pk?("["+esc(e.pk)+"] "):""; return pk+room+(e.nm?esc(e.nm):"お客様"); }
@@ -902,6 +902,7 @@ function openQuickRecord(prefill){
     '<div class="row"><div><div class="hint">日付</div><input id="qr_date" type="date" value="'+esc(prefill.date||todayISO())+'"></div>'+
       '<div><div class="hint">時間</div><select id="qr_time">'+timeOptions(prefill.time||defHM())+'</select></div></div>'+
     '<div class="hint" style="margin-top:8px;">施術時間（分）</div><input id="qr_dur" type="number" step="'+TIME_UNIT+'" value="'+(prefill.dur||60)+'">'+
+    laneFieldHtml("qr_lane", defaultLaneId())+
     '<div class="hint" style="margin-top:8px;" id="qr_namehint">お客様名（任意）</div><input id="qr_name" placeholder="例：〇〇様（空欄でもOK）">'+
     '<div class="hint" style="margin-top:8px;">住所（地図に出す・任意）</div><input id="qr_addr" placeholder="例：神戸市中央区元町通5-7-4-202">'+
     '<div class="hint" style="margin-top:8px;">電話（任意）</div><input id="qr_phone" placeholder="任意">'+
@@ -964,7 +965,7 @@ async function saveQuick(){
   var data={ org_id:PROFILE.org_id, client_id:clientId, booking_id:null, member_id:null, staff_id:ME.id,
     menu:el("qr_menu").value.trim(), amount:Number(el("qr_amount").value)||0,
     note:el("qr_note").value.trim(), date:el("qr_date").value,
-    photos:recExtra({ nm:(clientId?"":name), t:el("qr_time").value, pk:kind, dur:Number(el("qr_dur").value)||0, fee:(el("qr_fee")?Number(el("qr_fee").value)||0:0) }) };
+    photos:recExtra({ nm:(clientId?"":name), t:el("qr_time").value, pk:kind, dur:Number(el("qr_dur").value)||0, fee:(el("qr_fee")?Number(el("qr_fee").value)||0:0), lane:readLane("qr_lane") }) };
   var r=await insertRecords(data);
   if(r.error){ showMsg("保存エラー："+esc(r.error.message)); return; }
   closeSheet(); toast(created?("💴 記録し「"+name+"」を顧客に登録しました"):"💴 施術を記録しました"); await loadAll(); renderTab();
@@ -1135,6 +1136,8 @@ function defaultLaneId(){ try{ var v=localStorage.getItem("lastlane_"+(ME&&ME.id
 function rememberLane(id){ if(id){ try{ localStorage.setItem("lastlane_"+ME.id, id); }catch(e){} } }
 function laneOptions(sel){ return LANES.map(function(l){ return '<option value="'+esc(l.id)+'"'+(l.id===sel?" selected":"")+'>'+esc(l.name)+'</option>'; }).join(""); }
 function laneTag(id){ if(!multiLane()||!id) return ""; return '<span class="lane-tag" style="background:'+laneColor(id)+'22;color:'+laneColor(id)+';border:1px solid '+laneColor(id)+'55;">'+esc(laneName(id))+'</span>'; }
+function laneFieldHtml(fieldId, sel){ if(!multiLane()) return ""; return '<div class="hint" style="margin-top:8px;">枠・担当</div><select id="'+fieldId+'">'+laneOptions(sel||defaultLaneId())+'</select>'; }
+function readLane(fieldId){ var e=el(fieldId); var v=(e&&e.value)?e.value:defaultLaneId(); rememberLane(v); return v; }
 function openLanes(){
   var rows=LANES.map(function(l){ return laneRow(l); }).join("");
   openSheet('<div class="sheet-title">👥 枠・担当</div>'+
@@ -1200,6 +1203,7 @@ function openRecordForm(id, prefill){
       '<input id="rf_caddr" value="'+esc(c.address||"")+'" placeholder="住所（例：神戸市中央区元町通5-7-4-202）">'+
       '<input id="rf_cphone" value="'+esc(c.phone||"")+'" placeholder="電話（任意）" style="margin-top:6px;">'+
       '<input id="rf_crules" value="'+esc(c.rules||"")+'" placeholder="注意・ルール（任意）" style="margin-top:6px;margin-bottom:4px;">':'')+
+    laneFieldHtml("rf_lane", exRec(rec).lane||defaultLaneId())+
     '<div class="row"><div><div class="hint">日付</div><input id="rf_date" type="date" value="'+esc(rec.date||todayISO())+'"></div>'+
       '<div><div class="hint">時間</div><select id="rf_time">'+timeOptions(rec.time||exRec(rec).t||defHM())+'</select></div></div>'+
     '<div class="hint" style="margin-top:8px;">施術時間（分）</div><input id="rf_dur" type="number" step="'+TIME_UNIT+'" value="'+(Number(exRec(rec).dur)||60)+'">'+
@@ -1226,7 +1230,7 @@ async function saveRecord(id){
     member_id:el("rf_mid").value||null, staff_id:ME.id,
     menu:el("rf_menu").value.trim(), amount:Number(el("rf_amount").value)||0,
     note:el("rf_note").value.trim(), date:el("rf_date").value,
-    photos:recExtra({nm:el("rf_mname").value, t:el("rf_time").value, pk:el("rf_pk").value, dur:Number(el("rf_dur").value)||0, room:(el("rf_room")?el("rf_room").value.trim():""), fee:(el("rf_fee")?Number(el("rf_fee").value)||0:0)}) };
+    photos:recExtra({nm:el("rf_mname").value, t:el("rf_time").value, pk:el("rf_pk").value, dur:Number(el("rf_dur").value)||0, room:(el("rf_room")?el("rf_room").value.trim():""), fee:(el("rf_fee")?Number(el("rf_fee").value)||0:0), lane:readLane("rf_lane")}) };
   if(!confirmIfConflict({date:data.date, time:el("rf_time").value, dur:Number(el("rf_dur").value)||30, clientId:client, exRecId:id})) return;   // 重複チェック
   var r=id?await updateRecord(id,data):await insertRecords(data);
   if(r.error){ showMsg("保存エラー："+esc(r.error.message)); return; }
@@ -1279,6 +1283,7 @@ async function openFacilityBatch(clientId, opts){
     '<input id="ba_cphone" value="'+esc(defPhone)+'" placeholder="電話（任意）" style="margin-top:6px;">'+
     '<div class="row" style="margin-top:8px;"><div><div class="hint">日付</div><input id="ba_date" type="date" value="'+esc(iso)+'"></div>'+
       '<div><div class="hint">時間</div><select id="ba_time">'+timeOptions(defTime)+'</select></div></div>'+
+    laneFieldHtml("ba_lane", defaultLaneId())+
     (hasRows?'<div class="card" style="padding:10px 12px;margin-top:10px;">'+
       '<div class="row"><button class="btn ghost accent sm" onclick="batchCheckAll(true)">✓ 全員チェック</button>'+
         '<button class="btn ghost sm" onclick="batchCheckAll(false)">全員はずす</button></div>'+
@@ -1367,14 +1372,14 @@ async function batchAdd(){
   var node=tmp.firstChild; el("ba_rows").appendChild(node); captureBatchDraft();
 }
 async function saveBatch(){
-  var date=el("ba_date").value; var time=(el("ba_time")?el("ba_time").value:""); var rows=document.querySelectorAll("#ba_rows .ba-row"); var payload=[];
+  var date=el("ba_date").value; var time=(el("ba_time")?el("ba_time").value:""); var lane=readLane("ba_lane"); var rows=document.querySelectorAll("#ba_rows .ba-row"); var payload=[];
   Array.prototype.forEach.call(rows,function(row){
     if(!row.querySelector(".ba_chk").checked) return;
     payload.push({ org_id:PROFILE.org_id, client_id:window._batch.clientId, booking_id:window._batch.bookingId||null,
       member_id:row.getAttribute("data-mid")||null, staff_id:ME.id,
       menu:row.querySelector(".ba_menu").value.trim(), amount:Number(row.querySelector(".ba_amount").value)||0, date:date,
       note:row.getAttribute("data-note")||"",
-      photos:recExtra({nm:row.getAttribute("data-name")||"", room:(row.querySelector(".ba_room")?row.querySelector(".ba_room").value.trim():""), t:time}) });
+      photos:recExtra({nm:row.getAttribute("data-name")||"", room:(row.querySelector(".ba_room")?row.querySelector(".ba_room").value.trim():""), t:time, lane:lane}) });
   });
   if(!payload.length){ showMsg("その日 対応した人にチェックを入れてください"); return; }
   if(!confirmIfConflict({date:date, time:time, dur:60, clientId:window._batch.clientId})) return;   // 重複チェック（他の予定との重なり。同施設同時刻の団体は除外）
