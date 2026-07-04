@@ -806,6 +806,7 @@ function renderSales(){
       '<div class="muted" style="font-size:11px;margin-top:4px;">※「施術終了」にした分だけ売上に反映されます</div>'+
     '</div>';
   if(!recs.length){ html+='<div class="list-empty">この月の売上はまだありません。<br>予定を「✅施術終了」にすると、ここに反映されます。</div>'; v.innerHTML=html; return; }
+  if(multiLane()){ html+=breakdownCard("👥 枠・担当別", sumBy(recs,function(r){ var ln=exRec(r).lane; return ln?(laneName(ln)||"（不明な枠）"):"（枠なし）"; })); }
   html+=breakdownCard("🏢 顧客先・お客様別", sumBy(recs,function(r){ return r.client_id?clientName(r.client_id):(exRec(r).nm||"その他"); }));
   html+=breakdownCard("✂️ メニュー別", sumBy(recs,function(r){ return (r.menu||"").trim()||"（メニュー未記入）"; }));
   html+='<div class="sec">📋 日別明細</div>';
