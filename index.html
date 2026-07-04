@@ -1145,7 +1145,7 @@ function readLane(fieldId){ var e=el(fieldId); var v=(e&&e.value)?e.value:defaul
 function openLanes(){
   var rows=LANES.map(function(l){ return laneRow(l); }).join("");
   openSheet('<div class="sheet-title">👥 枠・担当</div>'+
-    '<div class="muted" style="margin-bottom:8px;">「訪問枠／サロン枠」やヘルパーさんなど、<b>予約を分けたい単位</b>を作れます。<b>別の枠どうしなら同じ時間でも重複になりません</b>（並行して入れられます）。</div>'+
+    '<div class="muted" style="margin-bottom:8px;">他のスタッフ（ヘルパー）や、サロン予約・訪問など、<b>別の予約枠が必要なとき</b>に追加できます。<b>別の枠どうしなら同じ時間でも重複になりません</b>（並行して予約OK）。</div>'+
     '<div id="ln_rows">'+rows+'</div>'+
     '<button class="btn ghost accent sm" style="width:auto;" onclick="addLaneRow()">＋ 枠を追加</button>'+
     '<button class="btn primary" style="margin-top:10px;" onclick="saveLanesForm()">保存</button>'+
