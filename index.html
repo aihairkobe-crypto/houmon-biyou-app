@@ -1214,6 +1214,7 @@ async function openFacilityBatch(clientId, opts){
     '<button class="btn ghost accent" onclick="facilityBulkPaste()">📋 名簿を貼り付け（Excelからコピー）</button>'+
     '<button class="btn ghost accent" onclick="batchAdd()">➕ その場で利用者を追加</button>'+
     '<div id="m"></div>'+
+    '<label style="display:flex;align-items:center;gap:8px;margin:8px 0;font-size:13px;cursor:pointer;"><input type="checkbox" id="ba_learnprice" style="width:auto;">入力した料金を「'+esc(c.name)+'」の料金表に反映する（次回の初期メニューになる）</label>'+
     '<button class="btn primary" onclick="saveBatch()">まとめて保存</button>'+
     (roster.length?'<button class="btn ghost sm" style="width:auto;color:var(--danger);margin-top:6px;" onclick="clearFacilityRoster()">🧹 以前の登録名簿を消す（'+roster.length+'件）</button>':"")+
     '<button class="btn ghost" onclick="closeSheet()">キャンセル</button>';
@@ -1306,6 +1307,11 @@ async function saveBatch(){
     var cu={ address:newAddr, phone:(el("ba_cphone")?el("ba_cphone").value.trim():"") };
     if(newAddr!==(oldC.address||"")){ cu.lat=null; cu.lng=null; }
     try{ await sb.from("clients").update(cu).eq("id",window._batch.clientId); }catch(e){}
+  }
+  // チェックONなら、入力した料金をこの施設の料金表に反映（メニュー名ごとに1件・後勝ちで上書き）
+  if(el("ba_learnprice") && el("ba_learnprice").checked){
+    var seen={}; payload.forEach(function(p){ var mn=(p.menu||"").trim(); if(mn) seen[mn]=p.amount||0; });
+    for(var mn in seen){ await upsertClientPrice(window._batch.clientId, mn, seen[mn]); }
   }
   clearBatchDraft(); closeSheet(); toast("💴 "+payload.length+"件の施術を記録しました"); await loadAll(); renderTab();
 }
