@@ -344,6 +344,7 @@ function renderToday(){
 function hm2min(t){ if(!t) return null; var p=String(t).split(":"); return (+p[0])*60+(+(p[1]||0)); }
 function itDur(it){ return it.kind==="bk" ? (it.b.duration||60) : it.kind==="fac" ? (Number(exRec(it.recs[0]).dur)||60) : (Number(exRec(it.r).dur)||30); }   // 施術時間(分)
 function itemDone(it){ return it.kind==="bk" ? (it.b.status==="施術終了") : it.kind==="fac" ? it.recs.every(function(r){return !!exRec(r).done;}) : !!exRec(it.r).done; }
+function itemLane(it){ return it.kind==="bk" ? (it.b.lane||"") : it.kind==="fac" ? (exRec(it.recs[0]||{}).lane||"") : (exRec(it.r||{}).lane||""); }   // その予定の枠
 function movesForDay(iso){ return TB.filter(function(m){return m.date===iso && m.time;}); }   // 独立した移動ブロック
 function dayScheduleHtml(iso){
   var items=dayTimeline(iso);
@@ -367,8 +368,9 @@ function dayScheduleHtml(iso){
     else if(isBk){ done=(it.b.status==="施術終了"); label=esc(clientName(it.b.client_id)); sub=done?'✅ 施術終了':(it.b.duration?it.b.duration+'分':'予定'); dataAttr='data-mv="bk" data-id="'+esc(it.b.id)+'"'; }
     else { done=!!exRec(it.r).done; label=recordWho(it.r); sub=esc(it.r.menu||'')+(it.r.amount?'　'+yen(it.r.amount):''); dataAttr='data-mv="rc" data-id="'+esc(it.r.id)+'"'; }
     var cls=done?"fin":"plan";   // 未=予定(緑)/済=施術終了(灰)
-    h+='<div class="sched-ev '+cls+'" '+dataAttr+' style="top:'+top+'px;height:'+hgt+'px;cursor:grab;">'+
-      '<b>'+esc(it.t)+'</b> '+label+(sub?'<div style="opacity:.85;">'+sub+'</div>':'')+'<div class="sched-resize"></div></div>';
+    var laneId=itemLane(it); var laneStyle=(multiLane()&&laneId)?'border-left:5px solid '+laneColor(laneId)+';':'';
+    h+='<div class="sched-ev '+cls+'" '+dataAttr+' style="top:'+top+'px;height:'+hgt+'px;cursor:grab;'+laneStyle+'">'+
+      '<b>'+esc(it.t)+'</b> '+label+laneTag(laneId)+(sub?'<div style="opacity:.85;">'+sub+'</div>':'')+'<div class="sched-resize"></div></div>';
   });
   // 独立した移動ブロック（好きな時間・場所に配置）
   moves.forEach(function(mv){
@@ -581,7 +583,7 @@ function timelineItemHtml(it){
     var frecs=it.recs; var ftot=frecs.reduce(function(a,r){return a+(r.amount||0);},0);
     var fdone=frecs.every(function(r){return !!exRec(r).done;});
     return '<div class="item"><div class="top">'+
-      '<div style="cursor:pointer;" onclick="openFacVisit(\''+it.clientId+'\',\''+it.iso+'\',\''+it.t+'\')"><div class="name">'+(it.t?esc(it.t)+'　':'')+'🏢 '+esc(clientName(it.clientId))+'（'+frecs.length+'名）</div>'+
+      '<div style="cursor:pointer;" onclick="openFacVisit(\''+it.clientId+'\',\''+it.iso+'\',\''+it.t+'\')"><div class="name">'+(it.t?esc(it.t)+'　':'')+'🏢 '+esc(clientName(it.clientId))+'（'+frecs.length+'名）'+laneTag(itemLane(it))+'</div>'+
         '<div class="meta">✂️ '+esc(menuSummary(frecs))+'　'+yen(ftot)+'</div></div>'+
       '<span class="pill '+(fdone?"plan":"done")+'">'+(fdone?"施術終了":"予定")+'</span></div>'+
       '<div class="row" style="margin-top:10px;">'+
@@ -593,7 +595,7 @@ function timelineItemHtml(it){
     var b=it.b; var recs=recordsForBooking(b.id); var hasRec=recs.length>0; var fin=(b.status==="施術終了");
     var tot=recs.reduce(function(a,r){return a+(r.amount||0);},0);
     return '<div class="item"><div class="top">'+
-      '<div><div class="name">'+(b.time?esc(b.time)+'　':'')+esc(clientName(b.client_id))+'</div>'+
+      '<div><div class="name">'+(b.time?esc(b.time)+'　':'')+esc(clientName(b.client_id))+laneTag(itemLane(it))+'</div>'+
         (b.memo?'<div class="meta">📝 '+esc(b.memo)+'</div>':"")+
         (hasRec?'<div class="meta">💴 '+recs.length+'件　'+yen(tot)+'</div>':"")+'</div>'+
       '<span class="pill '+(fin?"plan":"done")+'">'+(fin?"施術終了":"予定")+'</span></div>'+
@@ -605,7 +607,7 @@ function timelineItemHtml(it){
   }
   var r=it.r; var rfin=!!exRec(r).done;
   return '<div class="item"><div class="top">'+
-    '<div style="cursor:pointer;" onclick="openRecordForm(\''+r.id+'\')"><div class="name">'+(exRec(r).t?esc(exRec(r).t)+'　':'')+recordWho(r)+'</div>'+
+    '<div style="cursor:pointer;" onclick="openRecordForm(\''+r.id+'\')"><div class="name">'+(exRec(r).t?esc(exRec(r).t)+'　':'')+recordWho(r)+laneTag(itemLane(it))+'</div>'+
       '<div class="meta">✂️ '+esc(r.menu||"施術")+'　'+yen(r.amount)+(recFee(r)?'　🚗'+yen(recFee(r)):'')+(r.note?'　📝 '+esc(r.note):"")+'</div></div>'+
     '<span class="pill '+(rfin?"plan":"done")+'">'+(rfin?"施術終了":"予定")+'</span></div>'+
     '<div class="row" style="margin-top:10px;">'+
