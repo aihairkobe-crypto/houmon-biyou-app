@@ -169,10 +169,11 @@ async function boot(){
   await loadProfile();
   if(!PROFILE){ await ensurePersonalSpace(); await loadProfile(); }
   if(!PROFILE){ renderAuth(); return; }
-  loadStdMenu();
+  loadStdMenu(); loadOrgProfile();
   loadTimeUnit(); loadStateColors(); applyStateColors();
   await loadAll();
   renderApp();
+  if(!setupDone()) openInitialSetup();   // 初回だけ：屋号＋デフォルトメニューのかんたん設定（スキップ可）
   subscribeRealtime();
 }
 async function loadProfile(){ var r=await sb.from("profiles").select("*").eq("id",ME.id).maybeSingle(); PROFILE=r.data||null; }
@@ -1072,6 +1073,51 @@ function saveColorSettings(){
   applyStateColors(); closeSheet(); toast("🎨 色を保存しました"); renderTab();
 }
 function resetColors(){ STATE_COLORS=Object.assign({},STATE_COLORS_DEFAULT); try{ localStorage.removeItem("statecolors_"+(ME&&ME.id)); }catch(e){} applyStateColors(); openColorSettings(); }
+
+/* ===== お店・組織情報（この端末に保存。組織リンク段階で正式テーブルへ移行予定） ===== */
+var ORGP={};
+function loadOrgProfile(){ try{ ORGP=JSON.parse(localStorage.getItem("orgprofile_"+(ME&&ME.id))||"{}")||{}; }catch(e){ ORGP={}; } }
+function saveOrgProfile(o){ ORGP=o||{}; try{ localStorage.setItem("orgprofile_"+ME.id, JSON.stringify(ORGP)); }catch(e){} }
+function openOrgProfile(){
+  var o=ORGP||{};
+  openSheet('<div class="sheet-title">🏪 お店・組織情報</div>'+
+    '<div class="muted" style="margin-bottom:8px;">屋号やお名前を登録できます（今後、領収書・明細書などで使います）。</div>'+
+    '<div class="hint">屋号・お店/活動名</div><input id="op_shop" value="'+esc(o.shop||"")+'" placeholder="例：i,hair 訪問美容">'+
+    '<div class="hint" style="margin-top:8px;">お名前（担当者）</div><input id="op_name" value="'+esc(o.name||PROFILE.name||"")+'" placeholder="例：板谷">'+
+    '<div class="hint" style="margin-top:8px;">電話（任意）</div><input id="op_phone" value="'+esc(o.phone||"")+'" placeholder="任意">'+
+    '<div class="hint" style="margin-top:8px;">登録番号（インボイス・任意）</div><input id="op_invoice" value="'+esc(o.invoice||"")+'" placeholder="例：T1234567890123">'+
+    '<button class="btn primary" onclick="saveOrgProfileForm()">保存</button>'+
+    '<button class="btn ghost" onclick="openSettings()">戻る</button>');
+}
+function saveOrgProfileForm(){
+  saveOrgProfile({ shop:el("op_shop").value.trim(), name:el("op_name").value.trim(), phone:el("op_phone").value.trim(), invoice:el("op_invoice").value.trim() });
+  closeSheet(); toast("🏪 お店・組織情報を保存しました");
+}
+
+/* ===== 初回セットアップ（一度だけ。屋号＋デフォルトメニューをその場で登録。スキップ可） ===== */
+function setupDone(){ try{ return localStorage.getItem("setupdone_"+(ME&&ME.id))==="1"; }catch(e){ return false; } }
+function markSetupDone(){ try{ localStorage.setItem("setupdone_"+(ME&&ME.id),"1"); }catch(e){} }
+function openInitialSetup(){
+  var o=ORGP||{};
+  var menuRows=(STD_MENU.length?STD_MENU:[{name:"カット",price:""},{name:"",price:""}]).map(function(p){return priceRow(p.name,p.price);}).join("");
+  openSheet('<div class="sheet-title">はじめの設定 🎉</div>'+
+    '<div class="muted" style="margin-bottom:8px;">お店の名前と、よく使う<b>デフォルトメニュー</b>を先に登録しておくと、予約入力がぐっと楽になります。<br>あとで「設定」からいつでも変えられます。</div>'+
+    '<div class="hint">屋号・お店/活動名</div><input id="su_shop" value="'+esc(o.shop||"")+'" placeholder="例：i,hair 訪問美容">'+
+    '<div class="hint" style="margin-top:8px;">お名前（担当者）</div><input id="su_name" value="'+esc(o.name||PROFILE.name||"")+'" placeholder="例：板谷">'+
+    '<div class="hint" style="margin-top:10px;">デフォルトメニュー（料金表）</div>'+
+    '<div class="muted" style="font-size:11px;margin-bottom:4px;">施設・生活保護など条件で変わる料金は、予約入力時に自由入力＆その場で上書きできます。</div>'+
+    '<div id="su_rows">'+menuRows+'</div>'+
+    '<button class="btn ghost accent sm" style="width:auto;" onclick="addPriceRow(\'su_rows\')">＋ メニューを追加</button>'+
+    '<button class="btn primary" style="margin-top:10px;" onclick="saveInitialSetup()">保存して始める</button>'+
+    '<button class="btn ghost" onclick="skipInitialSetup()">あとで（スキップ）</button>');
+}
+function saveInitialSetup(){
+  saveOrgProfile({ shop:el("su_shop").value.trim(), name:el("su_name").value.trim(), phone:(ORGP.phone||""), invoice:(ORGP.invoice||"") });
+  var out=[]; Array.prototype.forEach.call(document.querySelectorAll("#su_rows .price-row"),function(r){ var n=r.querySelector(".pn").value.trim(); var p=Number(r.querySelector(".pp").value)||0; if(n) out.push({name:n,price:p}); });
+  STD_MENU=out; try{ localStorage.setItem("stdmenu_"+ME.id, JSON.stringify(out)); }catch(e){}
+  markSetupDone(); closeSheet(); toast("🎉 設定を保存しました"); renderTab();
+}
+function skipInitialSetup(){ markSetupDone(); closeSheet(); }
 function usedMenusFor(clientId){   // その顧客の過去メニューだけ（全体を寄せ集めない）
   if(!clientId) return [];
   var recs=RC.filter(function(r){return r.client_id===clientId;}).sort(function(a,b){return (b.date||"").localeCompare(a.date||"");});
@@ -1516,7 +1562,7 @@ function cfKind(b){
 function newMemberRow(name){ return '<div class="price-row"><input class="cf_nm" value="'+esc(name||"")+'" placeholder="利用者名（例：田中 花子）"><button class="px" onclick="this.parentNode.remove()">×</button></div>'; }
 function addNewMemberRow(){ var b=el("cf_newmembers"); if(b) b.insertAdjacentHTML("beforeend", newMemberRow("")); }
 function priceRow(name,price){ return '<div class="price-row"><input class="pn" value="'+esc(name||"")+'" placeholder="メニュー（例：カット）"><input class="pp" type="number" value="'+(price!=null&&price!==""?price:"")+'" placeholder="円"><button class="px" onclick="this.parentNode.remove()">×</button></div>'; }
-function addPriceRow(){ el("cf_prices").insertAdjacentHTML("beforeend", priceRow("","")); }
+function addPriceRow(target){ el(target||"cf_prices").insertAdjacentHTML("beforeend", priceRow("","")); }
 function collectPrices(){ var out=[]; Array.prototype.forEach.call(document.querySelectorAll("#cf_prices .price-row"),function(r){ var n=r.querySelector(".pn").value.trim(); var p=Number(r.querySelector(".pp").value)||0; if(n) out.push({name:n,price:p}); }); return out; }
 async function saveClient(id){
   var name=el("cf_name").value.trim(); if(!name){ showMsg("名前を入力してください"); return; }
@@ -1609,9 +1655,11 @@ function saveStdMenuForm(){
 /* ===== 設定 ===== */
 function openSettings(){
   var body='<div class="sheet-title">設定</div>'+
-    '<div class="card"><div class="hint">お名前</div><div style="font-weight:700;">'+esc(PROFILE.name||"")+'</div>'+
+    '<div class="card"><div class="hint">お店・活動名</div><div style="font-weight:700;">'+esc((ORGP&&ORGP.shop)||"（未設定）")+'</div>'+
+      '<div class="hint" style="margin-top:8px;">お名前</div><div>'+esc((ORGP&&ORGP.name)||PROFILE.name||"")+'</div>'+
       '<div class="hint" style="margin-top:8px;">メール</div><div>'+esc(ME.email||"")+'</div></div>'+
-    '<button class="btn ghost accent" onclick="openStdMenu()">🧾 標準メニュー（料金表）</button>'+
+    '<button class="btn ghost accent" onclick="openOrgProfile()">🏪 お店・組織情報</button>'+
+    '<button class="btn ghost accent" onclick="openStdMenu()">🧾 標準メニュー（デフォルト料金表）</button>'+
     '<button class="btn ghost accent" onclick="downloadRosterTemplate()">📥 名簿の雛形をダウンロード</button>'+
     '<div class="muted" style="font-size:11px;margin:-2px 0 6px;">施設や協力スタッフに配って、同じ形式で名簿をもらえます（そのまま取り込み可）。</div>'+
     '<div class="hint" style="margin-top:4px;">⏱ 時間の単位（予約・ドラッグ移動/伸縮の刻み）</div>'+
