@@ -1129,6 +1129,7 @@ function openRecordForm(id, prefill){
     menuChipsHtml(rec.client_id,"rf_menu","rf_amount")+
     '<input id="rf_menu" value="'+esc(rec.menu||"")+'" placeholder="メニュー（例：カット）">'+
     '<div class="hint" style="margin-top:8px;">料金（円）</div><input id="rf_amount" type="number" value="'+(rec.amount||"")+'" placeholder="0">'+
+    (rec.client_id?'<label style="display:flex;align-items:center;gap:8px;margin-top:8px;font-size:13px;cursor:pointer;"><input type="checkbox" id="rf_learnprice" style="width:auto;">次回からこの料金を「'+esc(c.name||"この顧客")+'」の初期メニューに登録する</label>':'')+
     '<div class="hint" style="margin-top:8px;">🚗 訪問出張料（円・任意）</div><input id="rf_fee" type="number" value="'+(Number(exRec(rec).fee)||"")+'" placeholder="0">'+
     '<div class="hint" style="margin-top:8px;">メモ・カルテ</div><input id="rf_note" value="'+esc(rec.note||"")+'" placeholder="任意">'+
     '<div id="m"></div>'+
@@ -1156,6 +1157,10 @@ async function saveRecord(id){
     var cu={ address:newAddr, phone:el("rf_cphone").value.trim(), rules:el("rf_crules").value.trim() };
     if(newAddr!==(oldC.address||"")){ cu.lat=null; cu.lng=null; }
     try{ await sb.from("clients").update(cu).eq("id",client); }catch(e){}
+  }
+  // チェックONなら、この料金をこの顧客の料金表に覚えさせる（次回デフォルト）
+  if(client && el("rf_learnprice") && el("rf_learnprice").checked){
+    var mn=el("rf_menu").value.trim(); if(mn) await upsertClientPrice(client, mn, Number(el("rf_amount").value)||0);
   }
   closeSheet(); toast("💴 施術を記録しました"); await loadAll(); renderTab();
 }
@@ -1306,6 +1311,14 @@ async function saveBatch(){
 }
 /* ===== 施設名簿をExcelからコピペで一括取り込み ===== */
 function priceOfMenu(pl, menu){ var f=(pl||[]).find(function(p){return p.name===menu;}); return f?f.price:null; }
+/* 自由入力した料金を、その顧客/施設の料金表に登録（同名は上書き）→ 次回から初期メニューに出る */
+async function upsertClientPrice(clientId, name, price){
+  var c=clientById(clientId); if(!c||!name) return;
+  var pl=Array.isArray(c.price_list)?c.price_list.slice():[];
+  var f=pl.find(function(p){return p.name===name;});
+  if(f){ f.price=price; } else { pl.push({name:name, price:price}); }
+  try{ await sb.from("clients").update({price_list:pl}).eq("id",clientId); c.price_list=pl; }catch(e){}
+}
 function reopenFacilityBatch(){ var b=window._batch||{};
   // 開き直しでも入力中の日付・時間・住所・電話を保持
   openFacilityBatch(b.clientId,{ date:(el("ba_date")?el("ba_date").value:b.date), time:(el("ba_time")?el("ba_time").value:null), addr:(el("ba_caddr")?el("ba_caddr").value:null), phone:(el("ba_cphone")?el("ba_cphone").value:null), booking_id:b.bookingId });
