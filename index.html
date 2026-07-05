@@ -817,7 +817,8 @@ function renderSales(){
       '<div style="display:flex;justify-content:space-between;align-items:center;margin-top:6px;border-top:1px solid #cbe7da;padding-top:6px;"><span style="font-weight:800;">手取り</span><span class="amt" style="font-size:22px;">'+yen(net)+'</span></div>'+
       '<div class="muted" style="font-size:11px;margin-top:4px;">※売上は「施術終了」にした分だけ反映／手取り＝売上−経費</div>'+
     '</div>'+
-    '<button class="btn ghost accent" onclick="openExpenseForm(null,{date:(SALES_MONTH===curMonth()?todayISO():SALES_MONTH+\'-01\')})">🧾 経費を入れる</button>';
+    '<button class="btn ghost accent" onclick="openExpenseForm(null,{date:(SALES_MONTH===curMonth()?todayISO():SALES_MONTH+\'-01\')})">🧾 経費を入れる</button>'+
+    '<button class="btn ghost accent" onclick="openInvoicePicker()">📄 施設の請求書を作る</button>';
   if(!recs.length && !exs.length){ html+='<div class="list-empty">この月の売上・経費はまだありません。<br>予定を「✅施術終了」にすると売上に、上の「🧾経費を入れる」で経費が反映されます。</div>'; v.innerHTML=html; return; }
   if(multiLane()){ html+=breakdownCard("👥 枠・担当別", sumBy(recs,function(r){ var ln=exRec(r).lane; return ln?(laneName(ln)||"（不明な枠）"):"（枠なし）"; })); }
   html+=breakdownCard("🏢 顧客先・お客様別", sumBy(recs,function(r){ return r.client_id?clientName(r.client_id):(exRec(r).nm||"その他"); }));
@@ -878,6 +879,67 @@ async function delExpense(id){
   var r=await sb.from("expenses").delete().eq("id",id);
   if(r.error){ showMsg("削除エラー："+esc(r.error.message)); return; }
   closeSheet(); toast("🗑 削除しました"); await reloadExpenses();
+}
+
+/* ===== 施設の請求書（月まとめ・全利用者の明細付き。印刷/PDF保存） ===== */
+function openInvoicePicker(prefillFid){
+  var facs=CL.filter(isFacility);
+  if(!facs.length){ showMsg("施設・訪問先が未登録です。まず施設を登録してください。"); return; }
+  var mon=SALES_MONTH||curMonth();
+  openSheet('<div class="sheet-title">📄 施設の請求書</div>'+
+    '<div class="muted" style="margin-bottom:8px;">施設とその月を選ぶと、<b>全利用者の明細（日付・利用者名・メニュー・金額）</b>付きの請求書を作成します。「印刷→PDFで保存」で発行できます。<br>※「施術終了」にした分から作成します。</div>'+
+    '<div class="hint">施設・訪問先</div><select id="iv_fac">'+facs.map(function(c){return '<option value="'+esc(c.id)+'"'+(c.id===prefillFid?" selected":"")+'>'+esc(c.name)+'</option>';}).join("")+'</select>'+
+    '<div class="hint" style="margin-top:8px;">請求月</div><input id="iv_month" type="month" value="'+esc(mon)+'">'+
+    (!(ORGP&&ORGP.shop)?'<div class="muted" style="font-size:11px;margin-top:6px;color:var(--danger);">※先に設定の🏪お店・組織情報（屋号・住所・登録番号・振込先）を入れておくと請求書に反映されます。</div>':"")+
+    '<button class="btn primary" onclick="makeInvoiceFromForm()">請求書を作成（印刷/PDF）</button>'+
+    '<button class="btn ghost" onclick="closeSheet()">閉じる</button>');
+}
+function makeInvoiceFromForm(){ makeInvoice(el("iv_fac").value, el("iv_month").value); }
+function makeInvoice(fid, mon){
+  if(!fid||!mon){ showMsg("施設と請求月を選んでください"); return; }
+  var c=clientById(fid)||{};
+  var rows=RC.filter(function(r){ return r.client_id===fid && (r.date||"").slice(0,7)===mon && recDone(r); })
+    .sort(function(a,b){ var d=(a.date||"").localeCompare(b.date||""); if(d) return d; return (exRec(a).nm||"").localeCompare(exRec(b).nm||""); });
+  if(!rows.length){ showMsg("その月の「施術終了」の記録がありません。（請求書は施術終了分から作成します）"); return; }
+  var total=rows.reduce(function(a,r){return a+recTotal(r);},0);
+  var tax=Math.round(total*10/110);
+  var o=ORGP||{};
+  var invNo="INV-"+String(mon).replace("-","")+"-"+String(fid).slice(-4).toUpperCase();
+  var mp=String(mon).split("-"); var monLabel=mp.length===2?((+mp[0])+"年"+(+mp[1])+"月"):mon;
+  var trs=rows.map(function(r){ var m=(r.date||"").split("-"); var md=m.length===3?((+m[1])+"/"+(+m[2])):"";
+    return '<tr><td>'+md+'</td><td>'+esc(exRec(r).nm||"ご利用者")+(exRec(r).room?'（'+esc(exRec(r).room)+'）':'')+'</td><td>'+esc(r.menu||"施術")+'</td><td class="r">'+yen(recTotal(r))+'</td></tr>'; }).join("");
+  var issuerLines=[o.shop,o.name?("担当："+o.name):"",o.addr,o.phone?("TEL "+o.phone):"",o.invoice?("登録番号 "+o.invoice):""].filter(function(s){return s;}).map(function(s){return '<div>'+esc(s)+'</div>';}).join("");
+  var css='<style>'+
+    '*{box-sizing:border-box;} body{font-family:-apple-system,"Hiragino Kaku Gothic ProN",sans-serif;color:#111;margin:0;padding:24px;font-size:13px;}'+
+    '.noprint{margin-bottom:16px;} .noprint button{font-size:15px;padding:10px 18px;border:none;border-radius:8px;background:#1d9e75;color:#fff;font-weight:700;cursor:pointer;}'+
+    'h1{text-align:center;font-size:24px;letter-spacing:8px;margin:0 0 18px;}'+
+    '.head{display:flex;justify-content:space-between;align-items:flex-start;}'+
+    '.to{font-size:18px;font-weight:700;border-bottom:2px solid #111;padding-bottom:4px;min-width:240px;}'+
+    '.meta{text-align:right;font-size:12px;line-height:1.6;} .issuer{text-align:right;font-size:12px;line-height:1.7;margin-top:10px;}'+
+    '.total-box{margin:16px 0;padding:10px 14px;border:2px solid #111;display:inline-block;font-size:16px;font-weight:700;}'+
+    '.total-box .amt{font-size:22px;margin-left:12px;}'+
+    'table{width:100%;border-collapse:collapse;margin-top:10px;} th,td{border:1px solid #999;padding:6px 8px;text-align:left;} th{background:#eee;}'+
+    'td.r,th.r{text-align:right;} tfoot td{font-weight:700;background:#f7f7f7;}'+
+    '.bank{margin-top:14px;padding:8px 12px;background:#f4f6f5;border:1px solid #ddd;font-size:12px;}'+
+    '.note{margin-top:10px;font-size:11px;color:#555;}'+
+    '@media print{.noprint{display:none;} body{padding:0;}}'+
+    '</style>';
+  var body='<div class="noprint"><button onclick="window.print()">🖨 印刷 / PDFで保存</button></div>'+
+    '<h1>請求書</h1>'+
+    '<div class="head"><div><div class="to">'+esc(c.name)+'　御中</div>'+(c.address?'<div style="font-size:12px;margin-top:6px;">'+esc(c.address)+'</div>':"")+'</div>'+
+      '<div class="meta">請求番号：'+esc(invNo)+'<br>発行日：'+esc(dateLabel(todayISO()))+'<br>請求対象：'+esc(monLabel)+'分'+
+        '<div class="issuer">'+issuerLines+'</div></div></div>'+
+    '<div class="total-box">ご請求金額（税込）<span class="amt">'+yen(total)+'</span></div>'+
+    '<table><thead><tr><th style="width:60px;">日付</th><th>利用者名</th><th>メニュー</th><th class="r" style="width:90px;">金額</th></tr></thead>'+
+      '<tbody>'+trs+'</tbody>'+
+      '<tfoot><tr><td colspan="3" class="r">合計（税込）</td><td class="r">'+yen(total)+'</td></tr>'+
+        '<tr><td colspan="3" class="r">うち消費税（10%）</td><td class="r">'+yen(tax)+'</td></tr></tfoot></table>'+
+    (o.bank?'<div class="bank">お振込先：'+esc(o.bank)+'</div>':"")+
+    '<div class="note">※上記のとおりご請求申し上げます。'+(o.invoice?'（適格請求書／登録番号 '+esc(o.invoice)+'）':'')+'</div>';
+  var w=window.open("","_blank");
+  if(!w){ showMsg("ポップアップがブロックされました。ブラウザでこのサイトのポップアップを許可してください。"); return; }
+  w.document.open(); w.document.write('<!doctype html><html><head><meta charset="utf-8"><title>請求書 '+esc(c.name)+' '+esc(mon)+'</title>'+css+'</head><body>'+body+'</body></html>'); w.document.close();
+  closeSheet();
 }
 /* 売上をキー別に集計（金額の多い順） */
 function sumBy(recs, keyFn){
@@ -1148,12 +1210,15 @@ function openOrgProfile(){
     '<div class="hint">屋号・お店/活動名</div><input id="op_shop" value="'+esc(o.shop||"")+'" placeholder="例：i,hair 訪問美容">'+
     '<div class="hint" style="margin-top:8px;">お名前（担当者）</div><input id="op_name" value="'+esc(o.name||PROFILE.name||"")+'" placeholder="例：板谷">'+
     '<div class="hint" style="margin-top:8px;">電話（任意）</div><input id="op_phone" value="'+esc(o.phone||"")+'" placeholder="任意">'+
+    '<div class="hint" style="margin-top:8px;">住所（請求書・領収書に載ります・任意）</div><input id="op_addr" value="'+esc(o.addr||"")+'" placeholder="例：神戸市中央区〇〇1-2-3">'+
+    '<div class="hint" style="margin-top:8px;">振込先（請求書に載ります・任意）</div><input id="op_bank" value="'+esc(o.bank||"")+'" placeholder="例：〇〇銀行 △△支店 普通 1234567 イタヤ">'+
     '<div class="hint" style="margin-top:8px;">登録番号（インボイス・任意）</div><input id="op_invoice" value="'+esc(o.invoice||"")+'" placeholder="例：T1234567890123">'+
     '<button class="btn primary" onclick="saveOrgProfileForm()">保存</button>'+
     '<button class="btn ghost" onclick="openSettings()">戻る</button>');
 }
 function saveOrgProfileForm(){
-  saveOrgProfile({ shop:el("op_shop").value.trim(), name:el("op_name").value.trim(), phone:el("op_phone").value.trim(), invoice:el("op_invoice").value.trim() });
+  saveOrgProfile({ shop:el("op_shop").value.trim(), name:el("op_name").value.trim(), phone:el("op_phone").value.trim(),
+    addr:el("op_addr").value.trim(), bank:el("op_bank").value.trim(), invoice:el("op_invoice").value.trim() });
   closeSheet(); toast("🏪 お店・組織情報を保存しました");
 }
 
