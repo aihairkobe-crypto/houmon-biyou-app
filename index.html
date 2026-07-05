@@ -66,6 +66,24 @@
   .sched-del{position:absolute; top:1px; right:2px; width:22px; height:22px; padding:0; border:none; border-radius:6px; background:rgba(0,0,0,.06); color:#9a6b1e; font-size:13px; font-weight:700; line-height:1; cursor:pointer; z-index:5;}
   .sched-del:hover{background:rgba(200,60,60,.15); color:#c33;}
   .lane-tag{display:inline-block; font-size:10px; font-weight:700; padding:1px 6px; border-radius:999px; margin-left:6px; vertical-align:middle; white-space:nowrap;}
+  /* 帳票（請求書・領収書）の全画面表示＋印刷 */
+  #docview{position:fixed; inset:0; z-index:9999; background:#fff; overflow:auto; display:none;}
+  #docview.show{display:block;}
+  .docbar{position:sticky; top:0; display:flex; gap:8px; padding:10px 12px; background:#f4f6f5; border-bottom:1px solid #ddd;}
+  .docbar button{flex:1; font-size:15px; font-weight:700; padding:10px; border:none; border-radius:8px; cursor:pointer;}
+  .docbar .pr{background:#1d9e75; color:#fff;} .docbar .cl{background:#e6e8e7; color:#333;}
+  .docpage{max-width:720px; margin:0 auto; padding:22px; color:#111; font-size:13px;}
+  .docpage h1{text-align:center; font-size:24px; letter-spacing:8px; margin:0 0 18px;}
+  .docpage .dhead{display:flex; justify-content:space-between; align-items:flex-start; gap:16px;}
+  .docpage .to{font-size:18px; font-weight:700; border-bottom:2px solid #111; padding-bottom:4px; min-width:220px;}
+  .docpage .meta{text-align:right; font-size:12px; line-height:1.6;} .docpage .issuer{text-align:right; font-size:12px; line-height:1.7; margin-top:10px;}
+  .docpage .total-box{margin:16px 0; padding:10px 14px; border:2px solid #111; display:inline-block; font-size:16px; font-weight:700;}
+  .docpage .total-box .amt{font-size:22px; margin-left:12px;}
+  .docpage table{width:100%; border-collapse:collapse; margin-top:10px;} .docpage th,.docpage td{border:1px solid #999; padding:6px 8px; text-align:left;} .docpage th{background:#eee;}
+  .docpage td.r,.docpage th.r{text-align:right;} .docpage tfoot td{font-weight:700; background:#f7f7f7;}
+  .docpage .bank{margin-top:14px; padding:8px 12px; background:#f4f6f5; border:1px solid #ddd; font-size:12px;}
+  .docpage .note{margin-top:10px; font-size:11px; color:#555;}
+  @media print{ body>*{visibility:hidden;} #docview,#docview *{visibility:visible;} #docview{position:absolute; inset:auto; display:block;} .docbar{display:none;} .docpage{max-width:none; padding:0;} }
   .sched-resize{position:absolute; left:0; right:0; bottom:0; height:10px; cursor:ns-resize; touch-action:none;}
   .sched-resize::after{content:""; position:absolute; left:50%; bottom:3px; width:22px; height:3px; margin-left:-11px; border-radius:2px; background:rgba(0,0,0,.18);}
   /* タブバー */
@@ -110,6 +128,7 @@
 <body>
 <div class="wrap" id="app"><div class="center-narrow"><div class="card">読み込み中…</div></div></div>
 <div class="overlay" id="overlay" onclick="if(event.target===this)closeSheet()"><div class="sheet"><div class="sheet-handle"></div><div id="sheetBody"></div></div></div>
+<div id="docview"></div>
 
 <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
 <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
@@ -881,10 +900,19 @@ async function delExpense(id){
   closeSheet(); toast("🗑 削除しました"); await reloadExpenses();
 }
 
+/* ===== 帳票の全画面表示（印刷/PDF保存）。ポップアップ不要でスマホでも確実 ===== */
+function showDoc(innerHtml){
+  var d=el("docview"); if(!d) return;
+  d.innerHTML='<div class="docbar"><button class="pr" onclick="window.print()">🖨 印刷 / PDFで保存</button><button class="cl" onclick="closeDoc()">✕ 閉じる</button></div>'+
+    '<div class="docpage">'+innerHtml+'</div>';
+  d.classList.add("show"); d.scrollTop=0;
+}
+function closeDoc(){ var d=el("docview"); if(d){ d.classList.remove("show"); d.innerHTML=""; } }
+
 /* ===== 施設の請求書（月まとめ・全利用者の明細付き。印刷/PDF保存） ===== */
 function openInvoicePicker(prefillFid){
   var facs=CL.filter(isFacility);
-  if(!facs.length){ showMsg("施設・訪問先が未登録です。まず施設を登録してください。"); return; }
+  if(!facs.length){ toast("施設・訪問先が未登録です。先に施設を登録してください"); return; }
   var mon=SALES_MONTH||curMonth();
   openSheet('<div class="sheet-title">📄 施設の請求書</div>'+
     '<div class="muted" style="margin-bottom:8px;">施設とその月を選ぶと、<b>全利用者の明細（日付・利用者名・メニュー・金額）</b>付きの請求書を作成します。「印刷→PDFで保存」で発行できます。<br>※「施術終了」にした分から作成します。</div>'+
@@ -896,11 +924,11 @@ function openInvoicePicker(prefillFid){
 }
 function makeInvoiceFromForm(){ makeInvoice(el("iv_fac").value, el("iv_month").value); }
 function makeInvoice(fid, mon){
-  if(!fid||!mon){ showMsg("施設と請求月を選んでください"); return; }
+  if(!fid||!mon){ toast("施設と請求月を選んでください"); return; }
   var c=clientById(fid)||{};
   var rows=RC.filter(function(r){ return r.client_id===fid && (r.date||"").slice(0,7)===mon && recDone(r); })
     .sort(function(a,b){ var d=(a.date||"").localeCompare(b.date||""); if(d) return d; return (exRec(a).nm||"").localeCompare(exRec(b).nm||""); });
-  if(!rows.length){ showMsg("その月の「施術終了」の記録がありません。（請求書は施術終了分から作成します）"); return; }
+  if(!rows.length){ toast("その月の「施術終了」の記録がありません"); return; }
   var total=rows.reduce(function(a,r){return a+recTotal(r);},0);
   var tax=Math.round(total*10/110);
   var o=ORGP||{};
@@ -909,24 +937,8 @@ function makeInvoice(fid, mon){
   var trs=rows.map(function(r){ var m=(r.date||"").split("-"); var md=m.length===3?((+m[1])+"/"+(+m[2])):"";
     return '<tr><td>'+md+'</td><td>'+esc(exRec(r).nm||"ご利用者")+(exRec(r).room?'（'+esc(exRec(r).room)+'）':'')+'</td><td>'+esc(r.menu||"施術")+'</td><td class="r">'+yen(recTotal(r))+'</td></tr>'; }).join("");
   var issuerLines=[o.shop,o.name?("担当："+o.name):"",o.addr,o.phone?("TEL "+o.phone):"",o.invoice?("登録番号 "+o.invoice):""].filter(function(s){return s;}).map(function(s){return '<div>'+esc(s)+'</div>';}).join("");
-  var css='<style>'+
-    '*{box-sizing:border-box;} body{font-family:-apple-system,"Hiragino Kaku Gothic ProN",sans-serif;color:#111;margin:0;padding:24px;font-size:13px;}'+
-    '.noprint{margin-bottom:16px;} .noprint button{font-size:15px;padding:10px 18px;border:none;border-radius:8px;background:#1d9e75;color:#fff;font-weight:700;cursor:pointer;}'+
-    'h1{text-align:center;font-size:24px;letter-spacing:8px;margin:0 0 18px;}'+
-    '.head{display:flex;justify-content:space-between;align-items:flex-start;}'+
-    '.to{font-size:18px;font-weight:700;border-bottom:2px solid #111;padding-bottom:4px;min-width:240px;}'+
-    '.meta{text-align:right;font-size:12px;line-height:1.6;} .issuer{text-align:right;font-size:12px;line-height:1.7;margin-top:10px;}'+
-    '.total-box{margin:16px 0;padding:10px 14px;border:2px solid #111;display:inline-block;font-size:16px;font-weight:700;}'+
-    '.total-box .amt{font-size:22px;margin-left:12px;}'+
-    'table{width:100%;border-collapse:collapse;margin-top:10px;} th,td{border:1px solid #999;padding:6px 8px;text-align:left;} th{background:#eee;}'+
-    'td.r,th.r{text-align:right;} tfoot td{font-weight:700;background:#f7f7f7;}'+
-    '.bank{margin-top:14px;padding:8px 12px;background:#f4f6f5;border:1px solid #ddd;font-size:12px;}'+
-    '.note{margin-top:10px;font-size:11px;color:#555;}'+
-    '@media print{.noprint{display:none;} body{padding:0;}}'+
-    '</style>';
-  var body='<div class="noprint"><button onclick="window.print()">🖨 印刷 / PDFで保存</button></div>'+
-    '<h1>請求書</h1>'+
-    '<div class="head"><div><div class="to">'+esc(c.name)+'　御中</div>'+(c.address?'<div style="font-size:12px;margin-top:6px;">'+esc(c.address)+'</div>':"")+'</div>'+
+  var body='<h1>請求書</h1>'+
+    '<div class="dhead"><div><div class="to">'+esc(c.name)+'　御中</div>'+(c.address?'<div style="font-size:12px;margin-top:6px;">'+esc(c.address)+'</div>':"")+'</div>'+
       '<div class="meta">請求番号：'+esc(invNo)+'<br>発行日：'+esc(dateLabel(todayISO()))+'<br>請求対象：'+esc(monLabel)+'分'+
         '<div class="issuer">'+issuerLines+'</div></div></div>'+
     '<div class="total-box">ご請求金額（税込）<span class="amt">'+yen(total)+'</span></div>'+
@@ -936,10 +948,7 @@ function makeInvoice(fid, mon){
         '<tr><td colspan="3" class="r">うち消費税（10%）</td><td class="r">'+yen(tax)+'</td></tr></tfoot></table>'+
     (o.bank?'<div class="bank">お振込先：'+esc(o.bank)+'</div>':"")+
     '<div class="note">※上記のとおりご請求申し上げます。'+(o.invoice?'（適格請求書／登録番号 '+esc(o.invoice)+'）':'')+'</div>';
-  var w=window.open("","_blank");
-  if(!w){ showMsg("ポップアップがブロックされました。ブラウザでこのサイトのポップアップを許可してください。"); return; }
-  w.document.open(); w.document.write('<!doctype html><html><head><meta charset="utf-8"><title>請求書 '+esc(c.name)+' '+esc(mon)+'</title>'+css+'</head><body>'+body+'</body></html>'); w.document.close();
-  closeSheet();
+  closeSheet(); showDoc(body);
 }
 /* 売上をキー別に集計（金額の多い順） */
 function sumBy(recs, keyFn){
