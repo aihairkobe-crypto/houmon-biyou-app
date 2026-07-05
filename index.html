@@ -122,7 +122,7 @@ var sb = supabase.createClient(SUPABASE_URL, SUPABASE_KEY);
 
 var APP=document.getElementById("app");
 var ME=null, PROFILE=null;
-var CL=[], BK=[], RC=[], TB=[];      // 顧客 / 予約 / 売上 / 移動ブロック(time_blocks)
+var CL=[], BK=[], RC=[], TB=[], EX=[];      // 顧客 / 予約 / 売上 / 移動ブロック(time_blocks) / 経費(expenses)
 var TIME_UNIT=5;                     // 時間の単位（分）。5/10/15/30
 function loadTimeUnit(){ try{ var u=parseInt(localStorage.getItem("timeunit_"+(ME&&ME.id))||"5",10); TIME_UNIT=([5,10,15,30].indexOf(u)>=0)?u:5; }catch(e){ TIME_UNIT=5; } }
 function snapUnit(min){ return Math.round(min/TIME_UNIT)*TIME_UNIT; }
@@ -191,7 +191,9 @@ async function loadAll(){
   RC=c.error?[]:(c.data||[]);
   var d=await sb.from("time_blocks").select("*");
   TB=d.error?[]:(d.data||[]);
+  try{ var e=await sb.from("expenses").select("*"); EX=e.error?[]:(e.data||[]); }catch(err){ EX=[]; }   // 経費（テーブル未作成でも壊れない）
 }
+async function reloadExpenses(){ try{ var e=await sb.from("expenses").select("*"); if(!e.error) EX=e.data||[]; }catch(err){} renderTab(); }
 async function reloadTimeBlocks(){ var d=await sb.from("time_blocks").select("*"); if(!d.error) TB=d.data||[]; renderTab(); }
 
 /* ===== ログイン / 新規登録 ===== */
@@ -794,6 +796,9 @@ function renderSales(){
     .sort(function(a,b){return (b.date||"").localeCompare(a.date||"");});
   var tot=recs.reduce(function(a,r){return a+recTotal(r);},0);
   var feeTot=recs.reduce(function(a,r){return a+recFee(r);},0);
+  var exs=EX.filter(function(e){return (e.date||"").slice(0,7)===SALES_MONTH;}).sort(function(a,b){return (b.date||"").localeCompare(a.date||"");});
+  var exTot=exs.reduce(function(a,e){return a+(e.amount||0);},0);
+  var net=tot-exTot;   // 手取り
   var html='<div class="card" style="background:var(--accent-soft);border-color:#cbe7da;">'+
     '<div class="row" style="align-items:center;">'+
       '<button class="btn ghost sm" style="flex:0 0 44px;" onclick="salesMonth(-1)">‹</button>'+
@@ -803,13 +808,26 @@ function renderSales(){
     '<div style="display:flex;justify-content:space-between;align-items:center;margin-top:8px;border-top:1px solid #cbe7da;padding-top:8px;">'+
       '<span style="font-weight:700;">売上合計（'+recs.length+'件）</span><span class="amt" style="font-size:20px;">'+yen(tot)+'</span></div>'+
       (feeTot?'<div class="muted" style="font-size:12px;margin-top:2px;">🚗 うち訪問出張料 '+yen(feeTot)+'</div>':"")+
-      '<div class="muted" style="font-size:11px;margin-top:4px;">※「施術終了」にした分だけ売上に反映されます</div>'+
-    '</div>';
-  if(!recs.length){ html+='<div class="list-empty">この月の売上はまだありません。<br>予定を「✅施術終了」にすると、ここに反映されます。</div>'; v.innerHTML=html; return; }
+      '<div style="display:flex;justify-content:space-between;align-items:center;margin-top:4px;"><span style="color:var(--danger);">🧾 経費（'+exs.length+'件）</span><span style="color:var(--danger);font-weight:700;">−'+yen(exTot)+'</span></div>'+
+      '<div style="display:flex;justify-content:space-between;align-items:center;margin-top:6px;border-top:1px solid #cbe7da;padding-top:6px;"><span style="font-weight:800;">手取り</span><span class="amt" style="font-size:22px;">'+yen(net)+'</span></div>'+
+      '<div class="muted" style="font-size:11px;margin-top:4px;">※売上は「施術終了」にした分だけ反映／手取り＝売上−経費</div>'+
+    '</div>'+
+    '<button class="btn ghost accent" onclick="openExpenseForm(null,{date:(SALES_MONTH===curMonth()?todayISO():SALES_MONTH+\'-01\')})">🧾 経費を入れる</button>';
+  if(!recs.length && !exs.length){ html+='<div class="list-empty">この月の売上・経費はまだありません。<br>予定を「✅施術終了」にすると売上に、上の「🧾経費を入れる」で経費が反映されます。</div>'; v.innerHTML=html; return; }
   if(multiLane()){ html+=breakdownCard("👥 枠・担当別", sumBy(recs,function(r){ var ln=exRec(r).lane; return ln?(laneName(ln)||"（不明な枠）"):"（枠なし）"; })); }
   html+=breakdownCard("🏢 顧客先・お客様別", sumBy(recs,function(r){ return r.client_id?clientName(r.client_id):(exRec(r).nm||"その他"); }));
   html+=breakdownCard("✂️ メニュー別", sumBy(recs,function(r){ return (r.menu||"").trim()||"（メニュー未記入）"; }));
-  html+='<div class="sec">📋 日別明細</div>';
+  if(exs.length){
+    html+=breakdownCard("🧾 経費（費目別）", sumBy(exs,function(e){ return (e.category||"").trim()||"その他"; }));
+    html+='<div class="sec">🧾 経費の明細</div>';
+    exs.forEach(function(e){
+      html+='<div class="item" onclick="openExpenseForm(\''+e.id+'\')"><div class="top">'+
+        '<div><div class="name">'+esc(e.category||"経費")+laneTag(e.lane||"")+'</div>'+
+          '<div class="meta">📅 '+esc(dateLabel(e.date))+(e.note?'　📝 '+esc(e.note):"")+'</div></div>'+
+        '<span class="amt" style="color:var(--danger);">−'+yen(e.amount)+'</span></div></div>';
+    });
+  }
+  if(recs.length){ html+='<div class="sec">📋 売上の日別明細</div>'; }
   var lastD="";
   recs.forEach(function(r){
     if(r.date!==lastD){ html+='<div class="sec">📅 '+esc(dateLabel(r.date))+'</div>'; lastD=r.date; }
@@ -822,6 +840,40 @@ function renderSales(){
   v.innerHTML=html;
 }
 function salesMonth(d){ SALES_MONTH=shiftMonth(SALES_MONTH||curMonth(),d); renderSales(); }
+
+/* ===== 経費（軽めの経費ログ。手取り＝売上−経費） ===== */
+var EXP_CATS=["駐車場","ガソリン","備品","飲食","その他"];
+function openExpenseForm(id, prefill){
+  var x=id?(EX.find(function(e){return e.id===id;})||{}):(prefill||{});
+  var chips=EXP_CATS.map(function(c){ return '<button class="btn ghost sm" style="width:auto;display:inline-block;margin:0 6px 6px 0;" onclick="el(\'ex_cat\').value=\''+c+'\'">'+c+'</button>'; }).join("");
+  var body='<div class="sheet-title">🧾 経費'+(id?"（編集）":"")+'</div>'+
+    '<div class="muted" style="margin-bottom:8px;">駐車場代・ガソリン・備品など、仕事で出ていくお金を記録します。<b>手取り（売上−経費）</b>に反映されます。</div>'+
+    '<div class="row"><div><div class="hint">日付</div><input id="ex_date" type="date" value="'+esc(x.date||todayISO())+'"></div>'+
+      '<div><div class="hint">金額（円）</div><input id="ex_amount" type="number" value="'+(x.amount||"")+'" placeholder="0"></div></div>'+
+    '<div class="hint" style="margin-top:8px;">費目（下のボタンで入力／自由に書けます）</div>'+
+    '<div style="margin-bottom:4px;">'+chips+'</div>'+
+    '<input id="ex_cat" value="'+esc(x.category||"")+'" placeholder="費目（例：駐車場）">'+
+    laneFieldHtml("ex_lane", x.lane||defaultLaneId())+
+    '<div class="hint" style="margin-top:8px;">メモ（任意）</div><input id="ex_note" value="'+esc(x.note||"")+'" placeholder="例：〇〇苑の駐車場代">'+
+    '<button class="btn primary" onclick="saveExpense(\''+(id||"")+'\')">保存</button>'+
+    (id?'<button class="btn danger" onclick="delExpense(\''+id+'\')">削除</button>':"")+
+    '<button class="btn ghost" onclick="closeSheet()">キャンセル</button>';
+  openSheet(body);
+}
+async function saveExpense(id){
+  var data={ org_id:PROFILE.org_id, staff_id:ME.id, date:el("ex_date").value, amount:Number(el("ex_amount").value)||0,
+    category:el("ex_cat").value.trim()||"その他", note:el("ex_note").value.trim(), lane:(el("ex_lane")?el("ex_lane").value:null) };
+  if(!data.date){ showMsg("日付を入れてください"); return; }
+  var r=id?await sb.from("expenses").update(data).eq("id",id):await sb.from("expenses").insert(data);
+  if(r.error){ showMsg("保存エラー："+esc(r.error.message)+"（経費テーブルが未作成かもしれません）"); return; }
+  closeSheet(); toast("🧾 経費を記録しました"); await reloadExpenses();
+}
+async function delExpense(id){
+  if(!confirm("この経費を削除しますか？")) return;
+  var r=await sb.from("expenses").delete().eq("id",id);
+  if(r.error){ showMsg("削除エラー："+esc(r.error.message)); return; }
+  closeSheet(); toast("🗑 削除しました"); await reloadExpenses();
+}
 /* 売上をキー別に集計（金額の多い順） */
 function sumBy(recs, keyFn){
   var map={}, order=[];
