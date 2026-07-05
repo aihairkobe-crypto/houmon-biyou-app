@@ -759,11 +759,16 @@ function renderClients(){
 function renderClientList(){
   var box=el("clList"); if(!box) return;
   var q=(el("clSearch")&&el("clSearch").value.trim())||"";
+  // 各顧客の前回来店日を集計（新しい順に並べる用）
+  var lastMap={};
+  RC.forEach(function(r){ if(!r.client_id) return; var d=r.date||""; if(!lastMap[r.client_id] || d>lastMap[r.client_id]) lastMap[r.client_id]=d; });
   var groups=[["施設","🏢 施設・訪問先"],["病院","🏥 病院"],["個人","🧑 個人"]];
   var html="";
   groups.forEach(function(g){
     var items=CL.filter(function(c){return (c.kind||"個人")===g[0] && (!q||(c.name||"").indexOf(q)>=0);});
     if(!items.length) return;
+    // 前回来店日の新しい順（未来店は下）。同日は名前順
+    items.sort(function(a,b){ var da=lastMap[a.id]||"", db=lastMap[b.id]||""; if(da!==db) return db.localeCompare(da); return (a.name||"").localeCompare(b.name||""); });
     html+='<div class="sec">'+g[1]+'（'+items.length+'）</div>';
     items.forEach(function(c){
       var pl=Array.isArray(c.price_list)?c.price_list:[];
