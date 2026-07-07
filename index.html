@@ -161,6 +161,7 @@ var TAB="today";
 function esc(s){ return (s==null?"":String(s)).replace(/[&<>"]/g,function(c){return {"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;"}[c];}); }
 function el(id){ return document.getElementById(id); }
 function yen(n){ return "¥"+(Number(n)||0).toLocaleString(); }
+function priceLabel(n){ var v=Number(n); return (!v)?"未設定":yen(v); }   // 料金の未設定/¥0は「未設定」表示（合計には使わない）
 function showMsg(t,k){ var m=el("m"); if(m) m.innerHTML='<div class="msg '+(k||"err")+'">'+esc(t)+'</div>'; }
 
 /* ===== 日付ヘルパ ===== */
@@ -802,21 +803,19 @@ function renderClientList(){
     html+='<div class="sec">'+g[1]+'（'+items.length+'）</div>';
     items.forEach(function(c){
       var pl=Array.isArray(c.price_list)?c.price_list:[];
-      var plTxt=pl.map(function(p){return esc(p.name)+" "+yen(p.price);}).join(" / ");
+      var plShort=pl.slice(0,2).map(function(p){return esc(p.name)+" "+priceLabel(p.price);}).join("・")+(pl.length>2?" 他":"");
       var last=RC.filter(function(r){return r.client_id===c.id;}).sort(function(a,b){return (b.date||"").localeCompare(a.date||"");})[0];
-      html+='<div class="item">'+
-        '<div class="top" style="cursor:pointer;" onclick="openClientDetail(\''+c.id+'\')"><div>'+
-          '<div class="name">'+esc(c.name)+'</div>'+
-          (c.address?'<div class="meta">📍 '+esc(c.address)+'</div>':"")+
-          (c.rules?'<div class="rules">⚠️ '+esc(c.rules)+'</div>':"")+
-          (plTxt?'<div class="meta">💴 '+plTxt+'</div>':"")+
-          (last?'<div class="meta">🗓 前回 '+esc(dateLabel(last.date))+'　'+esc(last.menu||"")+'</div>':"")+
-          '<div class="meta" style="color:var(--accent-text);">📋 カルテ・履歴を見る ›</div>'+
-        '</div></div>'+
-        '<div class="row" style="margin-top:10px;">'+
-          '<button class="btn ghost accent sm" style="width:auto;" onclick="bkWith(\''+c.id+'\')">📅 予約</button>'+
-          '<button class="btn ghost accent sm" style="width:auto;" onclick="recWith(\''+c.id+'\')">💴 施術</button>'+
-        '</div></div>';
+      // コンパクト表示：名前＋前回＋料金（住所・カルテリンク・予約/施術ボタンは詳細シートへ）
+      html+='<div class="item" style="cursor:pointer;" onclick="openClientDetail(\''+c.id+'\')">'+
+        '<div class="top">'+
+          '<div style="min-width:0;">'+
+            '<div class="name">'+esc(c.name)+'</div>'+
+            '<div class="meta">'+(last?'前回 '+esc(dateLabel(last.date)):'来店記録なし')+(plShort?'　💴 '+plShort:'')+'</div>'+
+            (c.rules?'<div class="rules">⚠️ '+esc(c.rules)+'</div>':"")+
+          '</div>'+
+          '<span class="muted" style="font-size:20px;align-self:center;flex:0 0 auto;">›</span>'+
+        '</div>'+
+      '</div>';
     });
   });
   if(!html) html='<div class="list-empty">まだ登録がありません。<br>契約先の施設や、よく行くお客様を登録しておきましょう。</div>';
@@ -844,7 +843,7 @@ function renderSales(){
     '</div>'+
     '<div style="border-top:1px solid #cbe7da;margin-top:8px;padding-top:10px;">'+
       '<div class="salesrow"><span style="font-weight:700;">売上<span class="cnt">施術終了 '+recs.length+'件</span></span><span class="amt" style="font-size:19px;">'+yen(tot)+'</span></div>'+
-      (feeTot?'<div class="muted" style="font-size:12px;margin:2px 0 0 2px;">🚗 うち訪問出張料 '+yen(feeTot)+'</div>':"")+
+      '<div class="muted" style="font-size:12px;margin:3px 0 0 10px;">✂️ 施術料 '+yen(tot-feeTot)+(feeTot?'　＋　🚗 出張料 '+yen(feeTot):'')+'</div>'+
       '<div class="salesrow" style="margin-top:6px;"><span style="color:var(--danger);">− 経費<span class="cnt">'+exs.length+'件</span></span><span style="color:var(--danger);font-weight:700;">'+yen(exTot)+'</span></div>'+
       '<div class="salesrow" style="margin-top:8px;border-top:2px solid #9fd3bd;padding-top:10px;"><span style="font-weight:800;font-size:16px;">＝ 差引<span class="cnt">売上−経費</span></span><span class="amt" style="font-size:26px;">'+yen(net)+'</span></div>'+
       (pend.length?'<div class="muted" style="font-size:12px;margin-top:8px;padding-top:8px;border-top:1px dashed #b7d3c7;">🟢 未終了の予定 '+pend.length+'件（見込 '+yen(pendTot)+'）… 「✅施術終了」にすると売上に入ります</div>':"")+
@@ -856,7 +855,7 @@ function renderSales(){
     '<button class="btn ghost accent" onclick="openInvoicePicker()">📄 施設の請求書を作る</button>'+
     '<button class="btn ghost accent" onclick="openReceiptForm()">🧾 領収書を作る</button>';
   if(!recs.length && !exs.length){ html+='<div class="list-empty">この月の売上・経費はまだありません。<br>予定を「✅施術終了」にすると売上に、上の「🧾経費を入れる」で経費が反映されます。</div>'; v.innerHTML=html; return; }
-  html+='<div class="sec">📊 内訳</div>';
+  html+='<div class="sec">📊 内訳<span class="muted" style="font-size:11px;font-weight:400;">（施術料ベース・🚗出張料'+yen(feeTot)+'は含みません）</span></div>';
   if(multiLane()){ html+=breakdownCard("👥 枠・担当別", sumBy(recs,function(r){ var ln=exRec(r).lane; return ln?(laneName(ln)||"（不明な枠）"):"（枠なし）"; })); }
   html+=breakdownCard("🏢 顧客先・お客様別", sumBy(recs,function(r){ return r.client_id?clientName(r.client_id):(exRec(r).nm||"その他"); }));
   html+=breakdownCard("✂️ メニュー別", sumBy(recs,function(r){ return (r.menu||"").trim()||"（メニュー未記入）"; }));
@@ -1805,7 +1804,7 @@ function openClientForm(id, presetKind){
          :'<div id="cf_newmembers">'+newMemberRow("")+'</div><button class="btn ghost sm" style="width:auto;" onclick="addNewMemberRow()">＋ 利用者を追加</button>')+
     '</div>'+
     (id?'<div class="hint" style="margin-top:14px;">来店履歴（カルテ）</div>'+
-        '<button class="btn primary sm" style="width:auto;margin-bottom:8px;" onclick="closeSheet();bkWith(\''+id+'\')">📅 '+((c.kind==="施設")?"この施設":(c.kind==="病院")?"この病院":"この方")+'で次回予約</button>'+
+        '<button class="btn primary sm" style="width:auto;margin-bottom:8px;" onclick="closeSheet();bkWith(\''+id+'\')">＋ 新規で予約</button>'+
         clientHistoryHtml(id):'')+
     '<div id="m"></div>'+
     '<button class="btn primary" onclick="saveClient(\''+(id||"")+'\')">保存</button>'+
@@ -1821,13 +1820,11 @@ function clientHistoryHtml(id){
   var total=recs.reduce(function(a,r){return a+(r.amount||0);},0);
   var h='<div class="muted" style="font-size:12px;margin-bottom:4px;">全'+recs.length+'回・累計 '+yen(total)+'</div>';
   h+=recs.map(function(r){ var e=exRec(r);
+    // 担当（枠）は普段テキスト表示、「変更」で選択式に切替
     var laneSel = multiLane() ? (
-      '<div style="margin-top:8px;display:flex;align-items:center;gap:6px;">'+
-        '<span class="muted" style="font-size:11px;white-space:nowrap;">担当：</span>'+
-        '<select onchange="setRecLane(\''+r.id+'\',this.value)" style="flex:1;padding:6px;border:1px solid var(--border,#ccc);border-radius:8px;">'+
-          '<option value=""'+(e.lane?"":" selected")+'>（担当なし）</option>'+
-          LANES.map(function(l){return '<option value="'+esc(l.id)+'"'+(l.id===e.lane?" selected":"")+'>'+esc(l.name)+'</option>';}).join("")+
-        '</select>'+
+      '<div class="lanewrap" style="margin-top:8px;font-size:11px;">'+
+        '<span class="muted">担当：'+(e.lane?esc(laneName(e.lane)):"（なし）")+'</span> '+
+        '<button class="btn ghost sm" style="width:auto;display:inline-block;font-size:11px;padding:2px 8px;" onclick="editRecLane(this,\''+r.id+'\',\''+esc(e.lane||"")+'\')">変更</button>'+
       '</div>') : '';
     return '<div class="item">'+
       '<div style="cursor:pointer;" onclick="closeSheet();openRecordForm(\''+r.id+'\')">'+
@@ -1835,10 +1832,19 @@ function clientHistoryHtml(id){
         '<div class="meta">✂️ '+esc(r.menu||"（メニュー未記入）")+'　'+yen(r.amount)+(recFee(r)?'　🚗'+yen(recFee(r)):'')+(r.note?'　📝 '+esc(r.note):"")+'</div>'+
       '</div>'+
       laneSel+
-      '<button class="btn ghost accent sm" style="width:auto;margin-top:8px;" onclick="reuseToBooking(\''+r.client_id+'\',\''+r.id+'\')">🔁 この内容で次回予約</button>'+
+      '<button class="btn ghost accent sm" style="width:auto;margin-top:8px;" onclick="reuseToBooking(\''+r.client_id+'\',\''+r.id+'\')">🔁 コピーして予約</button>'+
     '</div>';
   }).join("");
   return h;
+}
+/* 履歴の担当テキストを、その場で選択式に切り替える */
+function editRecLane(btn, rid, cur){
+  var wrap=btn.closest?btn.closest(".lanewrap"):null; if(!wrap) return;
+  wrap.innerHTML='<span class="muted" style="font-size:11px;white-space:nowrap;">担当：</span>'+
+    '<select onchange="setRecLane(\''+rid+'\',this.value)" style="padding:6px;border:1px solid var(--line);border-radius:8px;margin-left:6px;">'+
+      '<option value=""'+(cur?"":" selected")+'>（担当なし）</option>'+
+      LANES.map(function(l){return '<option value="'+esc(l.id)+'"'+(l.id===cur?" selected":"")+'>'+esc(l.name)+'</option>';}).join("")+
+    '</select>';
 }
 /* 来店履歴カードから担当（枠）をその場で設定・変更 */
 async function setRecLane(recId, laneId){
@@ -1854,15 +1860,14 @@ async function setRecLane(recId, laneId){
 function openClientDetail(id){
   var c=clientById(id); if(!c) return;
   var pl=Array.isArray(c.price_list)?c.price_list:[];
-  var plTxt=pl.map(function(p){return esc(p.name)+" "+yen(p.price);}).join(" / ");
-  var kindLabel=(c.kind==="施設")?"この施設":(c.kind==="病院")?"この病院":"この方";
+  var plTxt=pl.map(function(p){return esc(p.name)+" "+priceLabel(p.price);}).join(" / ");
   var body='<div class="sheet-title">'+esc(c.name)+'　<span class="pill plan">'+esc(c.kind||"個人")+'</span></div>'+
     '<div class="card" style="padding:10px 12px;margin-bottom:10px;">'+
       (c.address?'<div class="meta">📍 '+esc(c.address)+'</div>':'<div class="meta" style="color:var(--danger);">📍 住所未登録（地図に出ません）</div>')+
       (c.phone?'<div class="meta">📞 '+esc(c.phone)+'</div>':"")+
       (c.rules?'<div class="rules">⚠️ '+esc(c.rules)+'</div>':"")+
       (plTxt?'<div class="meta">💴 '+plTxt+'</div>':"")+'</div>'+
-    '<div class="row"><button class="btn primary" onclick="bkWith(\''+id+'\')">📅 '+kindLabel+'で次回予約</button>'+
+    '<div class="row"><button class="btn primary" onclick="bkWith(\''+id+'\')">＋ 新規で予約</button>'+
       '<button class="btn ghost accent" onclick="recWith(\''+id+'\')">💴 施術を記録</button></div>'+
     '<button class="btn ghost sm" style="width:auto;margin-top:8px;" onclick="openClientForm(\''+id+'\')">✏️ 情報を編集</button>'+
     '<div class="hint" style="margin-top:14px;">来店履歴（カルテ）</div>'+
