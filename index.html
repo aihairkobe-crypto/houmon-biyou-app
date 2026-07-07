@@ -158,7 +158,7 @@ function setTimeUnit(u){ TIME_UNIT=u; try{ localStorage.setItem("timeunit_"+(ME&
   var seg=el("tu_seg"); if(seg){ Array.prototype.forEach.call(seg.children,function(b){ b.classList.toggle("on", b.textContent===(u+"分")); }); }
   toast("⏱ 時間の単位を"+u+"分にしました"); }
 var TAB="today";
-var APP_VERSION="20260707-1";   // ← 更新のたびにこの値を上げると、全端末が次回起動時に自動で最新化される
+var APP_VERSION="20260707-2";   // ← 更新のたびにこの値を上げる。全端末で「新しい版があります」バナーが出る
 
 function esc(s){ return (s==null?"":String(s)).replace(/[&<>"]/g,function(c){return {"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;"}[c];}); }
 function el(id){ return document.getElementById(id); }
@@ -192,7 +192,7 @@ function toast(msg){ var t=el("toast"); if(!t){ t=document.createElement("div");
 function openSheet(html){ el("sheetBody").innerHTML=html; el("overlay").classList.add("show"); document.querySelector("#overlay .sheet").scrollTop=0; }
 function closeSheet(){ el("overlay").classList.remove("show"); el("sheetBody").innerHTML=""; }
 
-/* ===== 自動更新チェック（Safariが古い版をキャッシュしたままにしない） ===== */
+/* ===== 更新チェック（新しい版が出たら「タップで更新」バナーを出す。入力中に勝手に切り替えない） ===== */
 function checkForUpdate(){
   try{
     fetch("index.html?_c="+Date.now(), {cache:"no-store"})
@@ -200,13 +200,20 @@ function checkForUpdate(){
       .then(function(t){
         var m=t.match(/APP_VERSION="([0-9A-Za-z.\-]+)"/);   // ← 実データ版だけに一致（自身の正規表現には一致しない）
         var live=m&&m[1];
-        if(!live || live===APP_VERSION) return;             // 最新なら何もしない
-        var tried=null; try{ tried=sessionStorage.getItem("upd_try"); }catch(e){}
-        if(tried===live){ toast("🔄 新しい版があります。ページを再読み込みしてください"); return; }   // 1回試して駄目なら案内のみ（ループ防止）
-        try{ sessionStorage.setItem("upd_try", live); }catch(e){}
-        location.replace(location.pathname+"?v="+encodeURIComponent(live));   // クエリ付きで確実に最新HTMLを取り直す
+        if(live && live!==APP_VERSION) showUpdateBanner();  // 新しい版あり→バナー表示（更新はユーザーのタップで）
       }).catch(function(){});
   }catch(e){}
+}
+/* クエリを変えて確実に最新HTMLを取り直す（キャッシュを確実に破棄してリロード） */
+function forceReload(){ location.replace(location.pathname+"?v="+Date.now()); }
+/* 画面最上部に「タップで更新」バナーを1つだけ出す */
+function showUpdateBanner(){
+  if(el("updBanner")) return;   // 二重表示防止
+  var b=document.createElement("div");
+  b.id="updBanner"; b.setAttribute("onclick","forceReload()");
+  b.style.cssText="position:fixed;left:0;right:0;top:0;z-index:9999;background:var(--accent);color:#fff;padding:11px 14px;font-weight:700;font-size:14px;text-align:center;cursor:pointer;box-shadow:0 2px 10px rgba(0,0,0,.22);";
+  b.innerHTML="🔄 新しい版があります　―　タップして更新";
+  document.body.appendChild(b);
 }
 
 /* ===== 起動 ===== */
@@ -2031,6 +2038,8 @@ function openSettings(){
     '<div class="seg-wrap" id="tu_seg" style="margin-bottom:8px;">'+[5,10,15,30].map(function(u){return '<button class="seg'+(TIME_UNIT===u?" on":"")+'" onclick="setTimeUnit('+u+')">'+u+'分</button>';}).join("")+'</div>'+
     '<button class="btn ghost accent" onclick="openColorSettings()">🎨 表示の色（予定・施術終了・移動）</button>'+
     '<button class="btn ghost accent" onclick="openHelp()">📖 使い方・ヘルプ</button>'+
+    '<button class="btn ghost accent" onclick="forceReload()">🔄 アプリを最新に更新</button>'+
+    '<div class="muted" style="font-size:11px;text-align:center;margin:2px 0 8px;">最新版が反映されない時にタップ（バージョン '+esc(APP_VERSION)+'）</div>'+
     '<div class="muted" style="font-size:11px;text-align:center;margin:8px 0;">組織リンク（複数人で共有）は <b>近日</b> 対応予定</div>'+
     '<button class="btn ghost" onclick="doSignOut()" style="color:var(--hint);">ログアウト</button>'+
     '<div style="border-top:1px solid var(--line);margin:18px 0 8px;"></div>'+
