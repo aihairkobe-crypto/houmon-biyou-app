@@ -918,15 +918,17 @@ function openInvoicePicker(prefillFid){
   var facs=CL.filter(isFacility);
   if(!facs.length){ toast("施設・訪問先が未登録です。先に施設を登録してください"); return; }
   var mon=SALES_MONTH||curMonth();
-  openSheet('<div class="sheet-title">📄 施設の請求書</div>'+
-    '<div class="muted" style="margin-bottom:8px;">施設とその月を選ぶと、<b>全利用者の明細（日付・利用者名・メニュー・金額）</b>付きの請求書を作成します。「印刷→PDFで保存」で発行できます。<br>※「施術終了」にした分から作成します。</div>'+
+  openSheet('<div class="sheet-title">📄 施設の請求書・領収書</div>'+
+    '<div class="muted" style="margin-bottom:8px;">施設とその月を選び、下から作成します。<b>請求書</b>は施設あて（全利用者の明細付き）、<b>個別領収書</b>は利用者ごとに1枚ずつ（1回の印刷で全員分）。「印刷→PDFで保存」で発行できます。<br>※「施術終了」にした分から作成します。</div>'+
     '<div class="hint">施設・訪問先</div><select id="iv_fac">'+facs.map(function(c){return '<option value="'+esc(c.id)+'"'+(c.id===prefillFid?" selected":"")+'>'+esc(c.name)+'</option>';}).join("")+'</select>'+
-    '<div class="hint" style="margin-top:8px;">請求月</div><input id="iv_month" type="month" value="'+esc(mon)+'">'+
-    (!(ORGP&&ORGP.shop)?'<div class="muted" style="font-size:11px;margin-top:6px;color:var(--danger);">※先に設定の🏪お店・組織情報（屋号・住所・登録番号・振込先）を入れておくと請求書に反映されます。</div>':"")+
-    '<button class="btn primary" onclick="makeInvoiceFromForm()">請求書を作成（印刷/PDF）</button>'+
+    '<div class="hint" style="margin-top:8px;">対象の月</div><input id="iv_month" type="month" value="'+esc(mon)+'">'+
+    (!(ORGP&&ORGP.shop)?'<div class="muted" style="font-size:11px;margin-top:6px;color:var(--danger);">※先に設定の🏪お店・組織情報（屋号・住所・登録番号・振込先）を入れておくと反映されます。</div>':"")+
+    '<button class="btn primary" onclick="makeInvoiceFromForm()">📄 請求書を作成（施設あて・明細付き）</button>'+
+    '<button class="btn ghost accent" onclick="makeFacilityReceiptsFromForm()">🧾 個別領収書を作成（利用者ごと・全員分）</button>'+
     '<button class="btn ghost" onclick="closeSheet()">閉じる</button>');
 }
 function makeInvoiceFromForm(){ makeInvoice(el("iv_fac").value, el("iv_month").value); }
+function makeFacilityReceiptsFromForm(){ makeFacilityReceipts(el("iv_fac").value, el("iv_month").value); }
 function makeInvoice(fid, mon){
   if(!fid||!mon){ toast("施設と請求月を選んでください"); return; }
   var c=clientById(fid)||{};
@@ -982,7 +984,8 @@ function receiptFromRecordForm(){
   else if(el("rf_mname")&&el("rf_mname").value){ nm=el("rf_mname").value.trim()+" 様"; }
   openReceiptForm({ name:nm, treat:(Number(el("rf_amount").value)||0), travel:(el("rf_fee")?Number(el("rf_fee").value)||0:0), date:(el("rf_date")?el("rf_date").value:todayISO()) });
 }
-function makeReceipt(name, treat, travel, but, dateISO){
+/* 領収書1枚分のHTML（単票・一括の両方で使う） */
+function receiptBlockHtml(name, treat, travel, but, dateISO){
   treat=Number(treat)||0; travel=Number(travel)||0; var total=treat+travel;
   var o=ORGP||{};
   var no="RC-"+String(dateISO||todayISO()).replace(/-/g,"");
@@ -992,7 +995,7 @@ function makeReceipt(name, treat, travel, but, dateISO){
   var rows='<tr><td>施術代</td><td class="r">'+yen(treat)+'</td></tr>'+
     (travel>0?'<tr><td>🚗 出張交通費</td><td class="r">'+yen(travel)+'</td></tr>':"")+
     '<tr><td><b>合計（税込）</b></td><td class="r"><b>'+yen(total)+'</b></td></tr>';
-  var body='<h1>領　収　書</h1>'+
+  return '<h1>領　収　書</h1>'+
     '<div class="dhead"><div><div class="to">'+esc(name)+'</div></div>'+
       '<div class="meta">No. '+esc(no)+'<br>発行日：'+esc(dateLabel(dateISO||todayISO()))+'</div></div>'+
     '<div class="total-box" style="display:block;text-align:center;margin:18px 0;">領収金額（税込）<span class="amt">'+yen(total)+'</span></div>'+
@@ -1002,7 +1005,22 @@ function makeReceipt(name, treat, travel, but, dateISO){
     '<div style="font-size:12px;margin-top:2px;color:#555;">（内消費税10%　'+yen(tax)+'）</div>'+
     '<div class="issuer" style="text-align:right;margin-top:20px;">'+issuerLines+'</div>'+
     (o.invoice?'<div class="note">（適格簡易請求書／登録番号 '+esc(o.invoice)+'）</div>':'')+stamp;
-  closeSheet(); showDoc(body);
+}
+function makeReceipt(name, treat, travel, but, dateISO){
+  closeSheet(); showDoc(receiptBlockHtml(name, treat, travel, but, dateISO));
+}
+/* 施設の全利用者分の個別領収書を一括生成（1回の印刷で人数分・ページ区切り） */
+function makeFacilityReceipts(fid, mon){
+  if(!fid||!mon){ toast("施設と月を選んでください"); return; }
+  var recs=RC.filter(function(r){ return r.client_id===fid && (r.date||"").slice(0,7)===mon && recDone(r); });
+  if(!recs.length){ toast("その月の「施術終了」の記録がありません"); return; }
+  var map={}, order=[];
+  recs.forEach(function(r){ var key=(r.member_id||exRec(r).nm||"ご利用者"); if(!(key in map)){ map[key]={nm:(exRec(r).nm||"ご利用者"), treat:0, travel:0, last:(r.date||"")}; order.push(key); } map[key].treat+=(r.amount||0); map[key].travel+=recFee(r); if((r.date||"")>map[key].last) map[key].last=r.date; });
+  var mp=String(mon).split("-"); var monLabel=mp.length===2?((+mp[0])+"年"+(+mp[1])+"月"):mon;
+  var but="施術代として（"+monLabel+"分）";
+  var pages=order.map(function(k,i){ var u=map[k]; var br=(i<order.length-1);
+    return '<div'+(br?' style="page-break-after:always;"':'')+'>'+receiptBlockHtml(u.nm+" 様", u.treat, u.travel, but, u.last||(mon+"-01"))+'</div>'; }).join("");
+  closeSheet(); showDoc(pages); toast(order.length+"名分の領収書を作成しました");
 }
 /* 予定リスト等から、施術済みの内容をベースに領収書フォームを開く（施術代・出張交通費を分けて） */
 function receiptFromRecord(id){
