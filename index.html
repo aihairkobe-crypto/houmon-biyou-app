@@ -1134,7 +1134,7 @@ function openQuickRecord(prefill){
     '<div class="hint" style="margin-top:8px;">電話（任意）</div><input id="qr_phone" placeholder="任意">'+
     '<div class="hint" style="margin-top:8px;">注意・ルール（任意）</div><input id="qr_rules" placeholder="例：13時以降 / P1台">'+
     '<div id="qr_single">'+
-      '<div class="hint" style="margin-top:8px;">メニュー'+(STD_MENU.length?'（下のボタンをタップで料金も自動入力）':'')+'</div>'+
+      '<div class="hint" style="margin-top:8px;">メニュー'+(STD_MENU.length?'（下のボタンで複数選べます・料金は合算）':'')+'</div>'+
       menuChipsHtml(null,"qr_menu","qr_amount")+
       '<input id="qr_menu" placeholder="例：カット">'+
       '<div class="hint" style="margin-top:8px;">料金（円）</div><input id="qr_amount" type="number" placeholder="0">'+
@@ -1402,19 +1402,21 @@ function menuOptionsFor(clientId, selMenu){
   return opts;
 }
 /* 料金表のメニューを1タップ入力チップに（メニュー名＋料金を同時セット） */
-function menuChipsHtml(clientId, menuId, amountId){
+function menuChipsHtml(clientId, menuId, amountId, curMenu){
   var pl=priceListFor(clientId); if(!pl.length) return "";
+  var sel=String(curMenu||"").split(/[・+、,]/).map(function(s){return s.trim();}).filter(Boolean);   // 既存メニューに合うチップを事前選択
   return '<div class="mchips">'+pl.map(function(p){
-    return '<button type="button" class="mchip" data-name="'+esc(p.name)+'" data-price="'+(p.price||0)+'" onclick="pickMenuChip(this,\''+menuId+'\',\''+amountId+'\')">'+esc(p.name)+'<span class="p">'+yen(p.price)+'</span></button>';
+    var on=sel.indexOf(p.name)>=0;
+    return '<button type="button" class="mchip'+(on?" on":"")+'" data-name="'+esc(p.name)+'" data-price="'+(p.price||0)+'" onclick="pickMenuChip(this,\''+menuId+'\',\''+amountId+'\')">'+esc(p.name)+'<span class="p">'+yen(p.price)+'</span></button>';
   }).join("")+'</div>';
 }
+/* チップは複数選択（トグル）。選んだメニュー名を連結・料金は合算して欄に反映 */
 function pickMenuChip(btn, menuId, amountId){
-  var name=btn.getAttribute("data-name"), price=btn.getAttribute("data-price");
-  var mi=el(menuId); if(mi) mi.value=name;
-  var ai=el(amountId); if(ai && price!=null && price!=="") ai.value=price;
-  var wrap=btn.parentNode;
-  Array.prototype.forEach.call(wrap.querySelectorAll(".mchip"),function(b){ b.classList.remove("on"); });
-  btn.classList.add("on");
+  btn.classList.toggle("on");
+  var wrap=btn.parentNode; var names=[], sum=0, any=false;
+  Array.prototype.forEach.call(wrap.querySelectorAll(".mchip.on"),function(b){ names.push(b.getAttribute("data-name")); sum+=Number(b.getAttribute("data-price"))||0; any=true; });
+  var mi=el(menuId); if(mi) mi.value=names.join("・");
+  var ai=el(amountId); if(ai && any) ai.value=sum;   // 何も選ばれていない時は金額を触らない
 }
 function openRecordForm(id, prefill){
   var rec=id?(RC.find(function(x){return x.id===id;})||{}):(prefill||{});
@@ -1437,8 +1439,8 @@ function openRecordForm(id, prefill){
       '<div><div class="hint">時間</div><select id="rf_time">'+timeOptions(rec.time||exRec(rec).t||defHM())+'</select></div></div>'+
     '<div class="hint" style="margin-top:8px;">施術時間（分）</div><input id="rf_dur" type="number" step="'+TIME_UNIT+'" value="'+(Number(exRec(rec).dur)||60)+'">'+
     '<div class="hint" style="margin-top:8px;">部屋番号（任意）</div><input id="rf_room" value="'+esc(exRec(rec).room||"")+'" placeholder="例：305">'+
-    '<div class="hint" style="margin-top:8px;">メニュー'+(hasPl?'（下のボタンをタップで料金も自動入力）':'')+'</div>'+
-    menuChipsHtml(rec.client_id,"rf_menu","rf_amount")+
+    '<div class="hint" style="margin-top:8px;">メニュー'+(hasPl?'（下のボタンで複数選べます・料金は合算）':'')+'</div>'+
+    menuChipsHtml(rec.client_id,"rf_menu","rf_amount",rec.menu)+
     '<input id="rf_menu" value="'+esc(rec.menu||"")+'" placeholder="メニュー（例：カット）">'+
     '<div class="hint" style="margin-top:8px;">料金（円）</div><input id="rf_amount" type="number" value="'+(rec.amount||"")+'" placeholder="0">'+
     (rec.client_id?'<label style="display:flex;align-items:center;gap:8px;margin-top:8px;font-size:13px;cursor:pointer;"><input type="checkbox" id="rf_learnprice" style="width:auto;">次回からこの料金を「'+esc(c.name||"この顧客")+'」の初期メニューに登録する</label>':'')+
