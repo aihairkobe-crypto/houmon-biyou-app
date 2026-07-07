@@ -358,15 +358,15 @@ function renderToday(){
   html+='<div class="card" style="display:flex;justify-content:space-between;text-align:center;padding:12px;">'+
       '<div style="flex:1;"><div class="hint" style="margin:0;">今日の訪問</div><div style="font-weight:700;font-size:18px;">'+todays.length+'<span style="font-size:12px;">件</span></div></div>'+
       '<div style="flex:1;border-left:1px solid var(--line);"><div class="hint" style="margin:0;">今日の売上</div><div class="amt" style="font-size:18px;">'+yen(tSales)+'</div></div>'+
-      '<div style="flex:1;border-left:1px solid var(--line);"><div class="hint" style="margin:0;">未終了</div><div style="font-weight:700;font-size:18px;color:'+(pending?'var(--accent-text)':'var(--muted)')+';">'+pending+'<span style="font-size:12px;">件</span></div></div>'+
-    '</div>';
+      '<div style="flex:1;border-left:1px solid var(--line);" title="まだ「施術終了」にしていない予定の件数"><div class="hint" style="margin:0;">未終了</div><div style="font-weight:700;font-size:18px;color:'+(pending?'var(--accent-text)':'var(--muted)')+';">'+pending+'<span style="font-size:12px;">件</span></div></div>'+
+    '</div>'+
+    '<div class="muted" style="font-size:11px;margin:-4px 0 2px;">※未終了＝まだ「✅施術終了」にしていない予定</div>';
   html+='<div class="sec">'+esc(dateLabel(tISO))+' の訪問</div>';
-  if(!todays.length){ html+='<div class="list-empty">今日の予定・記録はありません。<br>予約・施術の入力は「📅 予定」タブから。</div>'; }
+  if(!todays.length){ html+='<div class="list-empty">今日の予定・記録はありません。<br>下の「＋ 予約する」から入力できます。</div>'; }
   else { todays.forEach(function(it){ html+=timelineItemHtml(it); }); }
   html+='<button class="btn ghost accent" style="margin-top:10px;" onclick="showRouteMap(\''+tISO+'\')">🗺 今日の動線を地図で見る</button>';
   html+='<div id="routeMap" style="display:none;margin-top:8px;"></div>';
-  html+='<button class="btn primary" style="margin-top:10px;" onclick="switchTab(\'plan\')">📅 予定タブで予約・施術を入力</button>';
-  html+='<button class="btn ghost" style="margin-top:8px;" onclick="openSettings()">⚙️ 設定（料金表・時間の単位・色・雛形など）</button>';
+  html+='<button class="btn primary" style="margin-top:10px;" onclick="openPicker(\'bkWith\',{title:\'だれの予約を入れますか？\',allowNew:true})">＋ 予約する</button>';
   v.innerHTML=html;
 }
 
@@ -381,12 +381,14 @@ function dayScheduleHtml(iso){
   var timed=items.filter(function(it){return it.t;});
   var untimed=items.filter(function(it){return !it.t;});
   var moves=movesForDay(iso);
-  var startH=9, endH=18;
-  timed.forEach(function(it){ var m=hm2min(it.t); var sh=Math.floor(m/60); if(sh<startH)startH=sh; var eh=Math.ceil((m+itDur(it))/60); if(eh>endH)endH=eh; });
-  moves.forEach(function(mv){ var m=hm2min(mv.time); var sh=Math.floor(m/60); if(sh<startH)startH=sh; var eh=Math.ceil((m+(mv.duration||15))/60); if(eh>endH)endH=eh; });
+  // 予定のある時間帯にフォーカス（前後1hだけ余白）。予定なしの日は9–18を表示
+  var startH=null, endH=null;
+  timed.forEach(function(it){ var m=hm2min(it.t); var sh=Math.floor(m/60); var eh=Math.ceil((m+itDur(it))/60); if(startH==null||sh<startH)startH=sh; if(endH==null||eh>endH)endH=eh; });
+  moves.forEach(function(mv){ var m=hm2min(mv.time); var sh=Math.floor(m/60); var eh=Math.ceil((m+(mv.duration||15))/60); if(startH==null||sh<startH)startH=sh; if(endH==null||eh>endH)endH=eh; });
+  if(startH==null){ startH=9; endH=18; } else { startH=Math.max(0,startH-1); endH=Math.min(24,endH+1); }
   if(endH<=startH) endH=startH+1;
   var hourH=48, ppm=hourH/60, top0=startH*60, PAD=8;
-  var h='<div class="muted" style="font-size:11px;margin:2px 0 4px;">空きをタップで追加・ブロックをドラッグで時間移動　｜　<span style="color:var(--c-plan,var(--accent));">■</span>予定　<span style="color:var(--c-fin,var(--muted));">■</span>施術終了　<span style="color:var(--c-move,#d8a85f);">■</span>移動'+(iso===todayISO()?'　<span style="color:var(--danger);">—</span>今':'')+'</div>';
+  var h='<div class="muted" style="font-size:11px;margin:2px 0 4px;"><span style="color:var(--c-plan,var(--accent));">■</span>予定　<span style="color:var(--c-fin,var(--muted));">■</span>施術終了　<span style="color:var(--c-move,#d8a85f);">■</span>移動'+(iso===todayISO()?'　<span style="color:var(--danger);">—</span>今':'')+'　｜　ブロックはドラッグで移動</div>';
   h+='<div class="sched" data-start="'+startH+'" style="height:'+((endH-startH)*hourH+PAD*2)+'px;touch-action:pan-y;" onclick="schedClick(event,\''+iso+'\')" onpointerdown="schedDown(event)">';
   for(var hh=startH; hh<=endH; hh++){ var y=(hh-startH)*hourH+PAD; h+='<div class="sched-hline" style="top:'+y+'px;"></div><div class="sched-hlabel" style="top:'+y+'px;">'+pad(hh)+':00</div>'; }
   if(iso===todayISO()){ var nm=(new Date()).getHours()*60+(new Date()).getMinutes(); if(nm>=top0 && nm<=endH*60){ var ny=(nm-top0)*ppm+PAD; h+='<div class="sched-now" style="top:'+ny+'px;"><span class="sched-now-dot"></span></div>'; } }
@@ -672,12 +674,12 @@ function renderPlan(){
     var cls="cell"+(iso===todayISO()?" today":"")+(iso===PLAN_SEL?" sel":"");
     html+='<div class="'+cls+'" onclick="planSelect(\''+iso+'\')">'+d+(dateHasEntries(iso)?'<span class="dot"></span>':"")+'</div>';
   }
-  html+='</div></div>';
+  html+='</div><div class="muted" style="font-size:11px;margin-top:4px;"><span class="dot" style="display:inline-block;vertical-align:middle;"></span> 印＝予定あり</div></div>';
   // 選択日のタイムスケジュール（時間軸で目視）
   html+='<div class="sec">'+esc(dateLabel(PLAN_SEL))+' の予定</div>';
   // タップした日のすぐ下に追加ボタン（スマホで見やすい・iPhoneカレンダー風）
-  html+='<button class="btn primary" style="margin-bottom:8px;" onclick="openPicker(\'bkWith\',{title:\'だれの予約・施術を入れますか？\',allowNew:true})">＋ 予約・施術を入れる</button>';
-  html+='<div class="muted" style="font-size:11px;margin-bottom:6px;">日付・時間はフォームで自由に変えられます（選んだ日が初期値）。下の時間帯タップでその時刻に追加も可。</div>';
+  html+='<button class="btn primary" style="margin-bottom:6px;" onclick="openPicker(\'bkWith\',{title:\'だれの予約を入れますか？\',allowNew:true})">＋ 予約する</button>';
+  html+='<div class="muted" style="font-size:11px;margin-bottom:6px;">空き時間をタップでその時刻に追加。日時は後から自由に変えられます。</div>';
   html+=dayScheduleHtml(PLAN_SEL);
   html+='<button class="btn ghost accent" style="margin-top:10px;" onclick="openMoveForm(null,{date:\''+PLAN_SEL+'\',duration:15})">🚗 移動を追加</button>';
   html+='<button class="btn ghost accent" style="margin-top:8px;" onclick="showRouteMap(\''+PLAN_SEL+'\')">🗺 この日の動線を地図で見る</button>';
