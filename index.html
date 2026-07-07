@@ -142,6 +142,7 @@ var sb = supabase.createClient(SUPABASE_URL, SUPABASE_KEY);
 var APP=document.getElementById("app");
 var ME=null, PROFILE=null;
 var CL=[], BK=[], RC=[], TB=[], EX=[];      // 顧客 / 予約 / 売上 / 移動ブロック(time_blocks) / 経費(expenses)
+var EX_OK=true;                              // 経費テーブルが使えるか（未作成なら false）
 var TIME_UNIT=5;                     // 時間の単位（分）。5/10/15/30
 function loadTimeUnit(){ try{ var u=parseInt(localStorage.getItem("timeunit_"+(ME&&ME.id))||"5",10); TIME_UNIT=([5,10,15,30].indexOf(u)>=0)?u:5; }catch(e){ TIME_UNIT=5; } }
 function snapUnit(min){ return Math.round(min/TIME_UNIT)*TIME_UNIT; }
@@ -210,7 +211,7 @@ async function loadAll(){
   RC=c.error?[]:(c.data||[]);
   var d=await sb.from("time_blocks").select("*");
   TB=d.error?[]:(d.data||[]);
-  try{ var e=await sb.from("expenses").select("*"); EX=e.error?[]:(e.data||[]); }catch(err){ EX=[]; }   // 経費（テーブル未作成でも壊れない）
+  try{ var e=await sb.from("expenses").select("*"); EX=e.error?[]:(e.data||[]); EX_OK=!e.error; }catch(err){ EX=[]; EX_OK=false; }   // 経費（テーブル未作成でも壊れない）
 }
 async function reloadExpenses(){ try{ var e=await sb.from("expenses").select("*"); if(!e.error) EX=e.data||[]; }catch(err){} renderTab(); }
 async function reloadTimeBlocks(){ var d=await sb.from("time_blocks").select("*"); if(!d.error) TB=d.data||[]; renderTab(); }
@@ -876,6 +877,7 @@ function openExpenseForm(id, prefill){
   var x=id?(EX.find(function(e){return e.id===id;})||{}):(prefill||{});
   var chips=EXP_CATS.map(function(c){ return '<button class="btn ghost sm" style="width:auto;display:inline-block;margin:0 6px 6px 0;" onclick="el(\'ex_cat\').value=\''+c+'\'">'+c+'</button>'; }).join("");
   var body='<div class="sheet-title">🧾 経費'+(id?"（編集）":"")+'</div>'+
+    (!EX_OK?'<div class="warn">⚠️ 経費の保存先（テーブル）がまだ準備できていないため、<b>保存できません</b>。<br>Supabase の SQL Editor で <b>sql/supabase_step6_expenses.sql</b> を1回実行してください（それまで経費だけ使えません）。</div>':'')+
     '<div class="muted" style="margin-bottom:8px;">駐車場代・ガソリン・備品など、仕事で出ていくお金を記録します。<b>手取り（売上−経費）</b>に反映されます。</div>'+
     '<div class="row"><div><div class="hint">日付</div><input id="ex_date" type="date" value="'+esc(x.date||todayISO())+'"></div>'+
       '<div><div class="hint">金額（円）</div><input id="ex_amount" type="number" value="'+(x.amount||"")+'" placeholder="0"></div></div>'+
@@ -884,6 +886,7 @@ function openExpenseForm(id, prefill){
     '<input id="ex_cat" value="'+esc(x.category||"")+'" placeholder="費目（例：駐車場）">'+
     laneFieldHtml("ex_lane", x.lane||defaultLaneId())+
     '<div class="hint" style="margin-top:8px;">メモ（任意）</div><input id="ex_note" value="'+esc(x.note||"")+'" placeholder="例：〇〇苑の駐車場代">'+
+    '<div id="m"></div>'+
     '<button class="btn primary" onclick="saveExpense(\''+(id||"")+'\')">保存</button>'+
     (id?'<button class="btn danger" onclick="delExpense(\''+id+'\')">削除</button>':"")+
     '<button class="btn ghost" onclick="closeSheet()">キャンセル</button>';
@@ -892,9 +895,9 @@ function openExpenseForm(id, prefill){
 async function saveExpense(id){
   var data={ org_id:PROFILE.org_id, staff_id:ME.id, date:el("ex_date").value, amount:Number(el("ex_amount").value)||0,
     category:el("ex_cat").value.trim()||"その他", note:el("ex_note").value.trim(), lane:(el("ex_lane")?el("ex_lane").value:null) };
-  if(!data.date){ showMsg("日付を入れてください"); return; }
+  if(!data.date){ showMsg("日付を入れてください"); toast("日付を入れてください"); return; }
   var r=id?await sb.from("expenses").update(data).eq("id",id):await sb.from("expenses").insert(data);
-  if(r.error){ showMsg("保存エラー："+esc(r.error.message)+"（経費テーブルが未作成かもしれません）"); return; }
+  if(r.error){ EX_OK=false; showMsg("保存エラー："+esc(r.error.message)+"（経費テーブルが未作成の可能性。sql/supabase_step6_expenses.sql を実行してください）"); toast("保存できませんでした：経費テーブル未作成の可能性"); return; }
   closeSheet(); toast("🧾 経費を記録しました"); await reloadExpenses();
 }
 async function delExpense(id){
