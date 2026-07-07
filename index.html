@@ -784,7 +784,7 @@ async function showRouteMap(iso){
 /* ===== 顧客タブ ===== */
 function renderClients(){
   var v=el("view");
-  var html='<div class="row"><button class="btn primary" onclick="openClientForm(null,\'個人\')">＋ 個人</button><button class="btn primary" onclick="openClientForm(null,\'施設\')">＋ 施設・訪問先</button></div>'+
+  var html='<div class="row"><button class="btn primary" onclick="openClientForm(null,\'個人\')">＋ お客様</button><button class="btn primary" onclick="openClientForm(null,\'施設\')">＋ 施設</button></div>'+
     '<input id="clSearch" placeholder="🔍 名前で探す" style="margin-top:10px;" oninput="renderClientList()">'+
     '<div id="clList" style="margin-top:6px;"></div>';
   v.innerHTML=html; renderClientList();
@@ -795,7 +795,7 @@ function renderClientList(){
   // 各顧客の前回来店日を集計（新しい順に並べる用）
   var lastMap={};
   RC.forEach(function(r){ if(!r.client_id) return; var d=r.date||""; if(!lastMap[r.client_id] || d>lastMap[r.client_id]) lastMap[r.client_id]=d; });
-  var groups=[["施設","🏢 施設・訪問先"],["病院","🏥 病院"],["個人","🧑 個人"]];
+  var groups=[["施設","🏢 施設"],["病院","🏥 病院"],["個人","🧑 お客様"]];
   var html="";
   groups.forEach(function(g){
     var items=CL.filter(function(c){return (c.kind||"個人")===g[0] && (!q||(c.name||"").indexOf(q)>=0);});
@@ -859,7 +859,7 @@ function renderSales(){
   if(!recs.length && !exs.length){ html+='<div class="list-empty">この月の売上・経費はまだありません。<br>予定を「✅施術終了」にすると売上に、上の「🧾経費を入れる」で経費が反映されます。</div>'; v.innerHTML=html; return; }
   html+='<div class="sec">📊 内訳<span class="muted" style="font-size:11px;font-weight:400;">（施術料ベース・🚗出張料'+yen(feeTot)+'は含みません）</span></div>';
   if(multiLane()){ html+=breakdownCard("👥 枠・担当別", sumBy(recs,function(r){ var ln=exRec(r).lane; return ln?(laneName(ln)||"（不明な枠）"):"（枠なし）"; })); }
-  html+=breakdownCard("🏢 顧客先・お客様別", sumBy(recs,function(r){ return r.client_id?clientName(r.client_id):(exRec(r).nm||"その他"); }));
+  html+=breakdownCard("🏢 顧客別（施設・お客様）", sumBy(recs,function(r){ return r.client_id?clientName(r.client_id):(exRec(r).nm||"その他"); }));
   html+=breakdownCard("✂️ メニュー別", sumBy(recs,function(r){ return (r.menu||"").trim()||"（メニュー未記入）"; }));
   if(exs.length){
     html+=breakdownCard("🧾 経費（費目別）", sumBy(exs,function(e){ return (e.category||"").trim()||"その他"; }));
@@ -1127,7 +1127,7 @@ function renderPickList(){
     var recent=CL.filter(function(c){return lastMap[c.id];}).sort(function(a,b){return (lastMap[b.id]||"").localeCompare(lastMap[a.id]||"");}).slice(0,6);
     if(recent.length){ html+='<div class="sec">⏱ 最近・よく行く先</div>'; recent.forEach(function(c){ html+=pickItemHtml(c,lastMap); }); }
   }
-  var groups=[["施設","🏢 施設・訪問先"],["病院","🏥 病院"],["個人","🧑 個人"]];
+  var groups=[["施設","🏢 施設"],["病院","🏥 病院"],["個人","🧑 お客様"]];
   groups.forEach(function(g){
     var items=CL.filter(function(c){return (c.kind||"個人")===g[0] && (!q||(c.name||"").indexOf(q)>=0);});
     if(!items.length) return;
