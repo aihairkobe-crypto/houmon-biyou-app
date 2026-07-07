@@ -158,7 +158,7 @@ function setTimeUnit(u){ TIME_UNIT=u; try{ localStorage.setItem("timeunit_"+(ME&
   var seg=el("tu_seg"); if(seg){ Array.prototype.forEach.call(seg.children,function(b){ b.classList.toggle("on", b.textContent===(u+"分")); }); }
   toast("⏱ 時間の単位を"+u+"分にしました"); }
 var TAB="today";
-var APP_VERSION="20260707-2";   // ← 更新のたびにこの値を上げる。全端末で「新しい版があります」バナーが出る
+var APP_VERSION="20260707-3";   // ← 更新のたびにこの値を上げる。全端末で「新しい版があります」バナーが出る
 
 function esc(s){ return (s==null?"":String(s)).replace(/[&<>"]/g,function(c){return {"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;"}[c];}); }
 function el(id){ return document.getElementById(id); }
@@ -178,6 +178,7 @@ function timeOptions(sel){
   return opts;
 }
 function todayISO(){ var d=new Date(); return d.getFullYear()+"-"+pad(d.getMonth()+1)+"-"+pad(d.getDate()); }
+function dOff(n){ var d=new Date(); d.setDate(d.getDate()+n); return d.getFullYear()+"-"+pad(d.getMonth()+1)+"-"+pad(d.getDate()); }   // 今日からn日ずらした日付（サンプル用）
 function curMonth(){ var d=new Date(); return d.getFullYear()+"-"+pad(d.getMonth()+1); }
 function shiftMonth(ym,delta){ var p=ym.split("-"); var d=new Date(+p[0],+p[1]-1+delta,1); return d.getFullYear()+"-"+pad(d.getMonth()+1); }
 var WK=["日","月","火","水","木","金","土"];
@@ -2043,18 +2044,43 @@ function openSettings(){
     '<div class="muted" style="font-size:11px;text-align:center;margin:8px 0;">組織リンク（複数人で共有）は <b>近日</b> 対応予定</div>'+
     '<button class="btn ghost" onclick="doSignOut()" style="color:var(--hint);">ログアウト</button>'+
     '<div style="border-top:1px solid var(--line);margin:18px 0 8px;"></div>'+
+    '<div class="hint">🧪 お試し（テスト用）</div>'+
+    '<button class="btn ghost accent" onclick="loadSampleData()">🧪 サンプルを入れる</button>'+
+    '<div class="muted" style="font-size:11px;text-align:center;margin:2px 0 8px;">施設・お客様・予約・売上・経費の見本を追加。試したら下の「リセット」で消せます。</div>'+
+    '<div style="border-top:1px solid var(--line);margin:14px 0 8px;"></div>'+
     '<div class="hint" style="color:var(--danger);">⚠️ 危険な操作</div>'+
     '<button class="btn danger" onclick="resetAll()">🧹 自分のデータをすべてリセット</button>'+
-    '<div class="muted" style="font-size:12px;text-align:center;">顧客・予約・施術の記録を全部消します。元に戻せません。</div>'+
+    '<div class="muted" style="font-size:12px;text-align:center;">顧客・予約・施術・売上・経費を全部消します。元に戻せません。</div>'+
     '<button class="btn ghost" onclick="closeSheet()" style="margin-top:10px;">閉じる</button>';
   openSheet(body);
 }
 async function resetAll(){
-  if(!confirm("⚠️ 自分の【顧客・利用者・予約・売上】をすべて削除します。\n元に戻せません。よろしいですか？")) return;
+  if(!confirm("⚠️ 自分の【顧客・利用者・予約・売上・経費】をすべて削除します。\n元に戻せません。よろしいですか？")) return;
   if(!confirm("最終確認：本当に全部削除しますか？")) return;
-  var org=PROFILE.org_id, tables=["records","bookings","members_t","clients"];
-  for(var i=0;i<tables.length;i++){ var r=await sb.from(tables[i]).delete().eq("org_id",org); if(r.error){ alert("リセットエラー："+r.error.message); return; } }
+  var org=PROFILE.org_id, tables=["records","bookings","members_t","expenses","time_blocks","clients"];
+  for(var i=0;i<tables.length;i++){ var r=await sb.from(tables[i]).delete().eq("org_id",org); if(r.error && !/does not exist|Could not find/i.test(r.error.message||"")){ alert("リセットエラー："+r.error.message); return; } }
   await loadAll(); closeSheet(); toast("🧹 リセットしました"); renderTab();
+}
+/* ===== お試し用サンプルデータ投入（テスト用・自分のデータに追加） ===== */
+async function loadSampleData(){
+  if(!confirm("🧪 お試し用のサンプル（施設・お客様・予約・売上・経費）を追加します。\nあなたのデータに足されます。よろしいですか？")) return;
+  try{
+    var org=PROFILE.org_id;
+    var fac=(await sb.from("clients").insert({org_id:org,kind:"施設",name:"サンプル苑（お試し）",address:"兵庫県神戸市中央区元町通1-1-1",phone:"078-000-0000",rules:"受付で名札を提示",billing:"一括",price_list:[{name:"カット",price:2500},{name:"カラー",price:5000}]}).select().single()).data;
+    var taro=(await sb.from("clients").insert({org_id:org,kind:"個人",name:"サンプル太郎",address:"兵庫県神戸市灘区六甲町2-2-2",phone:"090-0000-0000",billing:"個別",price_list:[{name:"カット",price:4000}]}).select().single()).data;
+    var hana=(await sb.from("clients").insert({org_id:org,kind:"個人",name:"サンプル花子",phone:"090-1111-1111",rules:"パーマ液アレルギーあり",billing:"個別",price_list:[{name:"カット・カラー",price:9000}]}).select().single()).data;
+    var rows=[
+      {org_id:org,client_id:taro.id,booking_id:null,member_id:null,staff_id:ME.id,menu:"カット",amount:4000,note:"サンプル",date:dOff(0),photos:{t:"10:00",dur:60,fee:1200,done:true}},
+      {org_id:org,client_id:fac.id,booking_id:null,member_id:null,staff_id:ME.id,menu:"カット",amount:2500,note:"",date:dOff(0),photos:{nm:"田中 一郎",t:"14:00",dur:30,done:true}},
+      {org_id:org,client_id:fac.id,booking_id:null,member_id:null,staff_id:ME.id,menu:"カット",amount:2500,note:"",date:dOff(0),photos:{nm:"鈴木 花",t:"14:30",dur:30,done:true}},
+      {org_id:org,client_id:hana.id,booking_id:null,member_id:null,staff_id:ME.id,menu:"カット・カラー",amount:9000,note:"前回はやや明るめ希望",date:dOff(-2),photos:{t:"13:00",dur:90,fee:1200,done:true}},
+      {org_id:org,client_id:taro.id,booking_id:null,member_id:null,staff_id:ME.id,menu:"カット",amount:4000,note:"",date:dOff(0),photos:{t:"17:30",dur:60,fee:1200}}
+    ];
+    var rr=await insertRecords(rows);
+    if(rr.error){ alert("サンプル投入エラー："+esc(rr.error.message)); return; }
+    try{ await sb.from("expenses").insert({org_id:org,staff_id:ME.id,date:dOff(0),amount:3000,category:"ガソリン",note:"サンプル",lane:null}); }catch(e){}
+    await loadAll(); closeSheet(); toast("🧪 サンプルを入れました"); renderTab();
+  }catch(err){ alert("サンプル投入エラー："+(err&&err.message?err.message:err)); }
 }
 async function doSignOut(){ unsubscribeRealtime(); await sb.auth.signOut(); ME=null; PROFILE=null; closeSheet(); renderAuth(); }
 
