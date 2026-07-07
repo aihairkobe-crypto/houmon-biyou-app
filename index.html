@@ -959,63 +959,72 @@ function makeInvoice(fid, mon){
 function openReceiptForm(prefill){
   var p=prefill||{};
   openSheet('<div class="sheet-title">🧾 領収書を作る</div>'+
-    '<div class="muted" style="margin-bottom:8px;">宛名・金額・但し書きは自由に直せます（「○○様」「○○御中」、ご家族宛でもOK）。「印刷→PDF」で発行できます。</div>'+
+    '<div class="muted" style="margin-bottom:8px;">宛名・金額・但し書きは自由に直せます（「○○様」「○○御中」、ご家族宛でもOK）。<b>施術代と出張交通費は分けて記載</b>されます。「印刷→PDF」で発行できます。</div>'+
     '<div class="hint">宛名</div><input id="rc_name" value="'+esc(p.name||"")+'" placeholder="例：山田 様 ／ 〇〇苑 御中">'+
-    '<div class="row" style="margin-top:8px;"><div><div class="hint">金額（円）</div><input id="rc_amount" type="number" value="'+(p.amount||"")+'" placeholder="0"></div>'+
-      '<div><div class="hint">日付</div><input id="rc_date" type="date" value="'+esc(p.date||todayISO())+'"></div></div>'+
-    '<div class="hint" style="margin-top:8px;">但し書き</div><input id="rc_but" value="'+esc(p.but||"施術代として")+'" placeholder="施術代として">'+
+    '<div class="row" style="margin-top:8px;"><div><div class="hint">施術代（円）</div><input id="rc_treat" type="number" value="'+(p.treat||"")+'" placeholder="0"></div>'+
+      '<div><div class="hint">🚗 出張交通費（円）</div><input id="rc_travel" type="number" value="'+(p.travel||"")+'" placeholder="0"></div></div>'+
+    '<div class="row" style="margin-top:8px;"><div><div class="hint">日付</div><input id="rc_date" type="date" value="'+esc(p.date||todayISO())+'"></div>'+
+      '<div><div class="hint">但し書き</div><input id="rc_but" value="'+esc(p.but||"施術代として")+'" placeholder="施術代として"></div></div>'+
     '<button class="btn primary" onclick="makeReceiptFromForm()">領収書を作成（印刷/PDF）</button>'+
     '<button class="btn ghost" onclick="closeSheet()">閉じる</button>');
 }
 function makeReceiptFromForm(){
-  var name=el("rc_name").value.trim(); var amt=Number(el("rc_amount").value)||0;
+  var name=el("rc_name").value.trim(); var treat=Number(el("rc_treat").value)||0; var travel=Number(el("rc_travel").value)||0;
   if(!name){ toast("宛名を入れてください"); return; }
-  if(!amt){ toast("金額を入れてください"); return; }
-  makeReceipt(name, amt, el("rc_but").value.trim()||"施術代として", el("rc_date").value);
+  if(!(treat+travel)){ toast("金額を入れてください"); return; }
+  makeReceipt(name, treat, travel, el("rc_but").value.trim()||"施術代として", el("rc_date").value);
 }
-/* 施術カードの入力内容から領収書フォームを開く（宛名・金額を自動セット） */
+/* 施術カードの入力内容から領収書フォームを開く（宛名・施術代・出張交通費を自動セット） */
 function receiptFromRecordForm(){
   var cid=el("rf_client")?el("rf_client").value:""; var c=cid?clientById(cid):null;
   var nm="";
   if(c){ nm=c.name+(isFacility(c)?" 御中":" 様"); }
   else if(el("rf_mname")&&el("rf_mname").value){ nm=el("rf_mname").value.trim()+" 様"; }
-  var fee=(el("rf_fee")?Number(el("rf_fee").value)||0:0);
-  openReceiptForm({ name:nm, amount:(Number(el("rf_amount").value)||0)+fee, date:(el("rf_date")?el("rf_date").value:todayISO()) });
+  openReceiptForm({ name:nm, treat:(Number(el("rf_amount").value)||0), travel:(el("rf_fee")?Number(el("rf_fee").value)||0:0), date:(el("rf_date")?el("rf_date").value:todayISO()) });
 }
-function makeReceipt(name, amount, but, dateISO){
+function makeReceipt(name, treat, travel, but, dateISO){
+  treat=Number(treat)||0; travel=Number(travel)||0; var total=treat+travel;
   var o=ORGP||{};
   var no="RC-"+String(dateISO||todayISO()).replace(/-/g,"");
-  var tax=Math.round(amount*10/110);
+  var tax=Math.round(total*10/110);
   var issuerLines=[o.shop,o.name?("担当："+o.name):"",o.addr,o.phone?("TEL "+o.phone):"",o.invoice?("登録番号 "+o.invoice):""].filter(function(s){return s;}).map(function(s){return '<div>'+esc(s)+'</div>';}).join("");
-  var stamp = amount>=50000 ? '<div style="margin-top:16px;padding:8px 12px;border:1px dashed #999;display:inline-block;font-size:11px;color:#555;">収入印紙（5万円以上）</div>' : '';
+  var stamp = total>=50000 ? '<div style="margin-top:16px;padding:8px 12px;border:1px dashed #999;display:inline-block;font-size:11px;color:#555;">収入印紙（5万円以上）</div>' : '';
+  var rows='<tr><td>施術代</td><td class="r">'+yen(treat)+'</td></tr>'+
+    (travel>0?'<tr><td>🚗 出張交通費</td><td class="r">'+yen(travel)+'</td></tr>':"")+
+    '<tr><td><b>合計（税込）</b></td><td class="r"><b>'+yen(total)+'</b></td></tr>';
   var body='<h1>領　収　書</h1>'+
     '<div class="dhead"><div><div class="to">'+esc(name)+'</div></div>'+
       '<div class="meta">No. '+esc(no)+'<br>発行日：'+esc(dateLabel(dateISO||todayISO()))+'</div></div>'+
-    '<div class="total-box" style="display:block;text-align:center;margin:18px 0;">領収金額（税込）<span class="amt">'+yen(amount)+'</span></div>'+
+    '<div class="total-box" style="display:block;text-align:center;margin:18px 0;">領収金額（税込）<span class="amt">'+yen(total)+'</span></div>'+
     '<div style="font-size:14px;">但し　'+esc(but)+'</div>'+
+    '<table style="width:100%;max-width:360px;margin-top:12px;">'+rows+'</table>'+
     '<div style="font-size:12px;margin-top:8px;color:#333;">上記の金額を正に領収いたしました。</div>'+
     '<div style="font-size:12px;margin-top:2px;color:#555;">（内消費税10%　'+yen(tax)+'）</div>'+
     '<div class="issuer" style="text-align:right;margin-top:20px;">'+issuerLines+'</div>'+
     (o.invoice?'<div class="note">（適格簡易請求書／登録番号 '+esc(o.invoice)+'）</div>':'')+stamp;
   closeSheet(); showDoc(body);
 }
-/* 予定リスト等から、施術済みの内容をベースに領収書フォームを開く */
+/* 予定リスト等から、施術済みの内容をベースに領収書フォームを開く（施術代・出張交通費を分けて） */
 function receiptFromRecord(id){
   var r=RC.find(function(x){return x.id===id;}); if(!r) return;
   var c=r.client_id?clientById(r.client_id):null;
   var nm=c?(c.name+(isFacility(c)?" 御中":" 様")):(exRec(r).nm?(exRec(r).nm+" 様"):"");
-  openReceiptForm({ name:nm, amount:recTotal(r), date:r.date });
+  openReceiptForm({ name:nm, treat:(r.amount||0), travel:recFee(r), date:r.date });
 }
 function receiptFromFacilityVisit(clientId, iso, t){
-  var recs=facGroupRecs(clientId,iso,t); var tot=recs.reduce(function(a,r){return a+recTotal(r);},0);
+  var recs=facGroupRecs(clientId,iso,t);
+  var treat=recs.reduce(function(a,r){return a+(r.amount||0);},0);
+  var travel=recs.reduce(function(a,r){return a+recFee(r);},0);
   var c=clientById(clientId)||{};
-  openReceiptForm({ name:(c.name||"")+" 御中", amount:tot, date:iso });
+  openReceiptForm({ name:(c.name||"")+" 御中", treat:treat, travel:travel, date:iso });
 }
 function receiptFromBooking(bid){
   var b=BK.find(function(x){return x.id===bid;}); if(!b) return;
-  var recs=recordsForBooking(b.id); var tot=recs.reduce(function(a,r){return a+recTotal(r);},0);
+  var recs=recordsForBooking(b.id);
+  var treat=recs.reduce(function(a,r){return a+(r.amount||0);},0);
+  var travel=recs.reduce(function(a,r){return a+recFee(r);},0);
   var c=clientById(b.client_id); var nm=c?(c.name+(isFacility(c)?" 御中":" 様")):"";
-  openReceiptForm({ name:nm, amount:tot, date:b.date });
+  openReceiptForm({ name:nm, treat:treat, travel:travel, date:b.date });
 }
 /* 売上をキー別に集計（金額の多い順） */
 function sumBy(recs, keyFn){
