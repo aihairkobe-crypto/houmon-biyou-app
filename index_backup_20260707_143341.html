@@ -1821,34 +1821,15 @@ function clientHistoryHtml(id){
   var total=recs.reduce(function(a,r){return a+(r.amount||0);},0);
   var h='<div class="muted" style="font-size:12px;margin-bottom:4px;">全'+recs.length+'回・累計 '+yen(total)+'</div>';
   h+=recs.map(function(r){ var e=exRec(r);
-    var laneSel = multiLane() ? (
-      '<div style="margin-top:8px;display:flex;align-items:center;gap:6px;">'+
-        '<span class="muted" style="font-size:11px;white-space:nowrap;">担当：</span>'+
-        '<select onchange="setRecLane(\''+r.id+'\',this.value)" style="flex:1;padding:6px;border:1px solid var(--border,#ccc);border-radius:8px;">'+
-          '<option value=""'+(e.lane?"":" selected")+'>（担当なし）</option>'+
-          LANES.map(function(l){return '<option value="'+esc(l.id)+'"'+(l.id===e.lane?" selected":"")+'>'+esc(l.name)+'</option>';}).join("")+
-        '</select>'+
-      '</div>') : '';
     return '<div class="item">'+
       '<div style="cursor:pointer;" onclick="closeSheet();openRecordForm(\''+r.id+'\')">'+
         '<div class="name" style="font-size:14px;">'+esc(dateLabel(r.date))+(e.t?'　'+esc(e.t):'')+(e.nm?'　'+esc(e.nm):'')+'</div>'+
         '<div class="meta">✂️ '+esc(r.menu||"（メニュー未記入）")+'　'+yen(r.amount)+(recFee(r)?'　🚗'+yen(recFee(r)):'')+(r.note?'　📝 '+esc(r.note):"")+'</div>'+
       '</div>'+
-      laneSel+
       '<button class="btn ghost accent sm" style="width:auto;margin-top:8px;" onclick="reuseToBooking(\''+r.client_id+'\',\''+r.id+'\')">🔁 この内容で次回予約</button>'+
     '</div>';
   }).join("");
   return h;
-}
-/* 来店履歴カードから担当（枠）をその場で設定・変更 */
-async function setRecLane(recId, laneId){
-  var rec=RC.find(function(r){return r.id===recId;}); if(!rec) return;
-  var p=Object.assign({},exRec(rec)); if(laneId) p.lane=laneId; else delete p.lane;
-  var res=await updateRecord(recId,{photos:p});
-  if(res&&res.error){ toast("担当を変更できませんでした"); return; }
-  rec.photos=p; rememberLane(laneId);
-  toast(laneId?("担当を「"+(laneName(laneId)||"")+"」にしました"):"担当を外しました");
-  if(typeof renderTab==="function") renderTab();
 }
 /* 顧客カルテ（見る専用画面）＝情報＋来店履歴＋次回予約 */
 function openClientDetail(id){
