@@ -618,7 +618,7 @@ function timelineItemHtml(it){
       '<span class="pill '+(fdone?"plan":"done")+'">'+(fdone?"施術終了":"予定")+'</span></div>'+
       '<div class="row" style="margin-top:10px;">'+
         '<button class="btn '+(fdone?"ghost":"primary")+' sm" onclick="toggleFacDone(\''+it.clientId+'\',\''+it.iso+'\',\''+it.t+'\')">'+(fdone?"↩ 予定に戻す":"✅ 全員 施術終了")+'</button>'+
-        '<button class="btn ghost sm" onclick="openFacVisit(\''+it.clientId+'\',\''+it.iso+'\',\''+it.t+'\')">📂 中を見る（'+frecs.length+'名）</button>'+
+        '<button class="btn ghost sm" onclick="openFacVisit(\''+it.clientId+'\',\''+it.iso+'\',\''+it.t+'\')">✏️ 編集（'+frecs.length+'名）</button>'+
         (fdone?'<button class="btn ghost accent sm" onclick="receiptFromFacilityVisit(\''+it.clientId+'\',\''+it.iso+'\',\''+it.t+'\')">🧾 領収書</button>':"")+'</div>'+
       '</div>';
   }
