@@ -73,6 +73,7 @@
   .dayhead .cnt{font-size:12px; color:var(--muted); font-weight:400; margin-left:6px;}
   .dayhead .dh-arrow{color:var(--muted); margin-right:4px;}
   .daybody{padding-top:6px;}
+  .iconbtn{flex:0 0 auto !important; width:44px !important; padding:8px 0 !important; text-align:center; font-size:16px;}
   /* 帳票（請求書・領収書）の全画面表示＋印刷 */
   #docview{position:fixed; inset:0; z-index:9999; background:#fff; overflow:auto; display:none;}
   #docview.show{display:block;}
@@ -319,11 +320,11 @@ function firstRunGuide(){
     '<div style="font-weight:700;font-size:17px;">ようこそ！🎉</div>'+
     '<div class="muted" style="margin:4px 0 12px;">訪問美容の<b>予約・顧客・売上</b>を、これひとつで。<br>難しい準備はいりません。気軽に始めましょう。</div>'+
     '<div class="guide-step"><span class="gnum">1</span><div><b>お客様・施設を登録</b><div class="muted">よく行く先やお客様。あとからでもOK。</div></div></div>'+
-    '<div class="guide-step"><span class="gnum">2</span><div><b>予約を作る</b><div class="muted">訪問の予定を入れます（任意）。</div></div></div>'+
+    '<div class="guide-step"><span class="gnum">2</span><div><b>予約する</b><div class="muted">訪問の予定を入れます（任意）。</div></div></div>'+
     '<div class="guide-step"><span class="gnum">3</span><div><b>施術を記録</b><div class="muted">施術したら料金を記録。売上に自動で集計。</div></div></div>'+
     '</div>'+
     '<div class="sec">まずはここから</div>'+
-    '<button class="btn primary" onclick="openPicker(\'bkWith\',{title:\'だれの予約を入れますか？\',allowNew:true})">📅 予約を入力</button>'+
+    '<button class="btn primary" onclick="openPicker(\'bkWith\',{title:\'だれの予約を入れますか？\',allowNew:true})">📅 予約する</button>'+
     '<div class="muted" style="font-size:11px;margin:-2px 0 8px;">相手はその場で登録もできます。まずは1件入れてみましょう。</div>'+
     '<button class="btn ghost accent" onclick="onboardExisting()">📋 既にお客様・施設をお持ちの方はこちら</button>'+
     '<button class="btn ghost" onclick="openHelp()">📖 詳しい使い方を見る</button>';
@@ -489,8 +490,8 @@ function openNewAt(iso, t){
   window._newAt={iso:iso, t:t};
   openSheet('<div class="sheet-title">'+esc(dateLabel(iso))+'　'+esc(t)+'</div>'+
     '<div class="muted" style="margin-bottom:8px;">この時間に追加します。</div>'+
-    '<button class="btn primary" onclick="newBookingAt()">＋ 予約・施術を入力</button>'+
-    '<button class="btn ghost accent" onclick="newMoveAt()">🚗 移動を入れる</button>'+
+    '<button class="btn primary" onclick="newBookingAt()">＋ 予約する</button>'+
+    '<button class="btn ghost accent" onclick="newMoveAt()">🚗 移動を追加</button>'+
     '<button class="btn ghost" onclick="closeSheet()">キャンセル</button>');
 }
 function newMoveAt(){ var a=window._newAt||{}; openMoveForm(null,{date:a.iso, time:a.t, duration:15}); }
@@ -619,10 +620,10 @@ function timelineItemHtml(it){
       '<div style="cursor:pointer;" onclick="openFacVisit(\''+it.clientId+'\',\''+it.iso+'\',\''+it.t+'\')"><div class="name">'+(it.t?esc(it.t)+'　':'')+'🏢 '+esc(clientName(it.clientId))+'（'+frecs.length+'名）'+laneTag(itemLane(it))+'</div>'+
         '<div class="meta">✂️ '+esc(menuSummary(frecs))+'　'+yen(ftot)+'</div></div>'+
       '<span class="pill '+(fdone?"plan":"done")+'">'+(fdone?"施術終了":"予定")+'</span></div>'+
-      '<div class="row" style="margin-top:10px;">'+
-        '<button class="btn '+(fdone?"ghost":"primary")+' sm" onclick="toggleFacDone(\''+it.clientId+'\',\''+it.iso+'\',\''+it.t+'\')">'+(fdone?"↩ 予定に戻す":"✅ 全員 施術終了")+'</button>'+
-        '<button class="btn ghost sm" onclick="openFacVisit(\''+it.clientId+'\',\''+it.iso+'\',\''+it.t+'\')">✏️ 編集（'+frecs.length+'名）</button>'+
-        (fdone?'<button class="btn ghost accent sm" onclick="receiptFromFacilityVisit(\''+it.clientId+'\',\''+it.iso+'\',\''+it.t+'\')">🧾 領収書</button>':"")+'</div>'+
+      '<div class="row" style="margin-top:10px;gap:6px;">'+
+        '<button class="btn '+(fdone?"ghost":"primary")+' sm" style="flex:1;" onclick="toggleFacDone(\''+it.clientId+'\',\''+it.iso+'\',\''+it.t+'\')">'+(fdone?"↩ 予定に戻す":"✅ 全員 施術終了")+'</button>'+
+        '<button class="btn ghost sm iconbtn" title="編集（'+frecs.length+'名）" onclick="openFacVisit(\''+it.clientId+'\',\''+it.iso+'\',\''+it.t+'\')">✏️</button>'+
+        (fdone?'<button class="btn ghost accent sm iconbtn" title="領収書" onclick="receiptFromFacilityVisit(\''+it.clientId+'\',\''+it.iso+'\',\''+it.t+'\')">🧾</button>':"")+'</div>'+
       '</div>';
   }
   if(it.kind==="bk"){
@@ -633,11 +634,11 @@ function timelineItemHtml(it){
         (b.memo?'<div class="meta">📝 '+esc(b.memo)+'</div>':"")+
         (hasRec?'<div class="meta">💴 '+recs.length+'件　'+yen(tot)+'</div>':"")+'</div>'+
       '<span class="pill '+(fin?"plan":"done")+'">'+(fin?"施術終了":"予定")+'</span></div>'+
-      '<div class="row" style="margin-top:10px;">'+
-        '<button class="btn '+(fin?"ghost":"primary")+' sm" onclick="toggleBookingDone(\''+b.id+'\')">'+(fin?"↩ 予定に戻す":"✅ 施術終了")+'</button>'+
-        '<button class="btn ghost accent sm" onclick="recFromBooking(\''+b.id+'\')">💴 施術を記録</button>'+
-        '<button class="btn ghost sm" onclick="openBookingForm(\''+b.id+'\')">✏️ 編集</button>'+
-        (fin&&hasRec?'<button class="btn ghost accent sm" onclick="receiptFromBooking(\''+b.id+'\')">🧾 領収書</button>':"")+'</div>'+
+      '<div class="row" style="margin-top:10px;gap:6px;">'+
+        '<button class="btn '+(fin?"ghost":"primary")+' sm" style="flex:1;" onclick="toggleBookingDone(\''+b.id+'\')">'+(fin?"↩ 予定に戻す":"✅ 施術終了")+'</button>'+
+        '<button class="btn ghost accent sm iconbtn" title="施術を記録" onclick="recFromBooking(\''+b.id+'\')">💴</button>'+
+        '<button class="btn ghost sm iconbtn" title="編集" onclick="openBookingForm(\''+b.id+'\')">✏️</button>'+
+        (fin&&hasRec?'<button class="btn ghost accent sm iconbtn" title="領収書" onclick="receiptFromBooking(\''+b.id+'\')">🧾</button>':"")+'</div>'+
       '</div>';
   }
   var r=it.r; var rfin=!!exRec(r).done;
@@ -645,10 +646,10 @@ function timelineItemHtml(it){
     '<div style="cursor:pointer;" onclick="openRecordForm(\''+r.id+'\')"><div class="name">'+(exRec(r).t?esc(exRec(r).t)+'　':'')+recordWho(r)+laneTag(itemLane(it))+'</div>'+
       '<div class="meta">✂️ '+esc(r.menu||"施術")+'　'+yen(r.amount)+(recFee(r)?'　🚗'+yen(recFee(r)):'')+(r.note?'　📝 '+esc(r.note):"")+'</div></div>'+
     '<span class="pill '+(rfin?"plan":"done")+'">'+(rfin?"施術終了":"予定")+'</span></div>'+
-    '<div class="row" style="margin-top:10px;">'+
-      '<button class="btn '+(rfin?"ghost":"primary")+' sm" onclick="toggleRecordDone(\''+r.id+'\')">'+(rfin?"↩ 予定に戻す":"✅ 施術終了")+'</button>'+
-      '<button class="btn ghost sm" onclick="openRecordForm(\''+r.id+'\')">✏️ 編集</button>'+
-      (rfin?'<button class="btn ghost accent sm" onclick="receiptFromRecord(\''+r.id+'\')">🧾 領収書</button>':"")+'</div>'+
+    '<div class="row" style="margin-top:10px;gap:6px;">'+
+      '<button class="btn '+(rfin?"ghost":"primary")+' sm" style="flex:1;" onclick="toggleRecordDone(\''+r.id+'\')">'+(rfin?"↩ 予定に戻す":"✅ 施術終了")+'</button>'+
+      '<button class="btn ghost sm iconbtn" title="編集" onclick="openRecordForm(\''+r.id+'\')">✏️</button>'+
+      (rfin?'<button class="btn ghost accent sm iconbtn" title="領収書" onclick="receiptFromRecord(\''+r.id+'\')">🧾</button>':"")+'</div>'+
     '</div>';
 }
 
@@ -853,10 +854,10 @@ function renderSales(){
     '</div>'+
     '</div>'+
     '<div class="sec">📄 この月の作成・入力</div>'+
-    '<button class="btn ghost accent" onclick="openExpenseForm(null,{date:(SALES_MONTH===curMonth()?todayISO():SALES_MONTH+\'-01\')})">🧾 経費を入れる</button>'+
+    '<button class="btn ghost accent" onclick="openExpenseForm(null,{date:(SALES_MONTH===curMonth()?todayISO():SALES_MONTH+\'-01\')})">🧾 経費を追加</button>'+
     '<button class="btn ghost accent" onclick="openInvoicePicker()">📄 施設の請求書を作る</button>'+
     '<button class="btn ghost accent" onclick="openReceiptForm()">🧾 領収書を作る</button>';
-  if(!recs.length && !exs.length){ html+='<div class="list-empty">この月の売上・経費はまだありません。<br>予定を「✅施術終了」にすると売上に、上の「🧾経費を入れる」で経費が反映されます。</div>'; v.innerHTML=html; return; }
+  if(!recs.length && !exs.length){ html+='<div class="list-empty">この月の売上・経費はまだありません。<br>予定を「✅施術終了」にすると売上に、上の「🧾経費を追加」で経費が反映されます。</div>'; v.innerHTML=html; return; }
   html+='<div class="sec">📊 内訳<span class="muted" style="font-size:11px;font-weight:400;">（施術料ベース・🚗出張料'+yen(feeTot)+'は含みません）</span></div>';
   if(multiLane()){ html+=breakdownCard("👥 枠・担当別", sumBy(recs,function(r){ var ln=exRec(r).lane; return ln?(laneName(ln)||"（不明な枠）"):"（枠なし）"; })); }
   html+=breakdownCard("🏢 顧客別（施設・お客様）", sumBy(recs,function(r){ return r.client_id?clientName(r.client_id):(exRec(r).nm||"その他"); }));
@@ -1245,7 +1246,7 @@ async function saveQuick(){
 function openBookingForm(id, prefill){
   var b=id?(BK.find(function(x){return x.id===id;})||{}):(prefill||{});
   var c=clientById(b.client_id)||{};
-  var body='<div class="sheet-title">'+(id?"予約を編集":"予約を作る")+'</div>'+
+  var body='<div class="sheet-title">'+(id?"予約の編集":"新規予約")+'</div>'+
     '<div class="card" style="margin-bottom:10px;padding:10px 12px;"><b>'+esc(c.name||"（顧客未設定）")+'</b>'+(c.address?'<div class="meta">📍 '+esc(c.address)+'</div>':"")+'</div>'+
     '<input type="hidden" id="bf_client" value="'+esc(b.client_id||"")+'">'+
     (b.client_id?'<div class="hint">お客様情報（ここで直すと顧客に反映・地図にも使われます）</div>'+
@@ -1965,7 +1966,7 @@ function openHelp(){
     '<div class="muted" style="margin-bottom:8px;">訪問美容の <b>予約・顧客・売上</b> をこれひとつで管理できます。</div>'+
     helpItem("① 始め方（3ステップ）","1. <b>顧客・施設を登録</b>（顧客タブ）<br>2. <b>予約を作る</b>（予定タブ／任意）<br>3. <b>施術を記録</b>（今日タブ）→ 料金が<b>売上に自動集計</b>されます。")+
     helpItem("🏢 施設の使い方","施設を登録する画面で、<b>利用者（入居者）の名簿</b>も一緒に入れられます（あとから編集も可）。<br>訪問したら「施術を記録」で名簿が出るので、<b>その日対応した人だけチェック</b>してまとめて保存。<br>※名簿は候補。前回対応した人は<b>自動でチェック済み</b>になります。入退居は随時直せます。")+
-    helpItem("💴 施術情報を入力 / 📅 予約を入力","今日タブ・予定タブ・顧客タブのどこからでも、同じ<b>施術カード</b>（住所・時間・メニュー・料金・出張料など）で入力できます。施設は選ぶと団体入力（名簿貼り付け・全員一括）になります。")+
+    helpItem("💴 施術を記録 / 📅 予約する","ホーム・予定・顧客のどこからでも、同じ<b>施術カード</b>（住所・時間・メニュー・料金・出張料など）で入力できます。施設は選ぶと団体入力（名簿貼り付け・全員一括）になります。")+
     helpItem("📅 予約","先の予定も入れられます。予約をタップ→「この予約の施術を記録」で、顧客や日付が引き継がれてラクに記録できます。")+
     helpItem("💰 売上の見方","売上タブで、月ごとの合計と一覧が見られます。上の ‹ › で月を切り替え。")+
     helpItem("📱 複数の端末・自動更新","同じアカウントでログインすれば、どの端末でも同じデータ。変更は自動で反映されます（電波がある時）。")+
