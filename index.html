@@ -158,6 +158,7 @@ function setTimeUnit(u){ TIME_UNIT=u; try{ localStorage.setItem("timeunit_"+(ME&
   var seg=el("tu_seg"); if(seg){ Array.prototype.forEach.call(seg.children,function(b){ b.classList.toggle("on", b.textContent===(u+"分")); }); }
   toast("⏱ 時間の単位を"+u+"分にしました"); }
 var TAB="today";
+var APP_VERSION="20260707-1";   // ← 更新のたびにこの値を上げると、全端末が次回起動時に自動で最新化される
 
 function esc(s){ return (s==null?"":String(s)).replace(/[&<>"]/g,function(c){return {"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;"}[c];}); }
 function el(id){ return document.getElementById(id); }
@@ -191,8 +192,26 @@ function toast(msg){ var t=el("toast"); if(!t){ t=document.createElement("div");
 function openSheet(html){ el("sheetBody").innerHTML=html; el("overlay").classList.add("show"); document.querySelector("#overlay .sheet").scrollTop=0; }
 function closeSheet(){ el("overlay").classList.remove("show"); el("sheetBody").innerHTML=""; }
 
+/* ===== 自動更新チェック（Safariが古い版をキャッシュしたままにしない） ===== */
+function checkForUpdate(){
+  try{
+    fetch("index.html?_c="+Date.now(), {cache:"no-store"})
+      .then(function(r){ return r.ok?r.text():""; })
+      .then(function(t){
+        var m=t.match(/APP_VERSION="([0-9A-Za-z.\-]+)"/);   // ← 実データ版だけに一致（自身の正規表現には一致しない）
+        var live=m&&m[1];
+        if(!live || live===APP_VERSION) return;             // 最新なら何もしない
+        var tried=null; try{ tried=sessionStorage.getItem("upd_try"); }catch(e){}
+        if(tried===live){ toast("🔄 新しい版があります。ページを再読み込みしてください"); return; }   // 1回試して駄目なら案内のみ（ループ防止）
+        try{ sessionStorage.setItem("upd_try", live); }catch(e){}
+        location.replace(location.pathname+"?v="+encodeURIComponent(live));   // クエリ付きで確実に最新HTMLを取り直す
+      }).catch(function(){});
+  }catch(e){}
+}
+
 /* ===== 起動 ===== */
 async function boot(){
+  checkForUpdate();   // ログイン前でも毎回チェック（古いキャッシュを自動更新）
   var s=await sb.auth.getSession();
   ME=s.data.session?s.data.session.user:null;
   if(!ME){ renderAuth(); return; }
@@ -1115,7 +1134,8 @@ function openPicker(onpickFn, opts){
 function pickItemHtml(c, lastMap){
   var sub = lastMap[c.id] ? ('前回 '+esc(dateLabel(lastMap[c.id]))) : (isFacility(c)?'施設':'お客様');
   return '<div class="item" onclick="pickChoose(\''+c.id+'\')"><div class="name">'+esc(c.name)+'</div>'+
-    '<div class="meta">'+sub+(c.address?'　📍 '+esc(c.address):'')+'</div></div>';
+    '<div class="meta">'+sub+(c.address?'　📍 '+esc(c.address):'')+'</div>'+
+    (c.rules?'<div class="rules">⚠️ '+esc(c.rules)+'</div>':'')+'</div>';
 }
 function renderPickList(){
   var box=el("pkList"); if(!box) return;
@@ -1877,7 +1897,7 @@ function openClientDetail(id){
   var body='<div class="sheet-title">'+esc(c.name)+'　<span class="pill plan">'+esc(c.kind||"個人")+'</span></div>'+
     '<div class="card" style="padding:10px 12px;margin-bottom:10px;">'+
       (c.address?'<div class="meta">📍 '+esc(c.address)+'</div>':'<div class="meta" style="color:var(--danger);">📍 住所未登録（地図に出ません）</div>')+
-      (c.phone?'<div class="meta">📞 '+esc(c.phone)+'</div>':"")+
+      (c.phone?'<div class="meta">📞 <a href="tel:'+esc(String(c.phone).replace(/[^\d+]/g,""))+'" style="color:var(--accent-text);font-weight:600;text-decoration:none;">'+esc(c.phone)+'</a></div>':"")+
       (c.rules?'<div class="rules">⚠️ '+esc(c.rules)+'</div>':"")+
       (plTxt?'<div class="meta">💴 '+plTxt+'</div>':"")+'</div>'+
     '<div class="row"><button class="btn primary" onclick="bkWith(\''+id+'\')">＋ 新規で予約</button>'+
