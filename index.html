@@ -633,8 +633,8 @@ function timelineItemHtml(it){
       '<div class="row" style="margin-top:10px;">'+
         '<button class="btn '+(fin?"ghost":"primary")+' sm" onclick="toggleBookingDone(\''+b.id+'\')">'+(fin?"↩ 予定に戻す":"✅ 施術終了")+'</button>'+
         '<button class="btn ghost accent sm" onclick="recFromBooking(\''+b.id+'\')">💴 施術を記録</button>'+
-        (fin&&hasRec?'<button class="btn ghost accent sm" onclick="receiptFromBooking(\''+b.id+'\')">🧾 領収書</button>':"")+
-        '<button class="btn ghost sm" onclick="openBookingForm(\''+b.id+'\')">編集</button></div>'+
+        '<button class="btn ghost sm" onclick="openBookingForm(\''+b.id+'\')">✏️ 編集</button>'+
+        (fin&&hasRec?'<button class="btn ghost accent sm" onclick="receiptFromBooking(\''+b.id+'\')">🧾 領収書</button>':"")+'</div>'+
       '</div>';
   }
   var r=it.r; var rfin=!!exRec(r).done;
@@ -644,8 +644,8 @@ function timelineItemHtml(it){
     '<span class="pill '+(rfin?"plan":"done")+'">'+(rfin?"施術終了":"予定")+'</span></div>'+
     '<div class="row" style="margin-top:10px;">'+
       '<button class="btn '+(rfin?"ghost":"primary")+' sm" onclick="toggleRecordDone(\''+r.id+'\')">'+(rfin?"↩ 予定に戻す":"✅ 施術終了")+'</button>'+
-      (rfin?'<button class="btn ghost accent sm" onclick="receiptFromRecord(\''+r.id+'\')">🧾 領収書</button>':"")+
-      '<button class="btn ghost sm" onclick="openRecordForm(\''+r.id+'\')">編集</button></div>'+
+      '<button class="btn ghost sm" onclick="openRecordForm(\''+r.id+'\')">✏️ 編集</button>'+
+      (rfin?'<button class="btn ghost accent sm" onclick="receiptFromRecord(\''+r.id+'\')">🧾 領収書</button>':"")+'</div>'+
     '</div>';
 }
 
