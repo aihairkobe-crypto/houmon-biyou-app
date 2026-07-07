@@ -326,7 +326,7 @@ function firstRunGuide(){
     '<button class="btn primary" onclick="openPicker(\'bkWith\',{title:\'だれの予約を入れますか？\',allowNew:true})">📅 予約を入力</button>'+
     '<div class="muted" style="font-size:11px;margin:-2px 0 8px;">相手はその場で登録もできます。まずは1件入れてみましょう。</div>'+
     '<button class="btn ghost accent" onclick="onboardExisting()">📋 既にお客様・施設をお持ちの方はこちら</button>'+
-    '<button class="btn ghost" onclick="openHelp()">❓ 詳しい使い方を見る</button>';
+    '<button class="btn ghost" onclick="openHelp()">📖 詳しい使い方を見る</button>';
 }
 /* 既に顧客・施設リストがある人向け＝先に登録 */
 function onboardExisting(){
@@ -1111,19 +1111,29 @@ function openPicker(onpickFn, opts){
     '<button class="btn ghost" onclick="closeSheet()">閉じる</button>';
   openSheet(body); renderPickList();
 }
+function pickItemHtml(c, lastMap){
+  var sub = lastMap[c.id] ? ('前回 '+esc(dateLabel(lastMap[c.id]))) : (isFacility(c)?'施設':'お客様');
+  return '<div class="item" onclick="pickChoose(\''+c.id+'\')"><div class="name">'+esc(c.name)+'</div>'+
+    '<div class="meta">'+sub+(c.address?'　📍 '+esc(c.address):'')+'</div></div>';
+}
 function renderPickList(){
   var box=el("pkList"); if(!box) return;
   var q=(el("pkSearch")&&el("pkSearch").value.trim())||"";
-  var groups=[["施設","🏢 施設・訪問先"],["病院","🏥 病院"],["個人","🧑 個人"]];
+  var lastMap={};
+  RC.forEach(function(r){ if(!r.client_id) return; var d=r.date||""; if(!lastMap[r.client_id]||d>lastMap[r.client_id]) lastMap[r.client_id]=d; });
   var html="";
+  // 電話中でも速いよう「最近・よく行く先」を最上部に（検索中は出さない）
+  if(!q){
+    var recent=CL.filter(function(c){return lastMap[c.id];}).sort(function(a,b){return (lastMap[b.id]||"").localeCompare(lastMap[a.id]||"");}).slice(0,6);
+    if(recent.length){ html+='<div class="sec">⏱ 最近・よく行く先</div>'; recent.forEach(function(c){ html+=pickItemHtml(c,lastMap); }); }
+  }
+  var groups=[["施設","🏢 施設・訪問先"],["病院","🏥 病院"],["個人","🧑 個人"]];
   groups.forEach(function(g){
     var items=CL.filter(function(c){return (c.kind||"個人")===g[0] && (!q||(c.name||"").indexOf(q)>=0);});
     if(!items.length) return;
+    items.sort(function(a,b){ var da=lastMap[a.id]||"",db=lastMap[b.id]||""; if(da!==db) return db.localeCompare(da); return (a.name||"").localeCompare(b.name||""); });
     html+='<div class="sec">'+g[1]+'</div>';
-    items.forEach(function(c){
-      html+='<div class="item" onclick="pickChoose(\''+c.id+'\')"><div class="name">'+esc(c.name)+'</div>'+
-        (c.address?'<div class="meta">📍 '+esc(c.address)+'</div>':"")+'</div>';
-    });
+    items.forEach(function(c){ html+=pickItemHtml(c,lastMap); });
   });
   if(!html) html='<div class="list-empty">見つかりません。'+(window._pickNew?'<br>上の「➕新しい顧客・施設を登録」から追加できます。':'')+'</div>';
   box.innerHTML=html;
@@ -1995,12 +2005,14 @@ function openSettings(){
     '<div class="hint" style="margin-top:4px;">⏱ 時間の単位（予約・ドラッグ移動/伸縮の刻み）</div>'+
     '<div class="seg-wrap" id="tu_seg" style="margin-bottom:8px;">'+[5,10,15,30].map(function(u){return '<button class="seg'+(TIME_UNIT===u?" on":"")+'" onclick="setTimeUnit('+u+')">'+u+'分</button>';}).join("")+'</div>'+
     '<button class="btn ghost accent" onclick="openColorSettings()">🎨 表示の色（予定・施術終了・移動）</button>'+
-    '<button class="btn ghost accent" onclick="openHelp()">❓ 使い方・ヘルプ</button>'+
-    '<div class="card"><div class="hint">組織リンク（今後）</div><div class="muted" style="font-size:12px;">サロン等で使う場合、ここに組織コードを入れると情報を共有できるようにする予定です。</div></div>'+
+    '<button class="btn ghost accent" onclick="openHelp()">📖 使い方・ヘルプ</button>'+
+    '<div class="muted" style="font-size:11px;text-align:center;margin:8px 0;">組織リンク（複数人で共有）は <b>近日</b> 対応予定</div>'+
+    '<button class="btn ghost" onclick="doSignOut()" style="color:var(--hint);">ログアウト</button>'+
+    '<div style="border-top:1px solid var(--line);margin:18px 0 8px;"></div>'+
+    '<div class="hint" style="color:var(--danger);">⚠️ 危険な操作</div>'+
     '<button class="btn danger" onclick="resetAll()">🧹 自分のデータをすべてリセット</button>'+
     '<div class="muted" style="font-size:12px;text-align:center;">顧客・予約・施術の記録を全部消します。元に戻せません。</div>'+
-    '<button class="btn ghost" onclick="doSignOut()" style="color:var(--hint);">ログアウト</button>'+
-    '<button class="btn ghost" onclick="closeSheet()">閉じる</button>';
+    '<button class="btn ghost" onclick="closeSheet()" style="margin-top:10px;">閉じる</button>';
   openSheet(body);
 }
 async function resetAll(){
