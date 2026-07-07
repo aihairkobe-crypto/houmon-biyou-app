@@ -1083,15 +1083,16 @@ function sumBy(recs, keyFn){
   return order.map(function(k){ return {name:k, amount:map[k].amount, count:map[k].count}; }).sort(function(a,b){ return b.amount-a.amount; });
 }
 /* 集計カード（上位＋棒グラフ、残りはまとめて表示） */
+var BAR_COLORS=["#2fa36b","#3b82f6","#e0679a","#d8a85f","#8b5cf6","#14b8a6"];   // 内訳の棒グラフ 項目ごとの色
 function breakdownCard(title, rows){
   if(!rows.length) return "";
   var max=rows[0].amount||1, top=rows.slice(0,6);
   var h='<div class="sec">'+title+'</div><div class="card" style="padding:12px;">';
-  top.forEach(function(r){
-    var pct=Math.max(3,Math.round(r.amount/max*100));
+  top.forEach(function(r,i){
+    var pct=Math.max(3,Math.round(r.amount/max*100)); var col=BAR_COLORS[i%BAR_COLORS.length];
     h+='<div style="margin-bottom:9px;">'+
-      '<div style="display:flex;justify-content:space-between;font-size:13px;"><span>'+esc(r.name)+' <span class="muted">('+r.count+')</span></span><span class="amt">'+yen(r.amount)+'</span></div>'+
-      '<div style="height:6px;background:var(--bg);border-radius:3px;margin-top:3px;overflow:hidden;"><div style="height:100%;width:'+pct+'%;background:var(--accent);border-radius:3px;"></div></div>'+
+      '<div style="display:flex;justify-content:space-between;font-size:13px;"><span><span style="display:inline-block;width:9px;height:9px;border-radius:2px;background:'+col+';margin-right:6px;"></span>'+esc(r.name)+' <span class="muted">('+r.count+')</span></span><span class="amt">'+yen(r.amount)+'</span></div>'+
+      '<div style="height:6px;background:var(--bg);border-radius:3px;margin-top:3px;overflow:hidden;"><div style="height:100%;width:'+pct+'%;background:'+col+';border-radius:3px;"></div></div>'+
     '</div>';
   });
   if(rows.length>6){ var rest=rows.slice(6).reduce(function(a,r){return a+r.amount;},0); h+='<div class="muted" style="font-size:12px;">ほか'+(rows.length-6)+'件 '+yen(rest)+'</div>'; }
