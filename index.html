@@ -68,6 +68,11 @@
   .lane-tag{display:inline-block; font-size:10px; font-weight:700; padding:1px 6px; border-radius:999px; margin-left:6px; vertical-align:middle; white-space:nowrap;}
   .salesrow{display:flex; justify-content:space-between; align-items:baseline; gap:8px;}
   .salesrow .cnt{font-size:12px; color:var(--muted); font-weight:400; margin-left:4px;}
+  .daygroup{margin-bottom:8px;}
+  .dayhead{display:flex; justify-content:space-between; align-items:center; padding:9px 12px; background:var(--bg); border:1px solid var(--line); border-radius:10px; cursor:pointer; font-weight:700;}
+  .dayhead .cnt{font-size:12px; color:var(--muted); font-weight:400; margin-left:6px;}
+  .dayhead .dh-arrow{color:var(--muted); margin-right:4px;}
+  .daybody{padding-top:6px;}
   /* 帳票（請求書・領収書）の全画面表示＋印刷 */
   #docview{position:fixed; inset:0; z-index:9999; background:#fff; overflow:auto; display:none;}
   #docview.show{display:block;}
@@ -828,7 +833,7 @@ function renderSales(){
   var feeTot=recs.reduce(function(a,r){return a+recFee(r);},0);
   var exs=EX.filter(function(e){return (e.date||"").slice(0,7)===SALES_MONTH;}).sort(function(a,b){return (b.date||"").localeCompare(a.date||"");});
   var exTot=exs.reduce(function(a,e){return a+(e.amount||0);},0);
-  var net=tot-exTot;   // 手取り
+  var net=tot-exTot;   // 差引（売上−経費）
   var pend=RC.filter(function(r){return (r.date||"").slice(0,7)===SALES_MONTH && !recDone(r);});   // 未終了（見込み）
   var pendTot=pend.reduce(function(a,r){return a+recTotal(r);},0);
   var html='<div class="card" style="background:var(--accent-soft);border-color:#cbe7da;">'+
@@ -841,9 +846,9 @@ function renderSales(){
       '<div class="salesrow"><span style="font-weight:700;">売上<span class="cnt">施術終了 '+recs.length+'件</span></span><span class="amt" style="font-size:19px;">'+yen(tot)+'</span></div>'+
       (feeTot?'<div class="muted" style="font-size:12px;margin:2px 0 0 2px;">🚗 うち訪問出張料 '+yen(feeTot)+'</div>':"")+
       '<div class="salesrow" style="margin-top:6px;"><span style="color:var(--danger);">− 経費<span class="cnt">'+exs.length+'件</span></span><span style="color:var(--danger);font-weight:700;">'+yen(exTot)+'</span></div>'+
-      '<div class="salesrow" style="margin-top:8px;border-top:2px solid #9fd3bd;padding-top:10px;"><span style="font-weight:800;font-size:16px;">＝ 手取り</span><span class="amt" style="font-size:26px;">'+yen(net)+'</span></div>'+
+      '<div class="salesrow" style="margin-top:8px;border-top:2px solid #9fd3bd;padding-top:10px;"><span style="font-weight:800;font-size:16px;">＝ 差引<span class="cnt">売上−経費</span></span><span class="amt" style="font-size:26px;">'+yen(net)+'</span></div>'+
       (pend.length?'<div class="muted" style="font-size:12px;margin-top:8px;padding-top:8px;border-top:1px dashed #b7d3c7;">🟢 未終了の予定 '+pend.length+'件（見込 '+yen(pendTot)+'）… 「✅施術終了」にすると売上に入ります</div>':"")+
-      '<div class="muted" style="font-size:11px;margin-top:6px;">手取り＝売上−経費 ／ 売上は「施術終了」にした分だけ反映</div>'+
+      '<div class="muted" style="font-size:11px;margin-top:6px;">売上は「施術終了」にした分だけ反映されます</div>'+
     '</div>'+
     '</div>'+
     '<div class="sec">📄 この月の作成・入力</div>'+
@@ -865,28 +870,44 @@ function renderSales(){
         '<span class="amt" style="color:var(--danger);">−'+yen(e.amount)+'</span></div></div>';
     });
   }
-  if(recs.length){ html+='<div class="sec">📋 売上の日別明細</div>'; }
-  var lastD="";
-  recs.forEach(function(r){
-    if(r.date!==lastD){ html+='<div class="sec">📅 '+esc(dateLabel(r.date))+'</div>'; lastD=r.date; }
-    var who=recordWho(r);
-    html+='<div class="item" onclick="openRecordForm(\''+r.id+'\')"><div class="top">'+
-      '<div><div class="name">'+who+'</div>'+
-        '<div class="meta">'+(exRec(r).t?'🕐 '+esc(exRec(r).t)+'　':'')+'✂️ '+esc(r.menu||"（メニュー未記入）")+(recFee(r)?'　🚗'+yen(recFee(r)):'')+(r.note?'　📝 '+esc(r.note):"")+'</div></div>'+
-      '<span class="amt">'+yen(r.amount)+'</span></div></div>';
-  });
+  if(recs.length){
+    html+='<div class="sec">📋 売上の日別明細<span class="muted" style="font-size:11px;font-weight:400;">（日付をタップで開閉）</span></div>';
+    var byDate={}, dorder=[];
+    recs.forEach(function(r){ var d=r.date||""; if(!(d in byDate)){ byDate[d]=[]; dorder.push(d); } byDate[d].push(r); });
+    dorder.forEach(function(d,di){
+      var drecs=byDate[d]; var dtot=drecs.reduce(function(a,r){return a+recTotal(r);},0); var gid="dg_"+di;
+      html+='<div class="daygroup">'+
+        '<div class="dayhead" onclick="toggleDayGroup(\''+gid+'\')">'+
+          '<span><span class="dh-arrow">▸</span>📅 '+esc(dateLabel(d))+'<span class="cnt">'+drecs.length+'件</span></span>'+
+          '<span class="amt" style="font-size:16px;">'+yen(dtot)+'</span></div>'+
+        '<div class="daybody" id="'+gid+'" style="display:none;">'+drecs.map(salesItemHtml).join("")+'</div>'+
+      '</div>';
+    });
+  }
   v.innerHTML=html;
+}
+function salesItemHtml(r){
+  return '<div class="item" onclick="openRecordForm(\''+r.id+'\')"><div class="top">'+
+    '<div><div class="name">'+recordWho(r)+'</div>'+
+      '<div class="meta">'+(exRec(r).t?'🕐 '+esc(exRec(r).t)+'　':'')+'✂️ '+esc(r.menu||"（メニュー未記入）")+(recFee(r)?'　🚗'+yen(recFee(r)):'')+(r.note?'　📝 '+esc(r.note):"")+'</div></div>'+
+    '<span class="amt">'+yen(r.amount)+'</span></div></div>';
+}
+function toggleDayGroup(gid){
+  var b=el(gid); if(!b) return;
+  var open=(b.style.display==="none");
+  b.style.display=open?"block":"none";
+  var head=b.previousElementSibling; var arrow=head&&head.querySelector(".dh-arrow"); if(arrow) arrow.textContent=open?"▾":"▸";
 }
 function salesMonth(d){ SALES_MONTH=shiftMonth(SALES_MONTH||curMonth(),d); renderSales(); }
 
-/* ===== 経費（軽めの経費ログ。手取り＝売上−経費） ===== */
+/* ===== 経費（軽めの経費ログ。差引＝売上−経費） ===== */
 var EXP_CATS=["駐車場","ガソリン","備品","飲食","その他"];
 function openExpenseForm(id, prefill){
   var x=id?(EX.find(function(e){return e.id===id;})||{}):(prefill||{});
   var chips=EXP_CATS.map(function(c){ return '<button class="btn ghost sm" style="width:auto;display:inline-block;margin:0 6px 6px 0;" onclick="el(\'ex_cat\').value=\''+c+'\'">'+c+'</button>'; }).join("");
   var body='<div class="sheet-title">🧾 経費'+(id?"（編集）":"")+'</div>'+
     (!EX_OK?'<div class="warn">⚠️ 経費の保存先（テーブル）がまだ準備できていないため、<b>保存できません</b>。<br>Supabase の SQL Editor で <b>sql/supabase_step6_expenses.sql</b> を1回実行してください（それまで経費だけ使えません）。</div>':'')+
-    '<div class="muted" style="margin-bottom:8px;">駐車場代・ガソリン・備品など、仕事で出ていくお金を記録します。<b>手取り（売上−経費）</b>に反映されます。</div>'+
+    '<div class="muted" style="margin-bottom:8px;">駐車場代・ガソリン・備品など、仕事で出ていくお金を記録します。<b>差引（売上−経費）</b>に反映されます。</div>'+
     '<div class="row"><div><div class="hint">日付</div><input id="ex_date" type="date" value="'+esc(x.date||todayISO())+'"></div>'+
       '<div><div class="hint">金額（円）</div><input id="ex_amount" type="number" value="'+(x.amount||"")+'" placeholder="0"></div></div>'+
     '<div class="hint" style="margin-top:8px;">費目（下のボタンで入力／自由に書けます）</div>'+
