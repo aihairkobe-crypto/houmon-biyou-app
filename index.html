@@ -1889,11 +1889,15 @@ function openClientDetail(id){
   openSheet(body);
 }
 /* カルテの1回分から、同じ内容で次回予約を作る（前回メニューをメモに引き継ぎ） */
+/* コピーして予約：前回の内容（メニュー・料金・出張料・施術時間・部屋・担当）を引き継いで施術カードを開く */
 function reuseToBooking(clientId, recId){
-  var r=RC.find(function(x){return x.id===recId;});
-  var memo=(r&&r.menu)?("前回："+r.menu):"";
+  var r=RC.find(function(x){return x.id===recId;}); if(!r) return;
+  var c=clientById(clientId);
   closeSheet();
-  openBookingForm(null,{client_id:clientId, memo:memo});
+  if(isFacility(c)){ openFacilityBatch(clientId,{date:todayISO()}); return; }   // 施設は団体入力へ
+  var e=exRec(r);
+  openRecordForm(null,{ client_id:clientId, menu:r.menu, amount:r.amount,
+    photos:{ dur:e.dur, fee:e.fee, lane:e.lane, room:e.room } });   // 日付・時間は新規なので既定(今日・既定時刻)＝フォームで変更
 }
 function cfKind(b){
   var p=b.parentNode; Array.prototype.forEach.call(p.children,function(x){x.classList.remove("on");}); b.classList.add("on");
