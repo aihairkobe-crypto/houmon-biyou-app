@@ -159,7 +159,7 @@ function setTimeUnit(u){ TIME_UNIT=u; try{ localStorage.setItem("timeunit_"+(ME&
   var seg=el("tu_seg"); if(seg){ Array.prototype.forEach.call(seg.children,function(b){ b.classList.toggle("on", b.textContent===(u+"分")); }); }
   saveCloudSettings(); toast("⏱ 時間の単位を"+u+"分にしました"); }
 var TAB="today";
-var APP_VERSION="20260708-6";   // ← 更新のたびにこの値を上げる。全端末で「新しい版があります」バナーが出る
+var APP_VERSION="20260708-7";   // ← 更新のたびにこの値を上げる。全端末で「新しい版があります」バナーが出る
 
 /* ===== プラン（無料/Pro）＝訪問回数で切替。今はUX検証用の“見た目”のみ（サーバー強制・Stripeは後日） ===== */
 var FREE_LIMIT=30;   // 無料プラン：訪問 30回/月まで（施設は何名でも1回。この数字で無料枠を調整）
@@ -1111,18 +1111,18 @@ function makeInvoice(fid, mon){
   var mp=String(mon).split("-"); var monLabel=mp.length===2?((+mp[0])+"年"+(+mp[1])+"月"):mon;
   var trs=rows.map(function(r){ var m=(r.date||"").split("-"); var md=m.length===3?((+m[1])+"/"+(+m[2])):"";
     return '<tr><td>'+md+'</td><td>'+esc(exRec(r).nm||"ご利用者")+(exRec(r).room?'（'+esc(exRec(r).room)+'）':'')+'</td><td>'+esc(r.menu||"施術")+'</td><td class="r">'+yen(recTotal(r))+'</td></tr>'; }).join("");
-  var issuerLines=[o.shop,o.name?("担当："+o.name):"",o.addr,o.phone?("TEL "+o.phone):"",o.invoice?("登録番号 "+o.invoice):""].filter(function(s){return s;}).map(function(s){return '<div>'+esc(s)+'</div>';}).join("");
+  var issuerLines=[o.shop,o.name?("担当："+o.name):"",o.addr,o.phone?("TEL "+o.phone):"",(isTaxable()&&o.invoice)?("登録番号 "+o.invoice):""].filter(function(s){return s;}).map(function(s){return '<div>'+esc(s)+'</div>';}).join("");
   var body='<h1>請求書</h1>'+
     '<div class="dhead"><div><div class="to">'+esc(c.name)+'　御中</div>'+(c.address?'<div style="font-size:12px;margin-top:6px;">'+esc(c.address)+'</div>':"")+'</div>'+
       '<div class="meta">請求番号：'+esc(invNo)+'<br>発行日：'+esc(dateLabel(todayISO()))+'<br>請求対象：'+esc(monLabel)+'分'+
         '<div class="issuer">'+issuerLines+'</div></div></div>'+
-    '<div class="total-box">ご請求金額（税込）<span class="amt">'+yen(total)+'</span></div>'+
+    '<div class="total-box">ご請求金額'+taxSuffix()+'<span class="amt">'+yen(total)+'</span></div>'+
     '<table><thead><tr><th style="width:60px;">日付</th><th>利用者名</th><th>メニュー</th><th class="r" style="width:90px;">金額</th></tr></thead>'+
       '<tbody>'+trs+'</tbody>'+
-      '<tfoot><tr><td colspan="3" class="r">合計（税込）</td><td class="r">'+yen(total)+'</td></tr>'+
-        '<tr><td colspan="3" class="r">うち消費税（10%）</td><td class="r">'+yen(tax)+'</td></tr></tfoot></table>'+
+      '<tfoot><tr><td colspan="3" class="r">合計'+taxSuffix()+'</td><td class="r">'+yen(total)+'</td></tr>'+
+        (isTaxable()?'<tr><td colspan="3" class="r">うち消費税（10%）</td><td class="r">'+yen(tax)+'</td></tr>':'')+'</tfoot></table>'+
     (o.bank?'<div class="bank">お振込先：'+esc(o.bank)+'</div>':"")+
-    '<div class="note">※上記のとおりご請求申し上げます。'+(o.invoice?'（適格請求書／登録番号 '+esc(o.invoice)+'）':'')+'</div>';
+    '<div class="note">※上記のとおりご請求申し上げます。'+((isTaxable()&&o.invoice)?'（適格請求書／登録番号 '+esc(o.invoice)+'）':'')+'</div>';
   closeSheet(); showDoc(body);
 }
 
@@ -1159,21 +1159,21 @@ function receiptBlockHtml(name, treat, travel, but, dateISO){
   var o=ORGP||{};
   var no="RC-"+String(dateISO||todayISO()).replace(/-/g,"");
   var tax=Math.round(total*10/110);
-  var issuerLines=[o.shop,o.name?("担当："+o.name):"",o.addr,o.phone?("TEL "+o.phone):"",o.invoice?("登録番号 "+o.invoice):""].filter(function(s){return s;}).map(function(s){return '<div>'+esc(s)+'</div>';}).join("");
+  var issuerLines=[o.shop,o.name?("担当："+o.name):"",o.addr,o.phone?("TEL "+o.phone):"",(isTaxable()&&o.invoice)?("登録番号 "+o.invoice):""].filter(function(s){return s;}).map(function(s){return '<div>'+esc(s)+'</div>';}).join("");
   var stamp = total>=50000 ? '<div style="margin-top:16px;padding:8px 12px;border:1px dashed #999;display:inline-block;font-size:11px;color:#555;">収入印紙（5万円以上）</div>' : '';
   var rows='<tr><td>施術代</td><td class="r">'+yen(treat)+'</td></tr>'+
     (travel>0?'<tr><td>🚗 出張交通費</td><td class="r">'+yen(travel)+'</td></tr>':"")+
-    '<tr><td><b>合計（税込）</b></td><td class="r"><b>'+yen(total)+'</b></td></tr>';
+    '<tr><td><b>合計'+taxSuffix()+'</b></td><td class="r"><b>'+yen(total)+'</b></td></tr>';
   return '<h1>領　収　書</h1>'+
     '<div class="dhead"><div><div class="to">'+esc(name)+'</div></div>'+
       '<div class="meta">No. '+esc(no)+'<br>発行日：'+esc(dateLabel(dateISO||todayISO()))+'</div></div>'+
-    '<div class="total-box" style="display:block;text-align:center;margin:18px 0;">領収金額（税込）<span class="amt">'+yen(total)+'</span></div>'+
+    '<div class="total-box" style="display:block;text-align:center;margin:18px 0;">領収金額'+taxSuffix()+'<span class="amt">'+yen(total)+'</span></div>'+
     '<div style="font-size:14px;">但し　'+esc(but)+'</div>'+
     '<table style="width:100%;max-width:360px;margin-top:12px;">'+rows+'</table>'+
     '<div style="font-size:12px;margin-top:8px;color:#333;">上記の金額を正に領収いたしました。</div>'+
-    '<div style="font-size:12px;margin-top:2px;color:#555;">（内消費税10%　'+yen(tax)+'）</div>'+
+    (isTaxable()?'<div style="font-size:12px;margin-top:2px;color:#555;">（内消費税10%　'+yen(tax)+'）</div>':'')+
     '<div class="issuer" style="text-align:right;margin-top:20px;">'+issuerLines+'</div>'+
-    (o.invoice?'<div class="note">（適格簡易請求書／登録番号 '+esc(o.invoice)+'）</div>':'')+stamp;
+    ((isTaxable()&&o.invoice)?'<div class="note">（適格簡易請求書／登録番号 '+esc(o.invoice)+'）</div>':'')+stamp;
 }
 function makeReceipt(name, treat, travel, but, dateISO){
   closeSheet(); showDoc(receiptBlockHtml(name, treat, travel, but, dateISO));
@@ -1487,6 +1487,10 @@ function resetColors(){ STATE_COLORS=Object.assign({},STATE_COLORS_DEFAULT); try
 
 /* ===== お店・組織情報（この端末に保存。組織リンク段階で正式テーブルへ移行予定） ===== */
 var ORGP={};
+/* 課税区分：課税事業者=消費税10%と登録番号を表示／免税事業者=表示しない。未設定は登録番号の有無で推定 */
+function isTaxable(){ var m=ORGP&&ORGP.taxMode; if(m==="taxable") return true; if(m==="exempt") return false; return !!(ORGP&&ORGP.invoice); }
+function taxSuffix(){ return isTaxable()?'（税込）':''; }
+function segPick(btn){ var p=btn.parentNode; Array.prototype.forEach.call(p.children,function(x){x.classList.remove("on");}); btn.classList.add("on"); }
 function loadOrgProfile(){ try{ ORGP=JSON.parse(localStorage.getItem("orgprofile_"+(ME&&ME.id))||"{}")||{}; }catch(e){ ORGP={}; } }
 function saveOrgProfile(o){ ORGP=o||{}; try{ localStorage.setItem("orgprofile_"+ME.id, JSON.stringify(ORGP)); }catch(e){} saveCloudSettings(); }
 function openOrgProfile(){
@@ -1499,12 +1503,17 @@ function openOrgProfile(){
     '<div class="hint" style="margin-top:8px;">住所（請求書・領収書に載ります・任意）</div><input id="op_addr" value="'+esc(o.addr||"")+'" placeholder="例：神戸市中央区〇〇1-2-3">'+
     '<div class="hint" style="margin-top:8px;">振込先（請求書に載ります・任意）</div><input id="op_bank" value="'+esc(o.bank||"")+'" placeholder="例：〇〇銀行 △△支店 普通 1234567 イタヤ">'+
     '<div class="hint" style="margin-top:8px;">登録番号（インボイス・任意）</div><input id="op_invoice" value="'+esc(o.invoice||"")+'" placeholder="例：T1234567890123">'+
+    '<div class="hint" style="margin-top:10px;">課税区分（請求書・領収書の消費税表示）</div>'+
+    '<div class="seg-wrap" id="op_tax" style="margin-bottom:4px;">'+
+      ['免税事業者','課税事業者'].map(function(t){ var on=(t==="課税事業者")===isTaxable(); return '<button class="seg'+(on?" on":"")+'" onclick="segPick(this)">'+t+'</button>'; }).join("")+'</div>'+
+    '<div class="muted" style="font-size:11px;margin-bottom:4px;">免税＝消費税の内訳や登録番号を表示しません。課税＝「うち消費税10%」を表示（登録番号があれば適格請求書）。迷ったら確定申告の状況に合わせてください。</div>'+
     '<button class="btn primary" onclick="saveOrgProfileForm()">保存</button>'+
     '<button class="btn ghost" onclick="openSettings()">戻る</button>');
 }
 function saveOrgProfileForm(){
+  var _tx=document.querySelector("#op_tax .seg.on"); var taxMode=(_tx&&_tx.textContent==="課税事業者")?"taxable":"exempt";
   saveOrgProfile({ shop:el("op_shop").value.trim(), name:el("op_name").value.trim(), phone:el("op_phone").value.trim(),
-    addr:el("op_addr").value.trim(), bank:el("op_bank").value.trim(), invoice:el("op_invoice").value.trim() });
+    addr:el("op_addr").value.trim(), bank:el("op_bank").value.trim(), invoice:el("op_invoice").value.trim(), taxMode:taxMode });
   closeSheet(); toast("🏪 お店・組織情報を保存しました");
 }
 
