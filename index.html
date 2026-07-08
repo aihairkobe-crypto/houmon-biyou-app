@@ -149,6 +149,7 @@ var sb = supabase.createClient(SUPABASE_URL, SUPABASE_KEY);
 
 var APP=document.getElementById("app");
 var ME=null, PROFILE=null;
+var RECOVERY=false;   // パスワード再設定リンクから来た状態（trueの間は再設定画面）
 var CL=[], BK=[], RC=[], TB=[], EX=[];      // 顧客 / 予約 / 売上 / 移動ブロック(time_blocks) / 経費(expenses)
 var EX_OK=true;                              // 経費テーブルが使えるか（未作成なら false）
 var TIME_UNIT=5;                     // 時間の単位（分）。5/10/15/30
@@ -158,7 +159,7 @@ function setTimeUnit(u){ TIME_UNIT=u; try{ localStorage.setItem("timeunit_"+(ME&
   var seg=el("tu_seg"); if(seg){ Array.prototype.forEach.call(seg.children,function(b){ b.classList.toggle("on", b.textContent===(u+"分")); }); }
   saveCloudSettings(); toast("⏱ 時間の単位を"+u+"分にしました"); }
 var TAB="today";
-var APP_VERSION="20260708-5";   // ← 更新のたびにこの値を上げる。全端末で「新しい版があります」バナーが出る
+var APP_VERSION="20260708-6";   // ← 更新のたびにこの値を上げる。全端末で「新しい版があります」バナーが出る
 
 /* ===== プラン（無料/Pro）＝訪問回数で切替。今はUX検証用の“見た目”のみ（サーバー強制・Stripeは後日） ===== */
 var FREE_LIMIT=30;   // 無料プラン：訪問 30回/月まで（施設は何名でも1回。この数字で無料枠を調整）
@@ -267,6 +268,7 @@ function showUpdateBanner(){
 /* ===== 起動 ===== */
 async function boot(){
   checkForUpdate();   // ログイン前でも毎回チェック（古いキャッシュを自動更新）
+  if(RECOVERY || location.hash.indexOf("type=recovery")>=0){ renderResetPassword(); return; }   // パスワード再設定リンク経由なら再設定画面へ
   var s=await sb.auth.getSession();
   ME=s.data.session?s.data.session.user:null;
   if(!ME){ renderAuth(); return; }
@@ -340,6 +342,7 @@ function renderAuth(){
     '<div class="hint" style="margin-top:8px;">パスワード</div><input id="pw" type="password" autocomplete="'+(su?"new-password":"current-password")+'" placeholder="6文字以上" value="'+esc(window._ap||"")+'">'+
     (su?'<div class="warn">⚠️ この<b>メールとパスワード</b>は次回のログインに必要です。必ず控えてください。</div>':"")+
     '<button class="btn primary" onclick="'+(su?"doSignUp()":"doSignIn()")+'">'+(su?"登録して始める":"ログイン")+'</button>'+
+    (su?"":'<button class="btn ghost sm" style="width:auto;margin:8px auto 0;display:block;color:var(--muted);" onclick="doResetPassword()">パスワードを忘れた方はこちら</button>')+
     '<div id="m"></div>'+
     '</div></div>';
 }
@@ -358,8 +361,39 @@ async function doSignUp(){
   showMsg("登録中…","ok");
   var r=await sb.auth.signUp({email:email,password:pw,options:{data:{name:name}}});
   if(r.error){ showMsg("登録エラー："+esc(r.error.message)); return; }
-  if(!r.data.session){ showMsg("確認メールが有効です。Supabaseでメール確認をオフにするか、Add user(Auto Confirm)で作成してください。"); return; }
+  if(!r.data.session){ showMsg("📧 確認メールを送りました。メール内のリンクで認証してから「ログイン」してください。","ok"); return; }
   ME=r.data.user; window._ae=window._ap=window._an=""; boot();
+}
+/* ===== パスワード再発行（メールのリンクで再設定） ===== */
+async function doResetPassword(){
+  var email=(el("email")&&el("email").value.trim())||"";
+  if(!email){ email=(prompt("登録したメールアドレスを入力してください")||"").trim(); }
+  if(!email){ return; }
+  showMsg("送信中…","ok");
+  var r=await sb.auth.resetPasswordForEmail(email, { redirectTo: location.origin+location.pathname });
+  if(r.error){ showMsg("送信できませんでした："+esc(r.error.message)); return; }
+  showMsg("📧 再設定メールを「"+esc(email)+"」に送りました。メール内のリンクを開き、新しいパスワードを設定してください。","ok");
+}
+function renderResetPassword(){
+  APP.innerHTML='<div class="center-narrow">'+
+    '<h1 class="brand">パスワードの再設定</h1>'+
+    '<div class="sub" style="text-align:center;margin-bottom:16px;">新しいパスワードを入力してください。</div>'+
+    '<div class="card">'+
+      '<div class="hint">新しいパスワード</div><input id="np" type="password" autocomplete="new-password" placeholder="6文字以上">'+
+      '<div class="hint" style="margin-top:8px;">新しいパスワード（確認）</div><input id="np2" type="password" autocomplete="new-password" placeholder="もう一度">'+
+      '<button class="btn primary" onclick="doSetNewPassword()">パスワードを変更する</button>'+
+      '<div id="m"></div>'+
+    '</div></div>';
+}
+async function doSetNewPassword(){
+  var p=(el("np")||{}).value||"", p2=(el("np2")||{}).value||"";
+  if(p.length<6){ showMsg("6文字以上で入力してください"); return; }
+  if(p!==p2){ showMsg("確認用と一致しません"); return; }
+  showMsg("変更中…","ok");
+  var r=await sb.auth.updateUser({ password:p });
+  if(r.error){ showMsg("変更できませんでした："+esc(r.error.message)); return; }
+  RECOVERY=false; try{ history.replaceState(null,"",location.pathname); }catch(e){}   // URLの再設定トークンを消す
+  toast("🔑 パスワードを変更しました"); ME=r.data.user||ME; boot();
 }
 
 /* ===== アプリ本体（上部バー＋タブ） ===== */
@@ -2172,6 +2206,8 @@ async function loadSampleData(){
 }
 async function doSignOut(){ unsubscribeRealtime(); await sb.auth.signOut(); ME=null; PROFILE=null; closeSheet(); renderAuth(); }
 
+/* パスワード再設定リンクを開いた時（Supabaseが検知して発火）＝再設定画面へ */
+sb.auth.onAuthStateChange(function(ev){ if(ev==="PASSWORD_RECOVERY"){ RECOVERY=true; renderResetPassword(); } });
 boot();
 </script>
 </body>
