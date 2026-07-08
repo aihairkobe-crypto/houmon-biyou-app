@@ -158,7 +158,7 @@ function setTimeUnit(u){ TIME_UNIT=u; try{ localStorage.setItem("timeunit_"+(ME&
   var seg=el("tu_seg"); if(seg){ Array.prototype.forEach.call(seg.children,function(b){ b.classList.toggle("on", b.textContent===(u+"分")); }); }
   toast("⏱ 時間の単位を"+u+"分にしました"); }
 var TAB="today";
-var APP_VERSION="20260708-1";   // ← 更新のたびにこの値を上げる。全端末で「新しい版があります」バナーが出る
+var APP_VERSION="20260708-2";   // ← 更新のたびにこの値を上げる。全端末で「新しい版があります」バナーが出る
 
 function esc(s){ return (s==null?"":String(s)).replace(/[&<>"]/g,function(c){return {"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;"}[c];}); }
 function el(id){ return document.getElementById(id); }
@@ -522,7 +522,7 @@ function openNewAt(iso, t){
   openSheet('<div class="sheet-title">'+esc(dateLabel(iso))+'　'+esc(t)+'</div>'+
     '<div class="muted" style="margin-bottom:8px;">この時間に追加します。</div>'+
     '<button class="btn primary" onclick="newBookingAt()">＋ 予約する</button>'+
-    '<button class="btn ghost accent" onclick="newMoveAt()">🚗 移動を追加</button>'+
+    '<button class="btn ghost accent" onclick="newMoveAt()">🚗 移動時間を追加</button>'+
     '<button class="btn ghost" onclick="closeSheet()">キャンセル</button>');
 }
 function newMoveAt(){ var a=window._newAt||{}; openMoveForm(null,{date:a.iso, time:a.t, duration:15}); }
@@ -546,7 +546,7 @@ async function saveMove(id){
     duration:Number(el("mv_dur").value)||0, label:el("mv_label").value.trim() };
   var r=id?await sb.from("time_blocks").update(data).eq("id",id):await sb.from("time_blocks").insert(data);
   if(r.error){ showMsg("保存エラー："+esc(r.error.message)); return; }
-  closeSheet(); toast("🚗 移動を入れました"); await reloadTimeBlocks();
+  closeSheet(); toast("🚗 移動時間を入れました"); await reloadTimeBlocks();
 }
 async function delMove(id){
   if(!confirm("この移動を削除しますか？")) return;
@@ -713,7 +713,7 @@ function renderPlan(){
   html+='<button class="btn primary" style="margin-bottom:6px;" onclick="openPicker(\'bkWith\',{title:\'だれの予約を入れますか？\',allowNew:true})">＋ 予約する</button>';
   html+='<div class="muted" style="font-size:11px;margin-bottom:6px;">空き時間をタップでその時刻に追加。日時は後から自由に変えられます。</div>';
   html+=dayScheduleHtml(PLAN_SEL);
-  html+='<button class="btn ghost accent" style="margin-top:10px;" onclick="openMoveForm(null,{date:\''+PLAN_SEL+'\',duration:15})">🚗 移動を追加</button>';
+  html+='<button class="btn ghost accent" style="margin-top:10px;" onclick="openMoveForm(null,{date:\''+PLAN_SEL+'\',duration:15})">🚗 移動時間を追加</button>';
   html+='<button class="btn ghost accent" style="margin-top:8px;" onclick="showRouteMap(\''+PLAN_SEL+'\')">🗺 この日の動線を地図で見る</button>';
   html+='<div id="routeMap" style="display:none;margin-top:8px;"></div>';
   v.innerHTML=html;
