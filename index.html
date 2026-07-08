@@ -153,13 +153,13 @@ var RECOVERY=false;   // パスワード再設定リンクから来た状態（t
 var CL=[], BK=[], RC=[], TB=[], EX=[];      // 顧客 / 予約 / 売上 / 移動ブロック(time_blocks) / 経費(expenses)
 var EX_OK=true;                              // 経費テーブルが使えるか（未作成なら false）
 var TIME_UNIT=5;                     // 時間の単位（分）。5/10/15/30
-function loadTimeUnit(){ try{ var u=parseInt(localStorage.getItem("timeunit_"+(ME&&ME.id))||"5",10); TIME_UNIT=([5,10,15,30].indexOf(u)>=0)?u:5; }catch(e){ TIME_UNIT=5; } }
+function loadTimeUnit(){ try{ var u=parseInt(localStorage.getItem("timeunit_"+(ME&&ME.id))||"15",10); TIME_UNIT=([5,10,15,30].indexOf(u)>=0)?u:15; }catch(e){ TIME_UNIT=15; } }   // ドラッグ吸着・施術時間の刻み（既定15分）
 function snapUnit(min){ return Math.round(min/TIME_UNIT)*TIME_UNIT; }
 function setTimeUnit(u){ TIME_UNIT=u; try{ localStorage.setItem("timeunit_"+(ME&&ME.id), String(u)); }catch(e){}
   var seg=el("tu_seg"); if(seg){ Array.prototype.forEach.call(seg.children,function(b){ b.classList.toggle("on", b.textContent===(u+"分")); }); }
   saveCloudSettings(); toast("⏱ 時間の単位を"+u+"分にしました"); }
 var TAB="today";
-var APP_VERSION="20260708-8";   // ← 更新のたびにこの値を上げる。全端末で「新しい版があります」バナーが出る
+var APP_VERSION="20260708-9";   // ← 更新のたびにこの値を上げる。全端末で「新しい版があります」バナーが出る
 
 /* ===== プラン（無料/Pro）＝訪問回数で切替。今はUX検証用の“見た目”のみ（サーバー強制・Stripeは後日） ===== */
 var FREE_LIMIT=30;   // 無料プラン：訪問 30回/月まで（施設は何名でも1回。この数字で無料枠を調整）
@@ -693,7 +693,8 @@ function findConflict(o){
     if(it.kind==="bk" && it.b && it.b.id===o.exBookingId) continue;                          // 編集中の予約は除外
     if(it.kind==="rc" && it.r && it.r.id===o.exRecId) continue;                               // 編集中の記録は除外
     if(it.kind==="fac" && o.clientId && it.clientId===o.clientId && it.t===o.time) continue;  // 同施設・同時刻＝同じ団体
-    if(o.lane && itemLane(it) && itemLane(it)!==o.lane) continue;                              // 別の枠なら重ならない（枠なしの予定は対象に残す）
+    var _itl=itemLane(it);
+    if(o.lane && _itl && _itl!==o.lane && !(laneSolo(o.lane)&&laneSolo(_itl))) continue;       // 別の枠は基本スキップ。ただし両方「自分の体(掛け持ち不可)」なら重複チェック対象に残す
     var s2=hm2min(it.t); if(s2==null) continue;
     if(overlapMin(start,dur,s2,itDur(it))) return conflictLabel(it);
   }
@@ -1548,11 +1549,12 @@ function skipInitialSetup(){ markSetupDone(); closeSheet(); }
 var LANES=[]; var LANE_COLORS=["#2fa36b","#3b82f6","#e0679a","#d8a85f","#8b5cf6","#14b8a6"];
 function loadLanes(){
   try{ LANES=JSON.parse(localStorage.getItem("lanes_"+(ME&&ME.id))||"[]"); }catch(e){ LANES=[]; }
-  if(!Array.isArray(LANES)||!LANES.length){ LANES=[{id:"self", name:((ORGP&&ORGP.shop)||"自分"), color:LANE_COLORS[0]}]; saveLanesRaw(); }
+  if(!Array.isArray(LANES)||!LANES.length){ LANES=[{id:"self", name:((ORGP&&ORGP.shop)||"自分"), color:LANE_COLORS[0], solo:true}]; saveLanesRaw(); }
 }
 function saveLanesRaw(){ try{ localStorage.setItem("lanes_"+ME.id, JSON.stringify(LANES)); }catch(e){} }
 function laneById(id){ return LANES.find(function(l){return l.id===id;}); }
 function laneName(id){ var l=laneById(id); return l?l.name:""; }
+function laneSolo(id){ var l=laneById(id); return l?(l.solo!==false):true; }   // 既定=自分の体（掛け持ち不可）
 function laneColor(id){ var l=laneById(id); return l?l.color:"#888"; }
 function multiLane(){ return LANES.length>1; }
 function defaultLaneId(){ try{ var v=localStorage.getItem("lastlane_"+(ME&&ME.id)); if(v&&laneById(v)) return v; }catch(e){} return LANES[0]?LANES[0].id:"self"; }
@@ -1564,16 +1566,27 @@ function readLane(fieldId){ var e=el(fieldId); var v=(e&&e.value)?e.value:defaul
 function openLanes(){
   var rows=LANES.map(function(l){ return laneRow(l); }).join("");
   openSheet('<div class="sheet-title">👥 枠・担当</div>'+
-    '<div class="muted" style="margin-bottom:8px;">他のスタッフや、サロン予約・訪問など、<b>別の予約枠が必要なとき</b>に追加できます。<b>別の枠どうしなら同じ時間でも重複になりません</b>（並行して予約OK）。</div>'+
+    '<div class="muted" style="margin-bottom:8px;">他のスタッフや、サロン・訪問など<b>予約を分けたい単位</b>を作れます。<br>各枠の<b>「自分の体」</b>チェックで重なりの扱いが変わります：<br>・<b>ON</b>＝あなた自身の枠（訪問・サロン等）。<b>他のON枠と時間が重なると警告</b>（体は一つなのでブッキング防止）。<br>・<b>OFF</b>＝別の人の枠（ヘルパー等）。<b>他と重なってもOK</b>（並行して予約可）。</div>'+
     '<div id="ln_rows">'+rows+'</div>'+
     '<button class="btn ghost accent sm" style="width:auto;" onclick="addLaneRow()">＋ 枠を追加</button>'+
     '<button class="btn primary" style="margin-top:10px;" onclick="saveLanesForm()">保存</button>'+
     '<button class="btn ghost" onclick="openSettings()">戻る</button>');
 }
-function laneRow(l){ l=l||{id:"",name:"",color:LANE_COLORS[LANES.length%LANE_COLORS.length]}; return '<div class="price-row" data-id="'+esc(l.id||"")+'"><input class="ln_name" value="'+esc(l.name||"")+'" placeholder="枠の名前（例：訪問枠）"><input class="ln_color" type="color" value="'+(l.color||"#2fa36b")+'" style="width:52px;height:40px;padding:2px;border:1px solid var(--line);border-radius:8px;background:none;"><button class="px" onclick="this.parentNode.remove()">×</button></div>'; }
+function laneRow(l){
+  l=l||{id:"",name:"",color:LANE_COLORS[LANES.length%LANE_COLORS.length],solo:true};
+  var solo=(l.solo!==false);
+  return '<div class="lane-edit" data-id="'+esc(l.id||"")+'" style="border:1px solid var(--line);border-radius:10px;padding:8px 10px;margin-bottom:8px;">'+
+    '<div class="row" style="align-items:center;gap:6px;">'+
+      '<input class="ln_name" value="'+esc(l.name||"")+'" placeholder="枠の名前（例：訪問枠）" style="flex:1;">'+
+      '<input class="ln_color" type="color" value="'+(l.color||"#2fa36b")+'" style="width:44px;height:40px;padding:2px;border:1px solid var(--line);border-radius:8px;background:none;">'+
+      '<button class="px" onclick="this.closest(\'.lane-edit\').remove()">×</button>'+
+    '</div>'+
+    '<label style="display:flex;align-items:center;gap:8px;margin-top:6px;font-size:12px;cursor:pointer;"><input type="checkbox" class="ln_solo" style="width:auto;"'+(solo?" checked":"")+'>自分の体（他の枠と同時にできない＝ブッキング防止）</label>'+
+  '</div>';
+}
 function addLaneRow(){ el("ln_rows").insertAdjacentHTML("beforeend", laneRow()); }
 function saveLanesForm(){
-  var out=[]; Array.prototype.forEach.call(document.querySelectorAll("#ln_rows .price-row"),function(r){ var n=r.querySelector(".ln_name").value.trim(); if(!n) return; var id=r.getAttribute("data-id")||("L"+Math.random().toString(36).slice(2,9)); out.push({id:id, name:n, color:r.querySelector(".ln_color").value}); });
+  var out=[]; Array.prototype.forEach.call(document.querySelectorAll("#ln_rows .lane-edit"),function(r){ var n=r.querySelector(".ln_name").value.trim(); if(!n) return; var id=r.getAttribute("data-id")||("L"+Math.random().toString(36).slice(2,9)); out.push({id:id, name:n, color:r.querySelector(".ln_color").value, solo:r.querySelector(".ln_solo").checked}); });
   if(!out.length){ showMsg("枠を1つ以上残してください"); return; }
   LANES=out; saveLanesRaw(); saveCloudSettings(); closeSheet(); toast("👥 枠を保存しました"); renderTab();
 }
@@ -2122,15 +2135,35 @@ function unsubscribeRealtime(){ if(RT){ sb.removeChannel(RT); RT=null; } }
 /* ===== 使い方・ヘルプ ===== */
 function helpItem(title, body){ return '<div class="card"><div style="font-weight:700;font-size:14px;margin-bottom:4px;">'+title+'</div><div class="muted" style="font-size:13px;line-height:1.7;">'+body+'</div></div>'; }
 function openHelp(){
-  var body='<div class="sheet-title">使い方・ヘルプ</div>'+
-    '<div class="muted" style="margin-bottom:8px;">訪問美容の <b>予約・顧客・売上</b> をこれひとつで管理できます。</div>'+
-    helpItem("① 始め方（3ステップ）","1. <b>顧客・施設を登録</b>（顧客タブ）<br>2. <b>予約を作る</b>（予定タブ／任意）<br>3. <b>施術を記録</b>（今日タブ）→ 料金が<b>売上に自動集計</b>されます。")+
-    helpItem("🏢 施設の使い方","施設を登録する画面で、<b>利用者（入居者）の名簿</b>も一緒に入れられます（あとから編集も可）。<br>訪問したら「施術を記録」で名簿が出るので、<b>その日対応した人だけチェック</b>してまとめて保存。<br>※名簿は候補。前回対応した人は<b>自動でチェック済み</b>になります。入退居は随時直せます。")+
-    helpItem("💴 施術を記録 / 📅 予約する","ホーム・予定・顧客のどこからでも、同じ<b>施術カード</b>（住所・時間・メニュー・料金・出張料など）で入力できます。施設は選ぶと団体入力（名簿貼り付け・全員一括）になります。")+
-    helpItem("📅 予約","先の予定も入れられます。予約をタップ→「この予約の施術を記録」で、顧客や日付が引き継がれてラクに記録できます。")+
-    helpItem("💰 売上の見方","売上タブで、月ごとの合計と一覧が見られます。上の ‹ › で月を切り替え。")+
-    helpItem("📱 複数の端末・自動更新","同じアカウントでログインすれば、どの端末でも同じデータ。変更は自動で反映されます（電波がある時）。")+
-    helpItem("🧹 データのリセット","設定 → 「データをすべてリセット」で、自分のデータを全部消せます（元に戻せません）。")+
+  var body='<div class="sheet-title">📖 使い方・ヘルプ</div>'+
+    '<div class="muted" style="margin-bottom:8px;">訪問美容の <b>予約 → 施術 → 売上 → 書類</b> を、これひとつで。困ったらここを見てください。</div>'+
+
+    helpItem("🧭 全体の流れ","1. <b>顧客・施設を登録</b>（顧客タブ／その場でもOK）<br>2. <b>予約する</b>（予定タブ・任意）<br>3. 施術したら <b>「✅施術終了」</b> にする<br>4. 売上・手取り・書類（請求書/領収書）に<b>自動でつながる</b>。<br>入力は基本 <b>施術カード</b> 1つで完結します。")+
+
+    helpItem("🏠 ホーム","今月の売上、今日の訪問件数・売上・<b>未終了</b>（＝まだ「施術終了」にしていない予定）が一目で分かります。今日の訪問一覧から、その場で <b>✅施術終了 / ✏️編集 / 🧾領収書</b> が押せます。「＋予約する」で新規入力、「🗺今日の動線を地図で見る」で回る順路。")+
+
+    helpItem("📅 予定（カレンダー＋時間軸）","日付をタップ→その日の時間軸が出ます（<span class=\"dot\" style=\"display:inline-block;vertical-align:middle;\"></span>印＝予定あり）。<br>・<b>空き時間をタップ</b>でその時刻に追加<br>・<b>ブロックをドラッグ</b>で時間移動／下端で施術時間の伸縮（設定の刻みでカチッと吸着）<br>・「🚗移動時間を追加」で移動の枠を入れられます（ブロックの✕で削除）。")+
+
+    helpItem("👥 顧客・施設","「＋お客様」「＋施設」で登録。一覧は<b>前回来店が新しい順</b>。タップで<b>カルテ</b>（住所・料金表・来店履歴）。<br>・<b>＋新規で予約</b>：新しい予約を作る<br>・<b>🔁コピーして予約</b>：前回のメニュー・料金・出張料・担当を引き継いで新しい予約に（日時だけ入れ直し）<br>履歴は来店ごとに積み上がり、累計も出ます。")+
+
+    helpItem("🏢 施設のまとめ入力","施設を選ぶと<b>団体入力</b>に。その日来る<b>利用者リスト</b>を入力（毎回変わってOK）。<br>・「📋名簿を貼り付け」でExcelからまとめて取り込み（設定の雛形が便利）<br>・対応した人にチェック→料金を入れて<b>まとめて保存</b><br>・入力途中で閉じても<b>自動保存</b>で続きから。")+
+
+    helpItem("👥 枠・担当（掛け持ち防止）","訪問枠・サロン枠や別スタッフなど、予約を分ける単位。設定→枠・担当で作成。<br>各枠の<b>「自分の体」</b>チェック：<br>・<b>ON</b>＝自分の枠。他のON枠と時間が重なると<b>警告</b>（体は一つ＝ブッキング防止。訪問⇔サロン等）<br>・<b>OFF</b>＝別の人の枠（ヘルパー等）。<b>重なってもOK</b>。<br>予定表では枠ごとに色分け表示。")+
+
+    helpItem("✂️ メニュー・料金","施術カードの料金ボタンは<b>複数選べます</b>（例：カット＋カラー→料金は合算）。<br>「次回からこの料金を〇〇の初期メニューに登録」に✓を入れると、<b>その人の料金として記憶</b>し次回から自動表示。<br>共通の料金表は 設定→<b>標準メニュー</b> で。施設・お客様ごとの料金はカルテで個別に。")+
+
+    helpItem("💰 売上・手取り","売上タブで月ごとに集計（‹ ›で月切替）。<b>売上＝施術料＋🚗出張料</b>。そこから<b>経費</b>を引いた<b>差引</b>（手元に残る額）を表示。<br>売上は<b>「施術終了」にした分だけ</b>反映（未終了は見込みとして別表示）。内訳（枠別・顧客別・メニュー別・費目別）と<b>日別明細</b>（タップで開閉）も。")+
+
+    helpItem("🧾 経費","売上タブ「🧾経費を追加」で、駐車場・ガソリン・備品などを記録→<b>差引に反映</b>。<br>※経費は最初に1回だけ、Supabaseで専用テーブルの準備（SQL実行）が必要です。準備前は保存時に案内が出ます。")+
+
+    helpItem("📄 請求書・領収書","売上タブから作成→<b>印刷／PDFで保存</b>（画面内に表示）。<br>・<b>施設の請求書</b>：施設×月を選ぶと全利用者の明細付き<br>・<b>個別領収書</b>：施設の利用者ごとに1枚ずつ（1回の印刷で全員分）<br>・<b>領収書</b>：個人向け。予定リストの🧾からも作成可。施術代と出張交通費は分けて記載。<br>屋号・住所・登録番号・振込先は 設定→<b>お店・組織情報</b> に入れると自動で載ります。")+
+
+    helpItem("🕐 時間の入力","時刻はiPhone標準のホイールで選べます。施術時間（分）と、予定表ドラッグの<b>吸着の刻みは15分</b>が既定です。")+
+
+    helpItem("📱 複数の端末・最新に更新","同じアカウントでログインすれば、スマホ・PCどの端末でも<b>同じデータ</b>（クラウド保存）。<br>新しい版が出ると画面上部に<b>「🔄新しい版があります」</b>バナー→タップで更新。出ない時は 設定→<b>アプリを最新に更新</b>。")+
+
+    helpItem("⚠️ データ・リセット","データはクラウドに保存され、端末を変えても消えません。設定の一番下<b>「危険な操作」</b>の「データをすべてリセット」は、自分の顧客・予約・売上を<b>全部消去（戻せません）</b>。お試しで入れたデータの掃除に。")+
+
     '<button class="btn ghost" onclick="closeSheet()">閉じる</button>';
   openSheet(body);
 }
@@ -2167,8 +2200,6 @@ function openSettings(){
     '<button class="btn ghost accent" onclick="openStdMenu()">🧾 標準メニュー（デフォルト料金表）</button>'+
     '<button class="btn ghost accent" onclick="downloadRosterTemplate()">📥 名簿の雛形をダウンロード</button>'+
     '<div class="muted" style="font-size:11px;margin:-2px 0 6px;">施設や協力スタッフに配って、同じ形式で名簿をもらえます（そのまま取り込み可）。</div>'+
-    '<div class="hint" style="margin-top:4px;">⏱ 時間の単位（予約・ドラッグ移動/伸縮の刻み）</div>'+
-    '<div class="seg-wrap" id="tu_seg" style="margin-bottom:8px;">'+[5,10,15,30].map(function(u){return '<button class="seg'+(TIME_UNIT===u?" on":"")+'" onclick="setTimeUnit('+u+')">'+u+'分</button>';}).join("")+'</div>'+
     '<button class="btn ghost accent" onclick="openColorSettings()">🎨 表示の色（予定・施術終了・移動）</button>'+
     '<button class="btn ghost accent" onclick="openHelp()">📖 使い方・ヘルプ</button>'+
     '<button class="btn ghost accent" onclick="forceReload()">🔄 アプリを最新に更新</button>'+
