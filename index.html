@@ -158,7 +158,7 @@ function setTimeUnit(u){ TIME_UNIT=u; try{ localStorage.setItem("timeunit_"+(ME&
   var seg=el("tu_seg"); if(seg){ Array.prototype.forEach.call(seg.children,function(b){ b.classList.toggle("on", b.textContent===(u+"分")); }); }
   toast("⏱ 時間の単位を"+u+"分にしました"); }
 var TAB="today";
-var APP_VERSION="20260708-3";   // ← 更新のたびにこの値を上げる。全端末で「新しい版があります」バナーが出る
+var APP_VERSION="20260708-4";   // ← 更新のたびにこの値を上げる。全端末で「新しい版があります」バナーが出る
 
 /* ===== プラン（無料/Pro）＝訪問回数で切替。今はUX検証用の“見た目”のみ（サーバー強制・Stripeは後日） ===== */
 var FREE_LIMIT=30;   // 無料プラン：訪問 30回/月まで（施設は何名でも1回。この数字で無料枠を調整）
@@ -1630,10 +1630,12 @@ async function openFacilityBatch(clientId, opts){
     window._batchExtraRows.forEach(function(r){ srcRows.push({name:r.name, mid:"", room:r.room||"", menu:r.menu||"", amount:(r.amount!=null?String(r.amount):(r.menu?String(priceOfMenu(pl,r.menu)||""):"")), note:r.note||"", checked:true}); });
     window._batchExtraRows=null;
   }
+  var existRecs=RC.filter(function(r){ return r.client_id===clientId && r.date===iso; });   // この施設・この日に既に保存済みの記録（二重登録の注意用）
   var rowsHtml=srcRows.map(function(r){ return batchRow({id:r.mid||"",name:r.name}, pl, {menu:r.menu||"", amount:(r.amount!==""&&r.amount!=null?Number(r.amount):null), note:r.note||"", room:r.room||"", checked:r.checked}); }).join("");
   var hasRows=rowsHtml!=="";
   var body='<div class="sheet-title">'+esc(c.name)+'　'+esc(dateLabel(iso))+'</div>'+
     (resuming?'<div class="msg ok" style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px;">📝 入力途中を復元しました<button class="btn ghost sm" style="width:auto;" onclick="discardBatchDraft()">🗑 破棄して新規</button></div>':'')+
+    (existRecs.length?'<div class="warn" style="margin-bottom:8px;">⚠️ この施設の '+esc(dateLabel(iso))+' は、すでに <b>'+existRecs.length+'名分</b> 記録済みです。同じ人をもう一度保存すると二重になります。既存分の修正は各行の「🏢中を見る／✏️」から。</div>':'')+
     '<div class="muted" style="margin-bottom:8px;">この日に来る<b>利用者リストを入力</b>（毎回変わってOK）。<b>📋名簿を貼り付け</b>か「＋利用者を追加」で入れて、まとめて保存。保存分は履歴・領収書の元として残ります。<br>※入力は<b>自動保存</b>。途中で閉じても続きから再開できます。</div>'+
     '<div class="hint">お客様情報（ここで直すと顧客に反映・地図にも使われます）</div>'+
     '<input id="ba_caddr" value="'+esc(defAddr)+'" placeholder="住所（例：神戸市中央区元町通5-7-4-202）">'+
@@ -1741,6 +1743,9 @@ async function saveBatch(){
   if(!payload.length){ showMsg("その日 対応した人にチェックを入れてください"); return; }
   if(!ensureCanVisit(window._batch.clientId, date)) return;   // 無料枠（訪問回数）チェック。施設は何名でも1訪問
   if(!confirmIfConflict({date:date, time:time, dur:60, clientId:window._batch.clientId, lane:lane})) return;   // 重複チェック（同じ枠の中だけ。同施設同時刻の団体は除外）
+  var _dupN=RC.filter(function(r){ return r.client_id===window._batch.clientId && r.date===date; }).length;   // 同施設・同日に既存の記録＝二重登録の可能性
+  if(_dupN){ var _dc=clientById(window._batch.clientId)||{};
+    if(!confirm("⚠️「"+(_dc.name||"この施設")+"」の "+dateLabel(date)+" は、すでに "+_dupN+"件 記録があります。\n二重登録かもしれません。それでも追加保存しますか？\n（同じ日の別時間帯でなければ「キャンセル」を推奨）")) return; }
   var r=await insertRecords(payload);
   if(r.error){ showMsg("保存エラー："+esc(r.error.message)); return; }
   // 施設のお客様情報（住所・電話）も反映。住所変更で地図の座標キャッシュを消す
