@@ -177,6 +177,9 @@ function timeOptions(sel){
   if(sel && !found){ opts='<option value="'+esc(sel)+'" selected>'+esc(sel)+'（そのまま）</option>'+opts; }
   return opts;
 }
+function normHM(t){ if(!t) return ""; var p=String(t).split(":"); if(p.length<2) return ""; return pad(+p[0])+":"+pad(+p[1]); }   // "9:0"等→"09:00"
+/* iPhone標準の時刻ホイールで選べる入力欄（長いドロップダウンをやめる）。stepは刻みのヒント */
+function timeInput(id, sel){ return '<input id="'+esc(id)+'" type="time" step="'+(TIME_UNIT*60)+'" value="'+esc(normHM(sel))+'">'; }
 function todayISO(){ var d=new Date(); return d.getFullYear()+"-"+pad(d.getMonth()+1)+"-"+pad(d.getDate()); }
 function dOff(n){ var d=new Date(); d.setDate(d.getDate()+n); return d.getFullYear()+"-"+pad(d.getMonth()+1)+"-"+pad(d.getDate()); }   // 今日からn日ずらした日付（サンプル用）
 function curMonth(){ var d=new Date(); return d.getFullYear()+"-"+pad(d.getMonth()+1); }
@@ -528,7 +531,7 @@ function openMoveForm(id, prefill){
   var body='<div class="sheet-title">🚗 移動時間</div>'+
     '<div class="muted" style="margin-bottom:8px;">移動の時間を予定表に入れます。次の訪問先までの移動などにどうぞ。</div>'+
     '<div class="row"><div><div class="hint">日付</div><input id="mv_date" type="date" value="'+esc(m.date||todayISO())+'"></div>'+
-      '<div><div class="hint">開始時間</div><select id="mv_time">'+timeOptions(m.time||defHM())+'</select></div></div>'+
+      '<div><div class="hint">開始時間</div>'+timeInput("mv_time", m.time||defHM())+'</div></div>'+
     '<div class="hint" style="margin-top:8px;">移動時間（分）</div><input id="mv_dur" type="number" step="'+TIME_UNIT+'" value="'+(m.duration||15)+'">'+
     '<div class="hint" style="margin-top:8px;">メモ（任意）</div><input id="mv_label" value="'+esc(m.label||"")+'" placeholder="例：〇〇苑へ移動 / 休憩">'+
     '<div id="m"></div>'+
@@ -611,7 +614,7 @@ function openFacVisit(clientId, iso, t){
   var allDone=recs.length&&recs.every(function(r){return !!exRec(r).done;});
   var body='<div class="sheet-title">🏢 '+esc(clientName(clientId))+'　'+esc(dateLabel(iso))+(t?'　'+esc(t):'')+'</div>'+
     '<div class="muted" style="margin-bottom:8px;">利用者 '+recs.length+'名。<b>メニュー・料金・時間はここで直せます</b>（名前タップで詳細編集）。</div>'+
-    '<div class="row"><div><div class="hint">時間（全員）</div><select id="fv_time">'+timeOptions(t||defHM())+'</select></div>'+
+    '<div class="row"><div><div class="hint">時間（全員）</div>'+timeInput("fv_time", t||defHM())+'</div>'+
       '<div><div class="hint">施術時間（分）</div><input id="fv_dur" type="number" step="'+TIME_UNIT+'" value="'+(Number(exRec(recs[0]||{}).dur)||60)+'"></div></div>'+
     '<button class="btn '+(allDone?"ghost":"primary")+'" style="margin-top:8px;" onclick="toggleFacDone(\''+clientId+'\',\''+iso+'\',\''+t+'\')">'+(allDone?"↩ 予定に戻す":"✅ 全員 施術終了")+'</button>'+
     '<datalist id="fvMenuDL">'+plArr.map(function(p){return '<option value="'+esc(p.name)+'"></option>';}).join("")+'</datalist>'+
@@ -1199,7 +1202,7 @@ function openQuickRecord(prefill){
     '<div class="hint">区分</div><div class="seg-wrap" id="qr_kind" style="margin-bottom:8px;">'+
       ["在宅","施設","病院"].map(function(k){return '<button class="seg'+(k==="在宅"?" on":"")+'" onclick="qrKind(this)">'+k+'</button>';}).join("")+'</div>'+
     '<div class="row"><div><div class="hint">日付</div><input id="qr_date" type="date" value="'+esc(prefill.date||todayISO())+'"></div>'+
-      '<div><div class="hint">時間</div><select id="qr_time">'+timeOptions(prefill.time||defHM())+'</select></div></div>'+
+      '<div><div class="hint">時間</div>'+timeInput("qr_time", prefill.time||defHM())+'</div></div>'+
     '<div class="hint" style="margin-top:8px;">施術時間（分）</div><input id="qr_dur" type="number" step="'+TIME_UNIT+'" value="'+(prefill.dur||60)+'">'+
     laneFieldHtml("qr_lane", defaultLaneId())+
     '<div class="hint" style="margin-top:8px;" id="qr_namehint">お客様名（任意）</div><input id="qr_name" placeholder="例：〇〇様（空欄でもOK）">'+
@@ -1282,7 +1285,7 @@ function openBookingForm(id, prefill){
       '<input id="bf_cphone" value="'+esc(c.phone||"")+'" placeholder="電話（任意）" style="margin-top:6px;margin-bottom:4px;">':'')+
     '<div class="hint">日付</div><input id="bf_date" type="date" value="'+esc(b.date||todayISO())+'">'+
     '<div class="row" style="margin-top:8px;">'+
-      '<div><div class="hint">時間</div><select id="bf_time">'+timeOptions(b.time||"10:00")+'</select></div>'+
+      '<div><div class="hint">時間</div>'+timeInput("bf_time", b.time||"10:00")+'</div>'+
       '<div><div class="hint">所要(分)</div><input id="bf_dur" type="number" step="'+TIME_UNIT+'" value="'+(b.duration||60)+'"></div>'+
     '</div>'+
     '<div class="hint" style="margin-top:8px;">メモ</div><input id="bf_memo" value="'+esc(b.memo||"")+'" placeholder="任意">'+
@@ -1509,7 +1512,7 @@ function openRecordForm(id, prefill){
       '<input id="rf_crules" value="'+esc(c.rules||"")+'" placeholder="注意・ルール（任意）" style="margin-top:6px;margin-bottom:4px;">':'')+
     laneFieldHtml("rf_lane", exRec(rec).lane||defaultLaneId())+
     '<div class="row"><div><div class="hint">日付</div><input id="rf_date" type="date" value="'+esc(rec.date||todayISO())+'"></div>'+
-      '<div><div class="hint">時間</div><select id="rf_time">'+timeOptions(rec.time||exRec(rec).t||defHM())+'</select></div></div>'+
+      '<div><div class="hint">時間</div>'+timeInput("rf_time", rec.time||exRec(rec).t||defHM())+'</div></div>'+
     '<div class="hint" style="margin-top:8px;">施術時間（分）</div><input id="rf_dur" type="number" step="'+TIME_UNIT+'" value="'+(Number(exRec(rec).dur)||60)+'">'+
     '<div class="hint" style="margin-top:8px;">部屋番号（任意）</div><input id="rf_room" value="'+esc(exRec(rec).room||"")+'" placeholder="例：305">'+
     '<div class="hint" style="margin-top:8px;">メニュー'+(hasPl?'（下のボタンで複数選べます・料金は合算）':'')+'</div>'+
@@ -1587,7 +1590,7 @@ async function openFacilityBatch(clientId, opts){
     '<input id="ba_caddr" value="'+esc(defAddr)+'" placeholder="住所（例：神戸市中央区元町通5-7-4-202）">'+
     '<input id="ba_cphone" value="'+esc(defPhone)+'" placeholder="電話（任意）" style="margin-top:6px;">'+
     '<div class="row" style="margin-top:8px;"><div><div class="hint">日付</div><input id="ba_date" type="date" value="'+esc(iso)+'"></div>'+
-      '<div><div class="hint">時間</div><select id="ba_time">'+timeOptions(defTime)+'</select></div></div>'+
+      '<div><div class="hint">時間</div>'+timeInput("ba_time", defTime)+'</div></div>'+
     laneFieldHtml("ba_lane", defaultLaneId())+
     (hasRows?'<div class="card" style="padding:10px 12px;margin-top:10px;">'+
       '<div class="row"><button class="btn ghost accent sm" onclick="batchCheckAll(true)">✓ 全員チェック</button>'+
