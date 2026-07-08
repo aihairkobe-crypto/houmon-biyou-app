@@ -156,9 +156,9 @@ function loadTimeUnit(){ try{ var u=parseInt(localStorage.getItem("timeunit_"+(M
 function snapUnit(min){ return Math.round(min/TIME_UNIT)*TIME_UNIT; }
 function setTimeUnit(u){ TIME_UNIT=u; try{ localStorage.setItem("timeunit_"+(ME&&ME.id), String(u)); }catch(e){}
   var seg=el("tu_seg"); if(seg){ Array.prototype.forEach.call(seg.children,function(b){ b.classList.toggle("on", b.textContent===(u+"分")); }); }
-  toast("⏱ 時間の単位を"+u+"分にしました"); }
+  saveCloudSettings(); toast("⏱ 時間の単位を"+u+"分にしました"); }
 var TAB="today";
-var APP_VERSION="20260708-4";   // ← 更新のたびにこの値を上げる。全端末で「新しい版があります」バナーが出る
+var APP_VERSION="20260708-5";   // ← 更新のたびにこの値を上げる。全端末で「新しい版があります」バナーが出る
 
 /* ===== プラン（無料/Pro）＝訪問回数で切替。今はUX検証用の“見た目”のみ（サーバー強制・Stripeは後日） ===== */
 var FREE_LIMIT=30;   // 無料プラン：訪問 30回/月まで（施設は何名でも1回。この数字で無料枠を調整）
@@ -275,12 +275,37 @@ async function boot(){
   if(!PROFILE){ renderAuth(); return; }
   loadStdMenu(); loadOrgProfile(); loadLanes();
   loadTimeUnit(); loadStateColors(); applyStateColors();
+  applyCloudSettings();   // クラウド設定があれば端末より優先（無ければ端末設定をアップして移行）
   await loadAll();
   renderApp();
   if(!setupDone()) openInitialSetup();   // 初回だけ：屋号＋デフォルトメニューのかんたん設定（スキップ可）
   subscribeRealtime();
 }
 async function loadProfile(){ var r=await sb.from("profiles").select("*").eq("id",ME.id).maybeSingle(); PROFILE=r.data||null; }
+/* ===== 設定のクラウド同期（屋号/振込先/登録番号/料金表/枠/色/時間単位を profiles.settings に保存＝全端末で同じ） ===== */
+var SETTINGS_OK=true;   // profiles.settings 列が使えるか。未作成なら false＝従来通り端末保存のみで動作（壊さない）
+function settingsBlob(){ return { org:ORGP, lanes:LANES, stdMenu:STD_MENU, colors:STATE_COLORS, timeUnit:TIME_UNIT }; }
+/* クラウドに保存済みがあれば端末より優先（＝2台目でも屋号・料金表・枠が出る）。無ければ端末の設定をクラウドへ引き上げ */
+function applyCloudSettings(){
+  var s=PROFILE&&PROFILE.settings;
+  if(s && typeof s==="object" && !Array.isArray(s)){
+    if(s.org){ ORGP=s.org; try{ localStorage.setItem("orgprofile_"+ME.id, JSON.stringify(ORGP)); }catch(e){} }
+    if(Array.isArray(s.lanes)&&s.lanes.length){ LANES=s.lanes; saveLanesRaw(); }
+    if(Array.isArray(s.stdMenu)){ STD_MENU=s.stdMenu; try{ localStorage.setItem("stdmenu_"+ME.id, JSON.stringify(STD_MENU)); }catch(e){} }
+    if(s.colors){ STATE_COLORS=Object.assign({},STATE_COLORS_DEFAULT,s.colors); applyStateColors(); }
+    if(s.timeUnit && [5,10,15,30].indexOf(s.timeUnit)>=0){ TIME_UNIT=s.timeUnit; try{ localStorage.setItem("timeunit_"+ME.id, String(TIME_UNIT)); }catch(e){} }
+  } else {
+    saveCloudSettings();   // クラウド未保存＝この端末の設定を初回アップ（移行）
+  }
+}
+async function saveCloudSettings(){
+  if(!ME||!PROFILE) return;
+  try{
+    var r=await sb.from("profiles").update({ settings: settingsBlob() }).eq("id",ME.id);
+    if(r.error){ SETTINGS_OK=false; return; }   // 列が無い/権限不足→端末保存のみで継続（壊さない）
+    PROFILE.settings=settingsBlob(); SETTINGS_OK=true;
+  }catch(e){ SETTINGS_OK=false; }
+}
 async function ensurePersonalSpace(){
   var nm=(ME.user_metadata&&ME.user_metadata.name)?ME.user_metadata.name:((ME.email||"マイ").split("@")[0]);
   await sb.rpc("create_org_and_join",{ org_name:(nm+"の空間"), display_name:nm });
@@ -1422,14 +1447,14 @@ function openColorSettings(){
 function saveColorSettings(){
   STATE_COLORS={ plan:el("col_plan").value, fin:el("col_fin").value, move:el("col_move").value };
   try{ localStorage.setItem("statecolors_"+(ME&&ME.id), JSON.stringify(STATE_COLORS)); }catch(e){}
-  applyStateColors(); closeSheet(); toast("🎨 色を保存しました"); renderTab();
+  applyStateColors(); saveCloudSettings(); closeSheet(); toast("🎨 色を保存しました"); renderTab();
 }
-function resetColors(){ STATE_COLORS=Object.assign({},STATE_COLORS_DEFAULT); try{ localStorage.removeItem("statecolors_"+(ME&&ME.id)); }catch(e){} applyStateColors(); openColorSettings(); }
+function resetColors(){ STATE_COLORS=Object.assign({},STATE_COLORS_DEFAULT); try{ localStorage.removeItem("statecolors_"+(ME&&ME.id)); }catch(e){} applyStateColors(); saveCloudSettings(); openColorSettings(); }
 
 /* ===== お店・組織情報（この端末に保存。組織リンク段階で正式テーブルへ移行予定） ===== */
 var ORGP={};
 function loadOrgProfile(){ try{ ORGP=JSON.parse(localStorage.getItem("orgprofile_"+(ME&&ME.id))||"{}")||{}; }catch(e){ ORGP={}; } }
-function saveOrgProfile(o){ ORGP=o||{}; try{ localStorage.setItem("orgprofile_"+ME.id, JSON.stringify(ORGP)); }catch(e){} }
+function saveOrgProfile(o){ ORGP=o||{}; try{ localStorage.setItem("orgprofile_"+ME.id, JSON.stringify(ORGP)); }catch(e){} saveCloudSettings(); }
 function openOrgProfile(){
   var o=ORGP||{};
   openSheet('<div class="sheet-title">🏪 お店・組織情報</div>'+
@@ -1470,6 +1495,7 @@ function saveInitialSetup(){
   saveOrgProfile({ shop:el("su_shop").value.trim(), name:el("su_name").value.trim(), phone:(ORGP.phone||""), invoice:(ORGP.invoice||"") });
   var out=[]; Array.prototype.forEach.call(document.querySelectorAll("#su_rows .price-row"),function(r){ var n=r.querySelector(".pn").value.trim(); var p=Number(r.querySelector(".pp").value)||0; if(n) out.push({name:n,price:p}); });
   STD_MENU=out; try{ localStorage.setItem("stdmenu_"+ME.id, JSON.stringify(out)); }catch(e){}
+  saveCloudSettings();
   markSetupDone(); closeSheet(); toast("🎉 設定を保存しました"); renderTab();
 }
 function skipInitialSetup(){ markSetupDone(); closeSheet(); }
@@ -1505,7 +1531,7 @@ function addLaneRow(){ el("ln_rows").insertAdjacentHTML("beforeend", laneRow());
 function saveLanesForm(){
   var out=[]; Array.prototype.forEach.call(document.querySelectorAll("#ln_rows .price-row"),function(r){ var n=r.querySelector(".ln_name").value.trim(); if(!n) return; var id=r.getAttribute("data-id")||("L"+Math.random().toString(36).slice(2,9)); out.push({id:id, name:n, color:r.querySelector(".ln_color").value}); });
   if(!out.length){ showMsg("枠を1つ以上残してください"); return; }
-  LANES=out; saveLanesRaw(); closeSheet(); toast("👥 枠を保存しました"); renderTab();
+  LANES=out; saveLanesRaw(); saveCloudSettings(); closeSheet(); toast("👥 枠を保存しました"); renderTab();
 }
 function usedMenusFor(clientId){   // その顧客の過去メニューだけ（全体を寄せ集めない）
   if(!clientId) return [];
@@ -2079,6 +2105,7 @@ function openStdMenu(){
 function saveStdMenuForm(){
   var out=[]; Array.prototype.forEach.call(document.querySelectorAll("#sm_rows .price-row"),function(r){ var n=r.querySelector(".pn").value.trim(); var p=Number(r.querySelector(".pp").value)||0; if(n) out.push({name:n,price:p}); });
   STD_MENU=out; localStorage.setItem("stdmenu_"+ME.id, JSON.stringify(out));
+  saveCloudSettings();
   closeSheet(); toast("🧾 標準メニューを保存しました");
 }
 
