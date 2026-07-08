@@ -55,14 +55,14 @@
   .sched{position:relative; margin-top:8px; cursor:pointer;}
   .sched-hline{position:absolute; left:44px; right:0; border-top:1px dashed var(--line);}
   .sched-hlabel{position:absolute; left:0; transform:translateY(-50%); font-size:11px; color:var(--hint);}
-  .sched-ev{position:absolute; left:48px; right:2px; border-radius:8px; padding:3px 8px; font-size:12px; line-height:1.35; overflow:hidden; cursor:pointer; box-shadow:0 1px 2px rgba(0,0,0,.08); box-sizing:border-box;}
+  .sched-ev{position:absolute; left:48px; right:2px; border-radius:8px; padding:3px 8px; font-size:12px; line-height:1.35; overflow:hidden; cursor:pointer; box-shadow:0 1px 2px rgba(0,0,0,.08); box-sizing:border-box; touch-action:none;}
   .sched-ev.plan{background:var(--c-plan-bg,var(--accent-soft)); color:var(--c-plan,var(--accent-text)); border-left:3px solid var(--c-plan,var(--accent));}   /* 予定 */
   .sched-ev.done{background:var(--c-fin-bg,#eef1f0); color:var(--c-fin,var(--muted)); border-left:3px solid var(--c-fin,#b8b4b1);}   /* 記録済 */
   .sched-ev b{font-weight:700;}
   .sched-now{position:absolute; left:44px; right:0; border-top:2px solid var(--danger); z-index:5; pointer-events:none;}
   .sched-now-dot{position:absolute; left:-4px; top:-4px; width:7px; height:7px; border-radius:50%; background:var(--danger);}
   .sched-ev.fin{background:var(--c-fin-bg,#eef1f0); color:var(--c-fin,var(--muted)); border-left:3px solid var(--c-fin,#b8b4b1);}   /* 施術終了 */
-  .sched-move{position:absolute; left:48px; right:2px; border-radius:8px; padding:2px 8px; font-size:11px; line-height:1.3; box-sizing:border-box; overflow:hidden; background:var(--c-move-bg,#fbf2e2); color:var(--c-move,#9a6b1e); border-left:3px solid var(--c-move,#d8a85f);}
+  .sched-move{position:absolute; left:48px; right:2px; border-radius:8px; padding:2px 8px; font-size:11px; line-height:1.3; box-sizing:border-box; overflow:hidden; background:var(--c-move-bg,#fbf2e2); color:var(--c-move,#9a6b1e); border-left:3px solid var(--c-move,#d8a85f); touch-action:none;}
   .sched-del{position:absolute; top:1px; right:2px; width:22px; height:22px; padding:0; border:none; border-radius:6px; background:rgba(0,0,0,.06); color:#9a6b1e; font-size:13px; font-weight:700; line-height:1; cursor:pointer; z-index:5;}
   .sched-del:hover{background:rgba(200,60,60,.15); color:#c33;}
   .lane-tag{display:inline-block; font-size:10px; font-weight:700; padding:1px 6px; border-radius:999px; margin-left:6px; vertical-align:middle; white-space:nowrap;}
