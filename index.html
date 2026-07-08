@@ -158,7 +158,7 @@ function setTimeUnit(u){ TIME_UNIT=u; try{ localStorage.setItem("timeunit_"+(ME&
   var seg=el("tu_seg"); if(seg){ Array.prototype.forEach.call(seg.children,function(b){ b.classList.toggle("on", b.textContent===(u+"分")); }); }
   toast("⏱ 時間の単位を"+u+"分にしました"); }
 var TAB="today";
-var APP_VERSION="20260707-3";   // ← 更新のたびにこの値を上げる。全端末で「新しい版があります」バナーが出る
+var APP_VERSION="20260708-1";   // ← 更新のたびにこの値を上げる。全端末で「新しい版があります」バナーが出る
 
 function esc(s){ return (s==null?"":String(s)).replace(/[&<>"]/g,function(c){return {"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;"}[c];}); }
 function el(id){ return document.getElementById(id); }
