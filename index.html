@@ -158,7 +158,51 @@ function setTimeUnit(u){ TIME_UNIT=u; try{ localStorage.setItem("timeunit_"+(ME&
   var seg=el("tu_seg"); if(seg){ Array.prototype.forEach.call(seg.children,function(b){ b.classList.toggle("on", b.textContent===(u+"分")); }); }
   toast("⏱ 時間の単位を"+u+"分にしました"); }
 var TAB="today";
-var APP_VERSION="20260708-2";   // ← 更新のたびにこの値を上げる。全端末で「新しい版があります」バナーが出る
+var APP_VERSION="20260708-3";   // ← 更新のたびにこの値を上げる。全端末で「新しい版があります」バナーが出る
+
+/* ===== プラン（無料/Pro）＝訪問回数で切替。今はUX検証用の“見た目”のみ（サーバー強制・Stripeは後日） ===== */
+var FREE_LIMIT=30;   // 無料プラン：訪問 30回/月まで（施設は何名でも1回。この数字で無料枠を調整）
+function planIsPro(){ try{ return localStorage.getItem("plan_"+(ME&&ME.id))==="pro"; }catch(e){ return false; } }   // 将来はsubscriptionsテーブルから取得
+/* 「訪問」＝同じ顧客・同じ日でまとめて1回（施設で20名でも1回）。飛込み(顧客なし)は記録ごと1回 */
+function monthVisitKeys(){ var s={}; RC.forEach(function(r){ if((r.date||"").slice(0,7)!==curMonth()) return; s[r.client_id?(r.client_id+"|"+r.date):("_"+r.id)]=1; }); return s; }
+function monthVisitCount(){ return Object.keys(monthVisitKeys()).length; }
+/* 保存前チェック。既存の訪問への追加(人数追加/2回目保存)は消費しない。新規訪問が枠超過ならProシートでfalse */
+function ensureCanVisit(clientId, date){
+  if(planIsPro()) return true;
+  var keys=monthVisitKeys();
+  var k=clientId?(clientId+"|"+date):null;
+  if(k && keys[k]) return true;                 // この訪問は今月カウント済み→追加OK
+  if(monthVisitCount() < FREE_LIMIT) return true;
+  openUpgrade(); return false;                  // 新規訪問で無料枠オーバー
+}
+function usageMeterHtml(){
+  if(planIsPro()) return '<div class="card" style="display:flex;justify-content:space-between;align-items:center;"><div><div class="hint" style="margin:0;">プラン</div><div style="font-weight:700;">⭐ Proプラン</div></div><div class="muted" style="font-size:12px;">訪問 無制限</div></div>';
+  var n=monthVisitCount(), pct=Math.min(100,Math.round(n/FREE_LIMIT*100)), over=(n>=FREE_LIMIT);
+  var col=over?'var(--danger)':(pct>=80?'#d8862f':'var(--accent)');
+  return '<div class="card">'+
+    '<div style="display:flex;justify-content:space-between;align-items:baseline;">'+
+      '<div style="font-weight:700;font-size:13px;">今月の訪問 <span class="muted" style="font-weight:400;">（無料プラン）</span></div>'+
+      '<div style="font-weight:700;color:'+col+';">'+n+' / '+FREE_LIMIT+'回</div></div>'+
+    '<div style="height:7px;background:var(--bg);border-radius:4px;margin-top:6px;overflow:hidden;"><div style="height:100%;width:'+pct+'%;background:'+col+';border-radius:4px;"></div></div>'+
+    (over?'<div class="warn" style="margin-top:8px;">今月の無料枠（'+FREE_LIMIT+'回）に達しました。続けるには <b>Pro</b> へ。<br><button class="btn primary sm" style="width:auto;margin-top:6px;" onclick="openUpgrade()">⭐ Proを見る</button></div>'
+        :(pct>=80?'<div class="muted" style="font-size:12px;margin-top:6px;">まもなく無料枠の上限です（あと'+(FREE_LIMIT-n)+'回）。</div>':''))+
+    '<div class="muted" style="font-size:11px;margin-top:6px;">※施設は1回の訪問で何名でも「1回」。記録済みの訪問への追加は消費しません。</div>'+
+    '</div>';
+}
+function openUpgrade(){
+  openSheet('<div class="sheet-title">⭐ Proプラン</div>'+
+    '<div class="muted" style="margin-bottom:10px;">無料プランは<b>訪問 '+FREE_LIMIT+'回／月</b>まで（施設は何名でも1回）。Proにすると<b>訪問が無制限</b>になります（今後：複数端末での共有・組織リンクもProで解放予定）。</div>'+
+    '<div class="card" style="background:var(--accent-soft);border-color:#cbe7da;"><div style="font-weight:700;">Proプラン</div><div class="muted" style="font-size:13px;margin-top:2px;">訪問 無制限／月</div></div>'+
+    '<button class="btn primary" onclick="startCheckout()">Proにする（月額）</button>'+
+    '<div class="muted" style="font-size:11px;text-align:center;margin:4px 0 8px;">※お支払い（Stripe）は準備中です</div>'+
+    '<div style="border-top:1px solid var(--line);margin:10px 0;"></div>'+
+    '<div class="hint">🧪 お試し（テスト用・この端末だけ）</div>'+
+    '<button class="btn ghost accent" onclick="devSetPlan(\'pro\')">Proを試す（解放）</button>'+
+    (planIsPro()?'<button class="btn ghost" onclick="devSetPlan(\'free\')">無料に戻す</button>':'')+
+    '<button class="btn ghost" onclick="closeSheet()">閉じる</button>');
+}
+function startCheckout(){ toast("お支払い（Stripe）は準備中です。もう少しお待ちください"); }   // 後日：Stripe Checkout→Edge Function→subscriptions
+function devSetPlan(p){ try{ localStorage.setItem("plan_"+(ME&&ME.id), p); }catch(e){} closeSheet(); toast(p==="pro"?"⭐ Proにしました（テスト）":"無料プランに戻しました"); renderTab(); }
 
 function esc(s){ return (s==null?"":String(s)).replace(/[&<>"]/g,function(c){return {"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;"}[c];}); }
 function el(id){ return document.getElementById(id); }
@@ -385,6 +429,7 @@ function renderToday(){
   var html='<div class="card" style="background:var(--accent-soft);border-color:#cbe7da;display:flex;justify-content:space-between;align-items:center;">'+
       '<div><div class="hint" style="margin:0;">'+esc(monthLabel(curMonth()))+'</div><div style="font-weight:700;font-size:15px;">今月の売上</div>'+(feeM?'<div class="muted" style="font-size:11px;">🚗 うち出張料 '+yen(feeM)+'</div>':'')+'</div>'+
       '<div class="amt" style="font-size:22px;">'+yen(sumM)+'</div></div>';
+  html+=usageMeterHtml();   // 無料/Proの入力メーター
   // 今日のダッシュ
   html+='<div class="card" style="display:flex;justify-content:space-between;text-align:center;padding:12px;">'+
       '<div style="flex:1;"><div class="hint" style="margin:0;">今日の訪問</div><div style="font-weight:700;font-size:18px;">'+todays.length+'<span style="font-size:12px;">件</span></div></div>'+
@@ -1252,6 +1297,8 @@ async function saveQuick(){
   var kEl=document.querySelector("#qr_kind .seg.on"); var kind=kEl?kEl.textContent:"在宅";
   var ckind={"在宅":"個人","施設":"施設","病院":"病院"}[kind]||"個人";   // 区分→顧客の種別
   var name=el("qr_name").value.trim();
+  var _exQ=name?CL.find(function(c){return (c.kind||"個人")===ckind && c.name===name;}):null;
+  if(!ensureCanVisit(_exQ?_exQ.id:null, el("qr_date").value)) return;   // 無料枠（訪問回数）チェック
   if(!confirmIfConflict({date:el("qr_date").value, time:el("qr_time").value, dur:Number(el("qr_dur").value)||30, lane:(el("qr_lane")?el("qr_lane").value:defaultLaneId())})) return;   // 重複チェック（顧客登録の前に・同じ枠の中だけ）
   var addr=el("qr_addr").value.trim(), phone=el("qr_phone").value.trim(), rules=el("qr_rules").value.trim();
   // 名前を入れたら顧客に自動登録（住所・電話・注意も丸ごと）。同名がいれば再利用し、入れた情報は反映（手修正＝正）
@@ -1534,6 +1581,7 @@ function openRecordForm(id, prefill){
 function rfMenu(){ var sel=el("rf_menusel"); var opt=sel.options[sel.selectedIndex]; if(!opt||!opt.value) return; el("rf_menu").value=opt.value; var p=opt.getAttribute("data-price"); if(p!=null) el("rf_amount").value=p; }
 function qrMenu(){ var sel=el("qr_menusel"); var opt=sel.options[sel.selectedIndex]; if(!opt||!opt.value) return; el("qr_menu").value=opt.value; var p=opt.getAttribute("data-price"); if(p!=null) el("qr_amount").value=p; }
 async function saveRecord(id){
+  if(!id && !ensureCanVisit(el("rf_client").value||null, el("rf_date").value)) return;   // 新規のみ無料枠（訪問回数）チェック
   var client=el("rf_client").value||null;   // 顧客なし（その場記録）も保存OK。名前はphotos.nmに残る
   var data={ org_id:PROFILE.org_id, client_id:client, booking_id:el("rf_booking").value||null,
     member_id:el("rf_mid").value||null, staff_id:ME.id,
@@ -1691,6 +1739,7 @@ async function saveBatch(){
       photos:recExtra({nm:row.getAttribute("data-name")||"", room:(row.querySelector(".ba_room")?row.querySelector(".ba_room").value.trim():""), t:time, lane:lane}) });
   });
   if(!payload.length){ showMsg("その日 対応した人にチェックを入れてください"); return; }
+  if(!ensureCanVisit(window._batch.clientId, date)) return;   // 無料枠（訪問回数）チェック。施設は何名でも1訪問
   if(!confirmIfConflict({date:date, time:time, dur:60, clientId:window._batch.clientId, lane:lane})) return;   // 重複チェック（同じ枠の中だけ。同施設同時刻の団体は除外）
   var r=await insertRecords(payload);
   if(r.error){ showMsg("保存エラー："+esc(r.error.message)); return; }
@@ -2034,6 +2083,9 @@ function openSettings(){
     '<div class="card"><div class="hint">お店・活動名</div><div style="font-weight:700;">'+esc((ORGP&&ORGP.shop)||"（未設定）")+'</div>'+
       '<div class="hint" style="margin-top:8px;">お名前</div><div>'+esc((ORGP&&ORGP.name)||PROFILE.name||"")+'</div>'+
       '<div class="hint" style="margin-top:8px;">メール</div><div>'+esc(ME.email||"")+'</div></div>'+
+    (planIsPro()
+      ? '<div class="card" style="background:var(--accent-soft);border-color:#cbe7da;display:flex;justify-content:space-between;align-items:center;"><div><div class="hint" style="margin:0;">プラン</div><div style="font-weight:700;">⭐ Proプラン</div></div><span class="muted" style="font-size:12px;">入力 無制限</span></div>'
+      : '<div class="card"><div style="display:flex;justify-content:space-between;align-items:baseline;"><div><div class="hint" style="margin:0;">プラン</div><div style="font-weight:700;">無料プラン</div></div><div class="muted" style="font-size:12px;">今月 '+monthVisitCount()+' / '+FREE_LIMIT+'回</div></div><button class="btn primary sm" style="margin-top:8px;" onclick="openUpgrade()">⭐ Proにする</button></div>')+
     '<button class="btn ghost accent" onclick="openOrgProfile()">🏪 お店・組織情報</button>'+
     '<button class="btn ghost accent" onclick="openLanes()">👥 枠・担当（訪問枠/サロン枠など）</button>'+
     '<button class="btn ghost accent" onclick="openStdMenu()">🧾 標準メニュー（デフォルト料金表）</button>'+
