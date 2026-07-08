@@ -159,7 +159,7 @@ function setTimeUnit(u){ TIME_UNIT=u; try{ localStorage.setItem("timeunit_"+(ME&
   var seg=el("tu_seg"); if(seg){ Array.prototype.forEach.call(seg.children,function(b){ b.classList.toggle("on", b.textContent===(u+"分")); }); }
   saveCloudSettings(); toast("⏱ 時間の単位を"+u+"分にしました"); }
 var TAB="today";
-var APP_VERSION="20260708-9";   // ← 更新のたびにこの値を上げる。全端末で「新しい版があります」バナーが出る
+var APP_VERSION="20260708-10";   // ← 更新のたびにこの値を上げる。全端末で「新しい版があります」バナーが出る
 
 /* ===== プラン（無料/Pro）＝訪問回数で切替。今はUX検証用の“見た目”のみ（サーバー強制・Stripeは後日） ===== */
 var FREE_LIMIT=30;   // 無料プラン：訪問 30回/月まで（施設は何名でも1回。この数字で無料枠を調整）
@@ -1566,7 +1566,7 @@ function readLane(fieldId){ var e=el(fieldId); var v=(e&&e.value)?e.value:defaul
 function openLanes(){
   var rows=LANES.map(function(l){ return laneRow(l); }).join("");
   openSheet('<div class="sheet-title">👥 枠・担当</div>'+
-    '<div class="muted" style="margin-bottom:8px;">他のスタッフや、サロン・訪問など<b>予約を分けたい単位</b>を作れます。<br>各枠の<b>「自分の体」</b>チェックで重なりの扱いが変わります：<br>・<b>ON</b>＝あなた自身の枠（訪問・サロン等）。<b>他のON枠と時間が重なると警告</b>（体は一つなのでブッキング防止）。<br>・<b>OFF</b>＝別の人の枠（ヘルパー等）。<b>他と重なってもOK</b>（並行して予約可）。</div>'+
+    '<div class="muted" style="margin-bottom:8px;">他のスタッフや、サロン・訪問など<b>予約を分けたい単位</b>を作れます。<br>各枠の<b>「自分が動く枠」</b>チェックで重なりの扱いが変わります：<br>・<b>ON</b>＝あなた自身が動く枠（訪問・サロン等）。<b>他のON枠と時間が重なると警告</b>（あなたは一人なので、かけもち防止）。<br>・<b>OFF</b>＝別の人の枠（ヘルパー等）。<b>他と重なってもOK</b>（並行して予約可）。</div>'+
     '<div id="ln_rows">'+rows+'</div>'+
     '<button class="btn ghost accent sm" style="width:auto;" onclick="addLaneRow()">＋ 枠を追加</button>'+
     '<button class="btn primary" style="margin-top:10px;" onclick="saveLanesForm()">保存</button>'+
@@ -1581,7 +1581,7 @@ function laneRow(l){
       '<input class="ln_color" type="color" value="'+(l.color||"#2fa36b")+'" style="width:44px;height:40px;padding:2px;border:1px solid var(--line);border-radius:8px;background:none;">'+
       '<button class="px" onclick="this.closest(\'.lane-edit\').remove()">×</button>'+
     '</div>'+
-    '<label style="display:flex;align-items:center;gap:8px;margin-top:6px;font-size:12px;cursor:pointer;"><input type="checkbox" class="ln_solo" style="width:auto;"'+(solo?" checked":"")+'>自分の体（他の枠と同時にできない＝ブッキング防止）</label>'+
+    '<label style="display:flex;align-items:center;gap:8px;margin-top:6px;font-size:12px;cursor:pointer;"><input type="checkbox" class="ln_solo" style="width:auto;"'+(solo?" checked":"")+'>自分が動く枠（同時に他とかけもちしない）</label>'+
   '</div>';
 }
 function addLaneRow(){ el("ln_rows").insertAdjacentHTML("beforeend", laneRow()); }
@@ -2148,7 +2148,7 @@ function openHelp(){
 
     helpItem("🏢 施設のまとめ入力","施設を選ぶと<b>団体入力</b>に。その日来る<b>利用者リスト</b>を入力（毎回変わってOK）。<br>・「📋名簿を貼り付け」でExcelからまとめて取り込み（設定の雛形が便利）<br>・対応した人にチェック→料金を入れて<b>まとめて保存</b><br>・入力途中で閉じても<b>自動保存</b>で続きから。")+
 
-    helpItem("👥 枠・担当（掛け持ち防止）","訪問枠・サロン枠や別スタッフなど、予約を分ける単位。設定→枠・担当で作成。<br>各枠の<b>「自分の体」</b>チェック：<br>・<b>ON</b>＝自分の枠。他のON枠と時間が重なると<b>警告</b>（体は一つ＝ブッキング防止。訪問⇔サロン等）<br>・<b>OFF</b>＝別の人の枠（ヘルパー等）。<b>重なってもOK</b>。<br>予定表では枠ごとに色分け表示。")+
+    helpItem("👥 枠・担当（かけもち防止）","訪問枠・サロン枠や別スタッフなど、予約を分ける単位。設定→枠・担当で作成。<br>各枠の<b>「自分が動く枠」</b>チェック：<br>・<b>ON</b>＝自分が動く枠。他のON枠と時間が重なると<b>警告</b>（あなたは一人＝かけもち防止。訪問⇔サロン等）<br>・<b>OFF</b>＝別の人の枠（ヘルパー等）。<b>重なってもOK</b>。<br>予定表では枠ごとに色分け表示。")+
 
     helpItem("✂️ メニュー・料金","施術カードの料金ボタンは<b>複数選べます</b>（例：カット＋カラー→料金は合算）。<br>「次回からこの料金を〇〇の初期メニューに登録」に✓を入れると、<b>その人の料金として記憶</b>し次回から自動表示。<br>共通の料金表は 設定→<b>標準メニュー</b> で。施設・お客様ごとの料金はカルテで個別に。")+
 
