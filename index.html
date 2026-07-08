@@ -2,7 +2,7 @@
 <html lang="ja">
 <head>
 <meta charset="utf-8">
-<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1">
+<meta name="viewport" content="width=device-width, initial-scale=1">
 <title>訪問美容 楽々アプリ</title>
 <style>
   :root{ --accent:#1d9e75; --accent-soft:#e7f5ee; --accent-text:#147a59; --line:#e5e7e6; --bg:#f4f6f5; --surface:#fff; --text:#1f2624; --muted:#6b7572; --hint:#9aa39f; --danger:#c0392b; --radius:14px; }
@@ -159,7 +159,7 @@ function setTimeUnit(u){ TIME_UNIT=u; try{ localStorage.setItem("timeunit_"+(ME&
   var seg=el("tu_seg"); if(seg){ Array.prototype.forEach.call(seg.children,function(b){ b.classList.toggle("on", b.textContent===(u+"分")); }); }
   saveCloudSettings(); toast("⏱ 時間の単位を"+u+"分にしました"); }
 var TAB="today";
-var APP_VERSION="20260708-7";   // ← 更新のたびにこの値を上げる。全端末で「新しい版があります」バナーが出る
+var APP_VERSION="20260708-8";   // ← 更新のたびにこの値を上げる。全端末で「新しい版があります」バナーが出る
 
 /* ===== プラン（無料/Pro）＝訪問回数で切替。今はUX検証用の“見た目”のみ（サーバー強制・Stripeは後日） ===== */
 var FREE_LIMIT=30;   // 無料プラン：訪問 30回/月まで（施設は何名でも1回。この数字で無料枠を調整）
@@ -894,7 +894,8 @@ async function showRouteMap(iso){
     '<br><br>「神戸市〇〇区〇〇1-2-3」のように<b>市区町村＋番地</b>まで入れると出ます。予定の施術／予約をタップ→お客様情報の住所を直してください。</div>'; return; }
   box.innerHTML='<div id="mapCanvas" style="height:300px;border-radius:12px;overflow:hidden;border:1px solid var(--line,#e3e3e3);"></div>'+
     '<a class="btn primary" style="margin-top:8px;display:block;text-align:center;text-decoration:none;" href="'+navAllUrl(pts)+'" target="_blank" rel="noopener">🚗 全部まとめてナビ（'+pts.length+'件）</a>'+
-    '<div id="routeList" style="margin-top:8px;"></div>';
+    '<div id="routeList" style="margin-top:8px;"></div>'+
+    '<div class="muted" style="font-size:11px;margin-top:8px;">※ 地図表示のため、住所を外部の地図サービス（国土地理院・OpenStreetMap）に送信して位置に変換します。</div>';
   if(_map){ _map.remove(); _map=null; }
   _map=L.map("mapCanvas");
   L.tileLayer("https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png",{maxZoom:19,attribution:"© OpenStreetMap"}).addTo(_map);
