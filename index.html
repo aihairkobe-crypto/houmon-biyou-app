@@ -462,8 +462,9 @@ function schedMove(ev){
   if(!_sdrag) return; var dy=ev.clientY-_sdrag.y0;
   if(!_sdrag.moved && Math.abs(dy)>4) _sdrag.moved=true;
   if(_sdrag.moved){ if(ev.cancelable) ev.preventDefault();
-    if(_sdrag.mode==="resize"){ var nh=_sdrag.h0+dy; if(nh<16)nh=16; _sdrag.block.style.height=nh+"px"; _sdrag.block.style.opacity="0.85"; _sdrag.block.style.zIndex="20"; }
-    else { var nt=_sdrag.top0+dy; if(nt<8)nt=8; _sdrag.block.style.top=nt+"px"; _sdrag.block.style.opacity="0.75"; _sdrag.block.style.zIndex="20"; _sdrag.block.style.cursor="grabbing"; }
+    var slot=TIME_UNIT*(48/60);   // 1刻み分のpx。ドラッグ中も設定の時間単位でカチッと吸着
+    if(_sdrag.mode==="resize"){ var nh=Math.round((_sdrag.h0+dy)/slot)*slot; if(nh<slot)nh=slot; _sdrag.block.style.height=nh+"px"; _sdrag.block.style.opacity="0.9"; _sdrag.block.style.zIndex="20"; }
+    else { var nt=Math.round((_sdrag.top0+dy-8)/slot)*slot+8; if(nt<8)nt=8; _sdrag.block.style.top=nt+"px"; _sdrag.block.style.opacity="0.85"; _sdrag.block.style.zIndex="20"; _sdrag.block.style.cursor="grabbing"; }
   }
 }
 async function schedUp(ev){
