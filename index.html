@@ -159,7 +159,7 @@ function setTimeUnit(u){ TIME_UNIT=u; try{ localStorage.setItem("timeunit_"+(ME&
   var seg=el("tu_seg"); if(seg){ Array.prototype.forEach.call(seg.children,function(b){ b.classList.toggle("on", b.textContent===(u+"分")); }); }
   saveCloudSettings(); toast("⏱ 時間の単位を"+u+"分にしました"); }
 var TAB="today";
-var APP_VERSION="20260708-11";   // ← 更新のたびにこの値を上げる。全端末で「新しい版があります」バナーが出る
+var APP_VERSION="20260708-12";   // ← 更新のたびにこの値を上げる。全端末で「新しい版があります」バナーが出る
 
 /* ===== プラン（無料/Pro）＝訪問回数で切替。今はUX検証用の“見た目”のみ（サーバー強制・Stripeは後日） ===== */
 var FREE_LIMIT=30;   // 無料プラン：訪問 30回/月まで（施設は何名でも1回。この数字で無料枠を調整）
@@ -1564,29 +1564,40 @@ function laneTag(id){ if(!multiLane()||!id) return ""; return '<span class="lane
 function laneFieldHtml(fieldId, sel){ if(!multiLane()) return ""; return '<div class="hint" style="margin-top:8px;">枠・担当</div><select id="'+fieldId+'">'+laneOptions(sel||defaultLaneId())+'</select>'; }
 function readLane(fieldId){ var e=el(fieldId); var v=(e&&e.value)?e.value:defaultLaneId(); rememberLane(v); return v; }
 function openLanes(){
-  var rows=LANES.map(function(l){ return laneRow(l); }).join("");
+  var rows=LANES.map(function(l,i){ return laneRow(l, i===0); }).join("");
   openSheet('<div class="sheet-title">👥 枠・担当</div>'+
-    '<div class="muted" style="margin-bottom:8px;">他のスタッフや、サロン・訪問など<b>予約を分けたい単位</b>を作れます。<br>各枠の<b>「個人で使い分ける枠」</b>チェックで重なりの扱いが変わります：<br>・<b>ON</b>＝<b>個人で枠を使い分ける方</b>（訪問・サロンなど）。<b>他のON枠と時間が重なると警告</b>（あなたは一人なので、かけもち防止）。<br>・<b>OFF</b>＝別の人の枠（ヘルパー等）。<b>他と重なってもOK</b>（並行して予約可）。</div>'+
+    '<div class="muted" style="margin-bottom:8px;">サロン・訪問の使い分けや、別スタッフなど<b>予約を分けたい単位</b>を作れます。<br>枠を追加したら、その枠の予約を選べます：<br>・<b>🔗 リンク</b>＝あなた自身の使い分け（訪問・サロン等）。他のリンク枠と<b>時間が重なると警告</b>（あなたは一人＝かけもち防止）。<br>・<b>↔ 独立</b>＝別の人の枠（ヘルパー等）。<b>重なってもOK</b>（並行して予約可）。<br>※一番上はあなた本人の枠（固定）。</div>'+
     '<div id="ln_rows">'+rows+'</div>'+
     '<button class="btn ghost accent sm" style="width:auto;" onclick="addLaneRow()">＋ 枠を追加</button>'+
     '<button class="btn primary" style="margin-top:10px;" onclick="saveLanesForm()">保存</button>'+
     '<button class="btn ghost" onclick="openSettings()">戻る</button>');
 }
-function laneRow(l){
+function laneRow(l, isFirst){
   l=l||{id:"",name:"",color:LANE_COLORS[LANES.length%LANE_COLORS.length],solo:true};
   var solo=(l.solo!==false);
-  return '<div class="lane-edit" data-id="'+esc(l.id||"")+'" style="border:1px solid var(--line);border-radius:10px;padding:8px 10px;margin-bottom:8px;">'+
+  var choice = isFirst
+    ? '<div class="muted" style="margin-top:6px;font-size:11px;">あなた本人の枠（かけもち防止・固定）</div>'
+    : '<div style="margin-top:8px;"><div class="hint" style="margin:0 0 3px;">この枠の予約は？</div>'+
+      '<div class="seg-wrap ln_solo_seg" style="font-size:12px;">'+
+        '<button type="button" class="seg'+(solo?" on":"")+'" onclick="laneSoloPick(this,1)">🔗 リンク（かけもち防止）</button>'+
+        '<button type="button" class="seg'+(solo?"":" on")+'" onclick="laneSoloPick(this,0)">↔ 独立（別の人）</button>'+
+      '</div></div>';
+  return '<div class="lane-edit" data-id="'+esc(l.id||"")+'" data-first="'+(isFirst?"1":"")+'" data-solo="'+(solo?"1":"0")+'" style="border:1px solid var(--line);border-radius:10px;padding:8px 10px;margin-bottom:8px;">'+
     '<div class="row" style="align-items:center;gap:6px;">'+
-      '<input class="ln_name" value="'+esc(l.name||"")+'" placeholder="枠の名前（例：訪問枠）" style="flex:1;">'+
+      '<input class="ln_name" value="'+esc(l.name||"")+'" placeholder="枠の名前（例：訪問枠）" style="flex:1;"'+(isFirst?"":"")+'>'+
       '<input class="ln_color" type="color" value="'+(l.color||"#2fa36b")+'" style="width:44px;height:40px;padding:2px;border:1px solid var(--line);border-radius:8px;background:none;">'+
-      '<button class="px" onclick="this.closest(\'.lane-edit\').remove()">×</button>'+
-    '</div>'+
-    '<label style="display:flex;align-items:center;gap:8px;margin-top:6px;font-size:12px;cursor:pointer;"><input type="checkbox" class="ln_solo" style="width:auto;"'+(solo?" checked":"")+'>個人で使い分ける枠（訪問・サロンなど／同時にかけもちしない）</label>'+
+      (isFirst?'':'<button class="px" onclick="this.closest(\'.lane-edit\').remove()">×</button>')+
+    '</div>'+ choice +
   '</div>';
 }
-function addLaneRow(){ el("ln_rows").insertAdjacentHTML("beforeend", laneRow()); }
+function laneSoloPick(btn, v){
+  var row=btn.closest(".lane-edit"); if(!row) return;
+  row.setAttribute("data-solo", v?"1":"0");
+  var segs=row.querySelectorAll(".ln_solo_seg .seg"); if(segs[0])segs[0].classList.toggle("on",!!v); if(segs[1])segs[1].classList.toggle("on",!v);
+}
+function addLaneRow(){ el("ln_rows").insertAdjacentHTML("beforeend", laneRow(null,false)); }
 function saveLanesForm(){
-  var out=[]; Array.prototype.forEach.call(document.querySelectorAll("#ln_rows .lane-edit"),function(r){ var n=r.querySelector(".ln_name").value.trim(); if(!n) return; var id=r.getAttribute("data-id")||("L"+Math.random().toString(36).slice(2,9)); out.push({id:id, name:n, color:r.querySelector(".ln_color").value, solo:r.querySelector(".ln_solo").checked}); });
+  var out=[]; Array.prototype.forEach.call(document.querySelectorAll("#ln_rows .lane-edit"),function(r){ var n=r.querySelector(".ln_name").value.trim(); if(!n) return; var id=r.getAttribute("data-id")||("L"+Math.random().toString(36).slice(2,9)); var solo=(r.getAttribute("data-first")==="1")?true:(r.getAttribute("data-solo")==="1"); out.push({id:id, name:n, color:r.querySelector(".ln_color").value, solo:solo}); });
   if(!out.length){ showMsg("枠を1つ以上残してください"); return; }
   LANES=out; saveLanesRaw(); saveCloudSettings(); closeSheet(); toast("👥 枠を保存しました"); renderTab();
 }
