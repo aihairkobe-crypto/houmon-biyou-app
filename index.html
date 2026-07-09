@@ -159,7 +159,7 @@ function setTimeUnit(u){ TIME_UNIT=u; try{ localStorage.setItem("timeunit_"+(ME&
   var seg=el("tu_seg"); if(seg){ Array.prototype.forEach.call(seg.children,function(b){ b.classList.toggle("on", b.textContent===(u+"分")); }); }
   saveCloudSettings(); toast("⏱ 時間の単位を"+u+"分にしました"); }
 var TAB="today";
-var APP_VERSION="20260708-14";   // ← 更新のたびにこの値を上げる。全端末で「新しい版があります」バナーが出る
+var APP_VERSION="20260708-15";   // ← 更新のたびにこの値を上げる。全端末で「新しい版があります」バナーが出る
 
 /* ===== プラン（無料/Pro）＝訪問回数で切替。今はUX検証用の“見た目”のみ（サーバー強制・Stripeは後日） ===== */
 var FREE_LIMIT=30;   // 無料プラン：訪問 30回/月まで（施設は何名でも1回。この数字で無料枠を調整）
@@ -925,39 +925,59 @@ function renderClients(){
   var html='<div class="row"><button class="btn primary" onclick="openClientForm(null,\'個人\')">＋ お客様</button><button class="btn primary" onclick="openClientForm(null,\'施設\')">＋ 施設</button></div>'+
     '<input id="clSearch" placeholder="🔍 名前で探す" style="margin-top:10px;" oninput="renderClientList()">'+
     '<div id="clList" style="margin-top:6px;"></div>';
-  v.innerHTML=html; renderClientList();
+  v.innerHTML=html; window._clAll=false; renderClientList();
 }
+/* 顧客・施設 共通の並び：前回来店の新しい順→名前順 */
+function clSort(lastMap){ return function(a,b){ var da=lastMap[a.id]||"",db=lastMap[b.id]||""; if(da!==db) return db.localeCompare(da); return (a.name||"").localeCompare(b.name||""); }; }
+function clKindLabel(c){ return isFacility(c)?(c.kind==="病院"?"🏥 病院":"🏢 施設"):"🧑 お客様"; }
+/* 顧客タブの1行 */
+function clientRowHtml(c, lastMap){
+  var pl=Array.isArray(c.price_list)?c.price_list:[];
+  var plShort=pl.slice(0,2).map(function(p){return esc(p.name)+" "+priceLabel(p.price);}).join("・")+(pl.length>2?" 他":"");
+  var last=lastMap[c.id]||"";
+  return '<div class="item" style="cursor:pointer;" onclick="openClientDetail(\''+c.id+'\')">'+
+    '<div class="top"><div style="min-width:0;">'+
+      '<div class="name">'+esc(c.name)+'</div>'+
+      '<div class="meta">'+clKindLabel(c)+'　'+(last?'前回 '+esc(dateLabel(last)):'来店記録なし')+(plShort?'　💴 '+plShort:'')+'</div>'+
+      (c.rules?'<div class="rules">⚠️ '+esc(c.rules)+'</div>':"")+
+    '</div><span class="muted" style="font-size:20px;align-self:center;flex:0 0 auto;">›</span></div>'+
+  '</div>';
+}
+function clToggleAll(){ window._clAll=!window._clAll; renderClientList(); }
 function renderClientList(){
   var box=el("clList"); if(!box) return;
   var q=(el("clSearch")&&el("clSearch").value.trim())||"";
-  // 各顧客の前回来店日を集計（新しい順に並べる用）
   var lastMap={};
   RC.forEach(function(r){ if(!r.client_id) return; var d=r.date||""; if(!lastMap[r.client_id] || d>lastMap[r.client_id]) lastMap[r.client_id]=d; });
   var groups=[["施設","🏢 施設"],["病院","🏥 病院"],["個人","🧑 お客様"]];
   var html="";
-  groups.forEach(function(g){
-    var items=CL.filter(function(c){return (c.kind||"個人")===g[0] && (!q||(c.name||"").indexOf(q)>=0);});
-    if(!items.length) return;
-    // 前回来店日の新しい順（未来店は下）。同日は名前順
-    items.sort(function(a,b){ var da=lastMap[a.id]||"", db=lastMap[b.id]||""; if(da!==db) return db.localeCompare(da); return (a.name||"").localeCompare(b.name||""); });
-    html+='<div class="sec">'+g[1]+'（'+items.length+'）</div>';
-    items.forEach(function(c){
-      var pl=Array.isArray(c.price_list)?c.price_list:[];
-      var plShort=pl.slice(0,2).map(function(p){return esc(p.name)+" "+priceLabel(p.price);}).join("・")+(pl.length>2?" 他":"");
-      var last=RC.filter(function(r){return r.client_id===c.id;}).sort(function(a,b){return (b.date||"").localeCompare(a.date||"");})[0];
-      // コンパクト表示：名前＋前回＋料金（住所・カルテリンク・予約/施術ボタンは詳細シートへ）
-      html+='<div class="item" style="cursor:pointer;" onclick="openClientDetail(\''+c.id+'\')">'+
-        '<div class="top">'+
-          '<div style="min-width:0;">'+
-            '<div class="name">'+esc(c.name)+'</div>'+
-            '<div class="meta">'+(last?'前回 '+esc(dateLabel(last.date)):'来店記録なし')+(plShort?'　💴 '+plShort:'')+'</div>'+
-            (c.rules?'<div class="rules">⚠️ '+esc(c.rules)+'</div>':"")+
-          '</div>'+
-          '<span class="muted" style="font-size:20px;align-self:center;flex:0 0 auto;">›</span>'+
-        '</div>'+
-      '</div>';
+  // 検索中＝全件から一致を種類別に表示（重複なし）
+  if(q){
+    var hit=0;
+    groups.forEach(function(g){
+      var items=CL.filter(function(c){return (c.kind||"個人")===g[0] && (c.name||"").indexOf(q)>=0;});
+      if(!items.length) return; items.sort(clSort(lastMap));
+      html+='<div class="sec">'+g[1]+'（'+items.length+'）</div>';
+      items.forEach(function(c){ html+=clientRowHtml(c,lastMap); hit++; });
     });
-  });
+    box.innerHTML=hit?html:'<div class="list-empty">「'+esc(q)+'」は見つかりません。</div>'; return;
+  }
+  // 非検索＝「最近・よく行く先」だけ。全件は「すべて表示」で展開（増えても最初はスッキリ・重複なし）
+  var recent=CL.filter(function(c){return lastMap[c.id];}).sort(function(a,b){return (lastMap[b.id]||"").localeCompare(lastMap[a.id]||"");}).slice(0,8);
+  var rid={}; recent.forEach(function(c){rid[c.id]=1;});
+  if(recent.length){ html+='<div class="sec">⏱ 最近・よく行く先</div>'; recent.forEach(function(c){ html+=clientRowHtml(c,lastMap); }); }
+  var rest=CL.filter(function(c){return !rid[c.id];});
+  if(window._clAll){
+    groups.forEach(function(g){
+      var items=rest.filter(function(c){return (c.kind||"個人")===g[0];});
+      if(!items.length) return; items.sort(clSort(lastMap));
+      html+='<div class="sec">'+g[1]+'（'+items.length+'）</div>';
+      items.forEach(function(c){ html+=clientRowHtml(c,lastMap); });
+    });
+    if(rest.length) html+='<button class="btn ghost sm" style="width:auto;margin-top:6px;" onclick="clToggleAll()">▲ 閉じる</button>';
+  } else if(rest.length){
+    html+='<button class="btn ghost accent" style="margin-top:6px;" onclick="clToggleAll()">📇 すべての顧客・施設を見る（'+rest.length+'件）</button>';
+  }
   if(!html) html='<div class="list-empty">まだ登録がありません。<br>契約先の施設や、よく行くお客様を登録しておきましょう。</div>';
   box.innerHTML=html;
 }
@@ -1247,8 +1267,9 @@ function openPicker(onpickFn, opts){
     (opts.allowNew?'<button class="btn ghost accent" onclick="pickNew()">➕ 新しい顧客・施設を登録</button>':"")+
     '<div id="pkList" style="margin-top:8px;"></div>'+
     '<button class="btn ghost" onclick="closeSheet()">閉じる</button>';
-  openSheet(body); renderPickList();
+  window._pickAll=false; openSheet(body); renderPickList();
 }
+function pickToggleAll(){ window._pickAll=!window._pickAll; renderPickList(); }
 function pickItemHtml(c, lastMap){
   var sub = lastMap[c.id] ? ('前回 '+esc(dateLabel(lastMap[c.id]))) : (isFacility(c)?'施設':'お客様');
   return '<div class="item" onclick="pickChoose(\''+c.id+'\')"><div class="name">'+esc(c.name)+'</div>'+
@@ -1260,21 +1281,36 @@ function renderPickList(){
   var q=(el("pkSearch")&&el("pkSearch").value.trim())||"";
   var lastMap={};
   RC.forEach(function(r){ if(!r.client_id) return; var d=r.date||""; if(!lastMap[r.client_id]||d>lastMap[r.client_id]) lastMap[r.client_id]=d; });
-  var html="";
-  // 電話中でも速いよう「最近・よく行く先」を最上部に（検索中は出さない）
-  if(!q){
-    var recent=CL.filter(function(c){return lastMap[c.id];}).sort(function(a,b){return (lastMap[b.id]||"").localeCompare(lastMap[a.id]||"");}).slice(0,6);
-    if(recent.length){ html+='<div class="sec">⏱ 最近・よく行く先</div>'; recent.forEach(function(c){ html+=pickItemHtml(c,lastMap); }); }
-  }
   var groups=[["施設","🏢 施設"],["病院","🏥 病院"],["個人","🧑 お客様"]];
-  groups.forEach(function(g){
-    var items=CL.filter(function(c){return (c.kind||"個人")===g[0] && (!q||(c.name||"").indexOf(q)>=0);});
-    if(!items.length) return;
-    items.sort(function(a,b){ var da=lastMap[a.id]||"",db=lastMap[b.id]||""; if(da!==db) return db.localeCompare(da); return (a.name||"").localeCompare(b.name||""); });
-    html+='<div class="sec">'+g[1]+'</div>';
-    items.forEach(function(c){ html+=pickItemHtml(c,lastMap); });
-  });
-  if(!html) html='<div class="list-empty">見つかりません。'+(window._pickNew?'<br>上の「➕新しい顧客・施設を登録」から追加できます。':'')+'</div>';
+  var html="";
+  // 検索中＝全件から一致を種類別に（重複なし・最近セクションなし）
+  if(q){
+    var hit=0;
+    groups.forEach(function(g){
+      var items=CL.filter(function(c){return (c.kind||"個人")===g[0] && (c.name||"").indexOf(q)>=0;});
+      if(!items.length) return; items.sort(clSort(lastMap));
+      html+='<div class="sec">'+g[1]+'（'+items.length+'）</div>';
+      items.forEach(function(c){ html+=pickItemHtml(c,lastMap); hit++; });
+    });
+    box.innerHTML=hit?html:'<div class="list-empty">「'+esc(q)+'」は見つかりません。'+(window._pickNew?'<br>上の「➕新しい顧客・施設を登録」から追加できます。':'')+'</div>'; return;
+  }
+  // 非検索＝「最近・よく行く先」だけ。全件は「すべて表示」で展開（電話中でも最初はスッキリ・重複なし）
+  var recent=CL.filter(function(c){return lastMap[c.id];}).sort(function(a,b){return (lastMap[b.id]||"").localeCompare(lastMap[a.id]||"");}).slice(0,8);
+  var rid={}; recent.forEach(function(c){rid[c.id]=1;});
+  if(recent.length){ html+='<div class="sec">⏱ 最近・よく行く先</div>'; recent.forEach(function(c){ html+=pickItemHtml(c,lastMap); }); }
+  var rest=CL.filter(function(c){return !rid[c.id];});
+  if(window._pickAll){
+    groups.forEach(function(g){
+      var items=rest.filter(function(c){return (c.kind||"個人")===g[0];});
+      if(!items.length) return; items.sort(clSort(lastMap));
+      html+='<div class="sec">'+g[1]+'（'+items.length+'）</div>';
+      items.forEach(function(c){ html+=pickItemHtml(c,lastMap); });
+    });
+    if(rest.length) html+='<button class="btn ghost sm" style="width:auto;margin-top:6px;" onclick="pickToggleAll()">▲ 閉じる</button>';
+  } else if(rest.length){
+    html+='<button class="btn ghost accent" style="margin-top:6px;" onclick="pickToggleAll()">📇 すべての顧客・施設を見る（'+rest.length+'件）</button>';
+  }
+  if(!html) html='<div class="list-empty">まだ登録がありません。'+(window._pickNew?'<br>上の「➕新しい顧客・施設を登録」から追加できます。':'')+'</div>';
   box.innerHTML=html;
 }
 function pickChoose(id){ var fn=window._pickFn; closeSheet(); if(fn&&window[fn]) window[fn](id); }
