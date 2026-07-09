@@ -159,7 +159,7 @@ function setTimeUnit(u){ TIME_UNIT=u; try{ localStorage.setItem("timeunit_"+(ME&
   var seg=el("tu_seg"); if(seg){ Array.prototype.forEach.call(seg.children,function(b){ b.classList.toggle("on", b.textContent===(u+"分")); }); }
   saveCloudSettings(); toast("⏱ 時間の単位を"+u+"分にしました"); }
 var TAB="today";
-var APP_VERSION="20260708-13";   // ← 更新のたびにこの値を上げる。全端末で「新しい版があります」バナーが出る
+var APP_VERSION="20260708-14";   // ← 更新のたびにこの値を上げる。全端末で「新しい版があります」バナーが出る
 
 /* ===== プラン（無料/Pro）＝訪問回数で切替。今はUX検証用の“見た目”のみ（サーバー強制・Stripeは後日） ===== */
 var FREE_LIMIT=30;   // 無料プラン：訪問 30回/月まで（施設は何名でも1回。この数字で無料枠を調整）
@@ -1582,7 +1582,7 @@ function laneRow(l, isFirst){
         '<button type="button" class="seg'+(solo?" on":"")+'" onclick="laneSoloPick(this,1)">👤 自分の予定</button>'+
         '<button type="button" class="seg'+(solo?"":" on")+'" onclick="laneSoloPick(this,0)">🧑 別の人の予定</button>'+
       '</div>'+
-      '<div class="muted" style="font-size:11px;margin-top:4px;">👤 自分＝同じ時間に重なると警告　／　🧑 別の人＝重なってもOK（並行可）</div></div>';
+      '<div class="muted" style="font-size:11px;margin-top:4px;">👤 <b>自分</b>＝サロン予約など、自分の予定を別枠で分けたい時（同じ時間に重なると⚠️警告）<br>🧑 <b>別の人</b>＝ヘルパー・別スタッフの枠（あなたと重なってもOK・並行可）</div></div>';
   return '<div class="lane-edit" data-id="'+esc(l.id||"")+'" data-first="'+(isFirst?"1":"")+'" data-solo="'+(solo?"1":"0")+'" style="border:1px solid var(--line);border-radius:10px;padding:8px 10px;margin-bottom:8px;">'+
     '<div class="row" style="align-items:center;gap:6px;">'+
       '<input class="ln_name" value="'+esc(l.name||"")+'" placeholder="枠の名前（例：訪問枠）" style="flex:1;"'+(isFirst?"":"")+'>'+
