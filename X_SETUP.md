@@ -19,6 +19,26 @@
 
 ---
 
+## 🍎 iMac（Claude Code）でやるなら「ほぼ一発」
+
+Supabase CLI が使えるMacなら、STEP B・C を1本のスクリプトで済ませられます。
+
+1. **STEP A**（下記）で Xのキー4つを取得しておく
+2. ターミナルで:
+   ```bash
+   cd ~/houmon-biyou-app
+   git pull
+   # Supabaseダッシュボードで sql/supabase_step8_xposts.sql を先に1回実行（テーブル作成）
+   bash scripts/setup_x.sh     # ← キーを貼るだけ。関数の配置まで自動
+   ```
+   （Claude Code に「`scripts/setup_x.sh` を実行して」と頼んでもOK）
+3. アプリで「今すぐ投稿」を試す → 完了
+
+> Supabase CLI が未インストールなら: `brew install supabase/tap/supabase`
+> 手作業でやりたい場合は、下の STEP A〜D を順に進めてください（結果は同じ）。
+
+---
+
 ## 準備は3つ（＋任意で1つ）
 
 | | やること | 場所 | 目安 |
@@ -68,8 +88,10 @@
 2. 名前を **`x-post`** にする
 3. コード欄に、このリポジトリの **`supabase/functions/x-post/index.ts`** の中身を全部貼り付け
 4. **Deploy**
+5. ⚠️ **「Verify JWT」を OFF** にする（関数の設定 → Details/Settings）。
+   毎日自動投稿（cron）は JWT を付けずに呼ぶため、ONだと弾かれます。認可は関数の中で行っています。
 
-> CLIが使える方は `supabase functions deploy x-post` でもOKです。
+> CLIが使える方は `supabase functions deploy x-post --no-verify-jwt` でOK（`scripts/setup_x.sh` が自動でやります）。
 
 ### C-2. キー（Secrets）を登録
 Edge Functions → **x-post** → **Secrets（環境変数）** に、STEP Aの4つ＋合言葉を登録:

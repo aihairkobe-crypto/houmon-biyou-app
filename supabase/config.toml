@@ -1,0 +1,6 @@
+project_id = "dhgjaxhhdyxplnmubmvg"
+
+# x-post は cron（pg_net）からも呼ぶため、ゲートのJWT検証はオフにし、
+# 認可は関数の中で行う（投稿=ユーザーJWT検証 / 自動=X_CRON_SECRET照合）。
+[functions.x-post]
+verify_jwt = false
