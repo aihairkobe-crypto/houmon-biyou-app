@@ -159,7 +159,7 @@ function setTimeUnit(u){ TIME_UNIT=u; try{ localStorage.setItem("timeunit_"+(ME&
   var seg=el("tu_seg"); if(seg){ Array.prototype.forEach.call(seg.children,function(b){ b.classList.toggle("on", b.textContent===(u+"分")); }); }
   saveCloudSettings(); toast("⏱ 時間の単位を"+u+"分にしました"); }
 var TAB="today";
-var APP_VERSION="20260708-15";   // ← 更新のたびにこの値を上げる。全端末で「新しい版があります」バナーが出る
+var APP_VERSION="20260717-16";   // ← 更新のたびにこの値を上げる。全端末で「新しい版があります」バナーが出る
 
 /* ===== プラン（無料/Pro）＝訪問回数で切替。今はUX検証用の“見た目”のみ（サーバー強制・Stripeは後日） ===== */
 var FREE_LIMIT=30;   // 無料プラン：訪問 30回/月まで（施設は何名でも1回。この数字で無料枠を調整）
@@ -2235,6 +2235,152 @@ function saveStdMenuForm(){
 }
 
 /* ===== 設定 ===== */
+/* ===== X（旧Twitter）自動投稿 ===== */
+var XSET=null, XPOSTS=[], X_OK=true;
+/* i.hair のテイストに合わせた文例（毎日自動はここから順番に投稿） */
+var X_TPL_DEFAULT=[
+  "「綺麗にしてもらった日は、なんか元気が出る」ご利用者さんの言葉です。美容の力って、思った以上に大きい。#訪問美容 #神戸",
+  "「来られないなら、行きます」。施設・病院・在宅、どこへでも。京阪神エリアで訪問美容を続けて10年になりました。#訪問美容 #神戸",
+  "訪問美容を施設に導入したいけど、どこに頼めばいいかわからない。そんな施設担当者の方、まずはお気軽にDMください。特養・老健・グループホーム、実績多数あります。#訪問美容 #介護 #神戸",
+  "鏡の前で「あら、いいわね」の一言。その笑顔のために、今日もお伺いします。#訪問美容 #神戸",
+  "カットも、カラーも、パーマも。サロンと同じ仕上がりを、そのままお部屋へ届けます。#訪問美容 #神戸 #在宅",
+  "体調やお身体に合わせて、寝たままでもカットできます。ご家族もお気軽にご相談ください。#訪問美容 #介護 #神戸",
+  "それぞれのスタイルを持つ美容師が、あなたに合った美容を届けます。i hair の訪問美容です。#訪問美容 #神戸",
+  "「久しぶりに髪を切ってもらった」。その一日が、少し特別になりますように。#訪問美容 #神戸",
+  "施設のご担当者さまへ。入居者さまの“美容の日”、私たちにお任せください。ご相談・お見積りは無料です。#訪問美容 #介護 #神戸",
+  "髪が整うと、気持ちも整う。おうちで、施設で、あなたのそばで。#訪問美容 #神戸"
+];
+function xTemplates(){ var t=XSET&&Array.isArray(XSET.templates)?XSET.templates.filter(function(s){return (s||"").trim();}):[]; return t.length?t:X_TPL_DEFAULT.slice(); }
+function xTableMissing(err){ var m=(err&&err.message||"")+" "+(err&&err.code||""); return /does not exist|Could not find the table|42P01|PGRST205/i.test(m); }
+async function xLoad(){
+  X_OK=true; XSET=null; XPOSTS=[];
+  try{
+    var org=PROFILE&&PROFILE.org_id;
+    var s=await sb.from("x_settings").select("*").eq("org_id",org).maybeSingle();
+    if(s.error){ if(xTableMissing(s.error)){ X_OK=false; return; } } else { XSET=s.data||null; }
+    var p=await sb.from("x_posts").select("*").eq("org_id",org).order("created_at",{ascending:false}).limit(12);
+    if(!p.error) XPOSTS=p.data||[];
+  }catch(e){ }
+}
+async function openXPost(){ await xLoad(); renderXPost(); }
+function xStatusJP(s){ return {queued:"⏳ 予約待ち",posted:"✅ 投稿済",failed:"⚠️ 失敗",canceled:"取消"}[s]||s; }
+function xSourceJP(s){ return {manual:"手動",scheduled:"予約",auto:"毎日自動"}[s]||s; }
+function renderXPost(){
+  if(!X_OK){
+    openSheet('<div class="sheet-title">📣 X（旧Twitter）自動投稿</div>'+
+      '<div class="warn">この機能を使うには、最初に1回だけ準備が必要です。<br>Supabase の SQL Editor で <b>sql/supabase_step8_xposts.sql</b> を実行してください。</div>'+
+      '<div class="muted" style="font-size:12px;margin:8px 0;">くわしい手順は、リポジトリの <b>X_SETUP.md</b>（Xキーの取り方〜自動投稿の設定まで）をご覧ください。</div>'+
+      '<button class="btn ghost" onclick="closeSheet()">閉じる</button>');
+    return;
+  }
+  var tpls=xTemplates();
+  var chips=tpls.map(function(t,i){ return '<button class="btn ghost sm" style="text-align:left;white-space:normal;height:auto;padding:8px 10px;margin:3px 0;font-size:12px;" onclick="xUseTemplate('+i+')">'+esc(t)+'</button>'; }).join("");
+  var en=XSET&&XSET.enabled, tm=(XSET&&XSET.post_time?String(XSET.post_time).slice(0,5):"09:00");
+  var hist=XPOSTS.length?XPOSTS.map(function(p){
+    var link=p.tweet_id?' <a href="https://x.com/i/web/status/'+esc(p.tweet_id)+'" target="_blank" rel="noopener">表示</a>':'';
+    var when=esc((p.posted_at||p.scheduled_at||p.created_at||"").replace("T"," ").slice(5,16));
+    return '<div style="border-top:1px solid var(--line);padding:7px 0;font-size:12px;"><div>'+xStatusJP(p.status)+' <span class="muted">'+when+'・'+xSourceJP(p.source)+'</span>'+link+(p.status==="queued"?' <a href="javascript:void(0)" onclick="xCancel(\''+p.id+'\')" style="color:var(--danger);">取消</a>':'')+'</div><div style="color:var(--hint);">'+esc((p.body||"").slice(0,60))+((p.body||"").length>60?"…":"")+'</div>'+(p.error?'<div style="color:var(--danger);font-size:11px;">'+esc(p.error)+'</div>':'')+'</div>';
+  }).join(""):'<div class="muted" style="font-size:12px;">まだ投稿はありません。</div>';
+
+  openSheet('<div class="sheet-title">📣 X（旧Twitter）自動投稿</div>'+
+    '<div class="card"><div class="hint">投稿する文章</div>'+
+      '<textarea id="xBody" rows="4" style="width:100%;box-sizing:border-box;" oninput="xCount()" placeholder="ここに投稿内容を入力、または下の文例をタップ"></textarea>'+
+      '<div class="muted" style="font-size:11px;text-align:right;" id="xCnt">0 / 280</div>'+
+      '<div style="display:flex;gap:6px;margin-top:4px;">'+
+        '<button class="btn primary" style="flex:1;" onclick="xPostNow()">今すぐ投稿</button>'+
+        '<button class="btn ghost accent" style="flex:1;" onclick="xSchedule()">日時を決めて予約</button>'+
+      '</div>'+
+      '<button class="btn ghost sm" style="margin-top:6px;" onclick="xFillFromToday()">📊 本日の実績から文章を作る</button>'+
+    '</div>'+
+    '<div class="card"><div class="hint">テイスト文例（タップで入力）</div>'+chips+
+      '<button class="btn ghost sm" style="margin-top:6px;" onclick="xEditTemplates()">✏️ 文例を編集する</button>'+
+    '</div>'+
+    '<div class="card"><div class="hint">毎日の自動投稿</div>'+
+      '<label style="display:flex;align-items:center;gap:8px;margin:4px 0;"><input type="checkbox" id="xEnabled" '+(en?"checked":"")+'> 毎日この時刻に、文例を順番に自動投稿する</label>'+
+      '<div style="display:flex;align-items:center;gap:8px;"><span class="hint" style="margin:0;">投稿時刻</span><input type="time" id="xTime" value="'+esc(tm)+'"></div>'+
+      '<button class="btn primary sm" style="margin-top:8px;" onclick="xSaveAuto()">この設定を保存</button>'+
+      '<div class="muted" style="font-size:11px;margin-top:6px;">※「アプリを閉じていても」自動投稿するには、X_SETUP.md の定期実行（cron）設定が必要です。未設定でも、アプリを開いた時に予約・自動分をまとめて投稿します。</div>'+
+    '</div>'+
+    '<div class="card"><div class="hint">最近の投稿</div>'+hist+'</div>'+
+    '<button class="btn ghost" onclick="closeSheet()">閉じる</button>');
+  xCount();
+}
+function xCount(){ var b=el("xBody"); if(!b) return; var n=[].concat(Array.from(b.value)).length; var c=el("xCnt"); if(c){ c.textContent=n+" / 280"; c.style.color=n>280?"var(--danger)":"var(--muted)"; } }
+function xUseTemplate(i){ var t=xTemplates()[i]; if(t!=null){ el("xBody").value=t; xCount(); el("xBody").focus(); } }
+function xFillFromToday(){
+  var d=todayISO(); var todays=(RC||[]).filter(function(r){ return r.date===d; });
+  var n=todays.length;
+  var body= n>0
+    ? "本日は"+n+"名さまのもとへお伺いしました。ありがとうございました。またお会いできる日を楽しみにしています。#訪問美容 #神戸"
+    : "本日も訪問美容でお伺いします。施設・病院・在宅、京阪神エリア対応。ご相談お待ちしています。#訪問美容 #神戸";
+  el("xBody").value=body; xCount();
+}
+async function xPostNow(){
+  var t=(el("xBody").value||"").trim();
+  if(!t){ toast("本文が空です"); return; }
+  if(Array.from(t).length>280){ toast("280文字を超えています"); return; }
+  if(!confirm("この内容をXに投稿します。よろしいですか？\n\n"+t)) return;
+  toast("投稿中…");
+  try{
+    var r=await sb.functions.invoke("x-post",{body:{action:"post",text:t}});
+    var out=r&&r.data||{};
+    if(r&&r.error && !out.error){ toast("投稿窓口に接続できません。X_SETUP.md の手順（Edge Functionのデプロイ）をご確認ください"); return; }
+    if(out.ok===false || out.error){ toast("投稿できませんでした："+(out.error||"")); await xLoad(); renderXPost(); return; }
+    toast("✅ Xに投稿しました"); await xLoad(); renderXPost();
+  }catch(e){ toast("投稿できませんでした（未設定の可能性）"); }
+}
+async function xSchedule(){
+  var t=(el("xBody").value||"").trim();
+  if(!t){ toast("本文が空です"); return; }
+  if(Array.from(t).length>280){ toast("280文字を超えています"); return; }
+  var def=new Date(Date.now()+3600000); var pad2=function(n){return (n<10?"0":"")+n;};
+  var dv=prompt("いつ投稿しますか？（例 2026-07-18 09:00）", def.getFullYear()+"-"+pad2(def.getMonth()+1)+"-"+pad2(def.getDate())+" "+pad2(def.getHours())+":"+pad2(def.getMinutes()));
+  if(!dv) return;
+  var m=dv.trim().match(/^(\d{4})-(\d{2})-(\d{2})[ T](\d{2}):(\d{2})$/);
+  if(!m){ toast("日時の形式が正しくありません（2026-07-18 09:00 の形）"); return; }
+  var when=new Date(+m[1],+m[2]-1,+m[3],+m[4],+m[5],0);
+  if(isNaN(when.getTime())){ toast("日時が正しくありません"); return; }
+  var r=await sb.from("x_posts").insert({org_id:PROFILE.org_id,body:t,status:"queued",source:"scheduled",scheduled_at:when.toISOString()});
+  if(r.error){ toast("予約できませんでした："+esc(r.error.message)); return; }
+  toast("🗓 予約しました"); el("xBody").value=""; await xLoad(); renderXPost();
+}
+async function xCancel(id){
+  if(!confirm("この予約投稿を取り消しますか？")) return;
+  var r=await sb.from("x_posts").update({status:"canceled"}).eq("id",id);
+  if(r.error){ toast("取消できませんでした"); return; }
+  toast("取り消しました"); await xLoad(); renderXPost();
+}
+function xEditTemplates(){
+  var cur=xTemplates().join("\n");
+  openSheet('<div class="sheet-title">✏️ 文例を編集</div>'+
+    '<div class="muted" style="font-size:12px;margin-bottom:6px;">1行が1つの文例です。毎日の自動投稿は、上から順番に使われます。</div>'+
+    '<textarea id="xTpls" rows="14" style="width:100%;box-sizing:border-box;font-size:13px;">'+esc(cur)+'</textarea>'+
+    '<div style="display:flex;gap:6px;margin-top:8px;">'+
+      '<button class="btn primary" style="flex:1;" onclick="xSaveTemplates()">保存</button>'+
+      '<button class="btn ghost" style="flex:1;" onclick="renderXPost()">戻る</button>'+
+    '</div>');
+}
+async function xSaveTemplates(){
+  var lines=(el("xTpls").value||"").split("\n").map(function(s){return s.trim();}).filter(function(s){return s;});
+  if(!lines.length){ toast("文例が空です"); return; }
+  var ok=await xUpsertSettings({templates:lines});
+  if(ok){ toast("💾 文例を保存しました"); await xLoad(); renderXPost(); }
+}
+async function xSaveAuto(){
+  var enabled=!!(el("xEnabled")&&el("xEnabled").checked);
+  var tm=(el("xTime")&&el("xTime").value)||"09:00";
+  var patch={enabled:enabled, post_time:tm};
+  if(!XSET||!Array.isArray(XSET.templates)||!XSET.templates.length) patch.templates=xTemplates();
+  var ok=await xUpsertSettings(patch);
+  if(ok){ toast(enabled?("⏰ 毎日 "+tm+" に自動投稿します"):"自動投稿をオフにしました"); await xLoad(); renderXPost(); }
+}
+async function xUpsertSettings(patch){
+  var row=Object.assign({org_id:PROFILE.org_id, tz:"Asia/Tokyo"}, patch, {updated_at:new Date().toISOString()});
+  var r=await sb.from("x_settings").upsert(row,{onConflict:"org_id"});
+  if(r.error){ if(xTableMissing(r.error)){ X_OK=false; renderXPost(); } else { toast("保存できませんでした："+esc(r.error.message)); } return false; }
+  return true;
+}
+
 function openSettings(){
   var body='<div class="sheet-title">設定</div>'+
     '<div class="card"><div class="hint">お店・活動名</div><div style="font-weight:700;">'+esc((ORGP&&ORGP.shop)||"（未設定）")+'</div>'+
@@ -2249,6 +2395,7 @@ function openSettings(){
     '<button class="btn ghost accent" onclick="downloadRosterTemplate()">📥 名簿の雛形をダウンロード</button>'+
     '<div class="muted" style="font-size:11px;margin:-2px 0 6px;">施設や協力スタッフに配って、同じ形式で名簿をもらえます（そのまま取り込み可）。</div>'+
     '<button class="btn ghost accent" onclick="openColorSettings()">🎨 表示の色（予定・施術終了・移動）</button>'+
+    '<button class="btn ghost accent" onclick="openXPost()">📣 X（旧Twitter）自動投稿</button>'+
     '<button class="btn ghost accent" onclick="openHelp()">📖 使い方・ヘルプ</button>'+
     '<button class="btn ghost accent" onclick="forceReload()">🔄 アプリを最新に更新</button>'+
     '<div class="muted" style="font-size:11px;text-align:center;margin:2px 0 8px;">最新版が反映されない時にタップ（バージョン '+esc(APP_VERSION)+'）</div>'+
