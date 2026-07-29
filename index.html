@@ -2,7 +2,7 @@
 <html lang="ja">
 <head>
 <meta charset="utf-8">
-<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <title>訪問美容 楽々アプリ</title>
 <style>
   :root{ --accent:#1d9e75; --accent-soft:#e7f5ee; --accent-text:#147a59; --line:#e5e7e6; --bg:#f4f6f5; --surface:#fff; --text:#1f2624; --muted:#6b7572; --hint:#9aa39f; --danger:#c0392b; --radius:14px; }
@@ -131,6 +131,30 @@
   .guide-step b{font-size:14px;}
   .center-narrow{max-width:400px; margin:0 auto; padding:24px 18px;}
   h1.brand{font-size:20px; text-align:center; margin:24px 0 4px;}
+
+  /* ===== iPad・タブレット最適化（横向き含む） ===== */
+  @media (min-width:768px){
+    /* 480px の細帯をやめ、iPad の横幅を活かす（中央の読みやすい幅に拡張） */
+    .wrap{max-width:760px;}
+    .tabbar{max-width:760px; padding-bottom:env(safe-area-inset-bottom);}
+    .sheet{max-width:600px;}
+    /* 下タブ＋ホームバーに本文が隠れないよう余白を確保 */
+    .view{padding:18px 22px calc(96px + env(safe-area-inset-bottom));}
+    .topbar{padding:14px 22px;}
+    .topbar .t{font-size:18px;}
+    h2.page{font-size:20px;}
+    /* 入力欄を16px以上にして、タップ時のiOS自動ズームを防ぐ */
+    input, select, textarea{font-size:16px;}
+    .seg{font-size:16px;} .mchip{font-size:15px;}
+    /* タブは指で押しやすく少し大きく */
+    .tabbar button{font-size:12px; padding:10px 0 12px;}
+    .tabbar button .ic{font-size:22px;}
+    .center-narrow{max-width:440px;}
+  }
+  /* 横向きの iPad はもう少し広く使う */
+  @media (min-width:1040px){
+    .wrap, .tabbar{max-width:840px;}
+  }
 </style>
 </head>
 <body>
@@ -159,7 +183,7 @@ function setTimeUnit(u){ TIME_UNIT=u; try{ localStorage.setItem("timeunit_"+(ME&
   var seg=el("tu_seg"); if(seg){ Array.prototype.forEach.call(seg.children,function(b){ b.classList.toggle("on", b.textContent===(u+"分")); }); }
   saveCloudSettings(); toast("⏱ 時間の単位を"+u+"分にしました"); }
 var TAB="today";
-var APP_VERSION="20260708-15";   // ← 更新のたびにこの値を上げる。全端末で「新しい版があります」バナーが出る
+var APP_VERSION="20260708-16";   // ← 更新のたびにこの値を上げる。全端末で「新しい版があります」バナーが出る
 
 /* ===== プラン（無料/Pro）＝訪問回数で切替。今はUX検証用の“見た目”のみ（サーバー強制・Stripeは後日） ===== */
 var FREE_LIMIT=30;   // 無料プラン：訪問 30回/月まで（施設は何名でも1回。この数字で無料枠を調整）
