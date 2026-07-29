@@ -124,6 +124,13 @@
   .ba-row.on{border-color:var(--accent); background:var(--accent-soft);}
   .ba-row label.chk{display:flex; align-items:center; gap:8px; font-size:15px; font-weight:600; cursor:pointer;}
   .ba-row .chk input{width:20px; height:20px;}
+  .if-row{border:1px solid var(--line); border-radius:12px; padding:8px 10px; margin-bottom:8px;}
+  .if-row .if_nm{width:100%;}
+  .if-svcs{display:flex; gap:6px; align-items:center; margin-top:6px; flex-wrap:wrap;}
+  .if-svc{flex:0 0 auto; border:1px solid var(--line); background:var(--surface); color:var(--muted); padding:8px 12px; border-radius:9px; font-size:14px; font-weight:700; cursor:pointer;}
+  .if-svc.on{background:var(--accent); color:#fff; border-color:var(--accent);}
+  .if-amt{margin-left:auto; font-weight:700; font-size:14px; white-space:nowrap;}
+  .if-del{flex:0 0 34px; height:36px; border:1px solid var(--line); background:var(--surface); border-radius:9px; color:var(--muted); font-size:16px; cursor:pointer;}
   .toast{position:fixed; left:50%; bottom:80px; transform:translateX(-50%) translateY(10px); background:#1f2624; color:#fff; font-size:14px; font-weight:600; padding:11px 18px; border-radius:22px; box-shadow:0 4px 16px rgba(0,0,0,.25); opacity:0; transition:opacity .25s, transform .25s; pointer-events:none; z-index:9999; max-width:90%; text-align:center;}
   .toast.show{opacity:1; transform:translateX(-50%) translateY(0);}
   .guide-step{display:flex; gap:10px; align-items:flex-start; padding:8px 0; border-top:1px solid #cbe7da;}
@@ -1105,10 +1112,10 @@ function showDoc(innerHtml){
 function closeDoc(){ var d=el("docview"); if(d){ d.classList.remove("show"); d.innerHTML=""; } }
 
 /* ===== 施設の請求書（月まとめ・全利用者の明細付き。印刷/PDF保存） ===== */
-function openInvoicePicker(prefillFid){
+function openInvoicePicker(prefillFid, prefMon){
   var facs=CL.filter(isFacility);
   if(!facs.length){ toast("施設・訪問先が未登録です。先に施設を登録してください"); return; }
-  var mon=SALES_MONTH||curMonth();
+  var mon=prefMon||SALES_MONTH||curMonth();
   openSheet('<div class="sheet-title">📄 施設の請求書・領収書</div>'+
     '<div class="muted" style="margin-bottom:8px;">施設とその月を選び、下から作成します。<b>請求書</b>は施設あて（全利用者の明細付き）、<b>個別領収書</b>は利用者ごとに1枚ずつ（1回の印刷で全員分）。「印刷→PDFで保存」で発行できます。<br>※「施術終了」にした分から作成します。</div>'+
     '<div class="hint">施設・訪問先</div><select id="iv_fac">'+facs.map(function(c){return '<option value="'+esc(c.id)+'"'+(c.id===prefillFid?" selected":"")+'>'+esc(c.name)+'</option>';}).join("")+'</select>'+
@@ -1745,6 +1752,7 @@ async function delRecord(id){
 /* ===== 施設：その日の売上まとめ入力 ===== */
 async function openFacilityBatch(clientId, opts){
   opts=opts||{}; var c=clientById(clientId)||{}; var iso=opts.date||todayISO();
+  if(!opts.forceBatch && isImgFormFacility(c)){ openImgForm(clientId, opts); return; }   // 画像フォーマット施設（例：アップリケア）は専用画面へ
   window._batch={ clientId:clientId, bookingId:opts.booking_id||null, date:iso };
   var defTime=opts.time||defHM();   // 貼り付けで開き直しても時間を保持・記録画面から引き継ぎ
   var defAddr=(opts.addr!=null?opts.addr:(c.address||"")), defPhone=(opts.phone!=null?opts.phone:(c.phone||""));
@@ -1787,6 +1795,7 @@ async function openFacilityBatch(clientId, opts){
     '<div id="ba_rows" style="margin-top:10px;">'+(rowsHtml||'<div class="list-empty">まだ利用者がいません。<br>下の「📋 名簿を貼り付け」か「＋ 利用者を追加」で、この日の人を入れてください。</div>')+'</div>'+
     '<button class="btn ghost accent" onclick="facilityBulkPaste()">📋 名簿を貼り付け（Excelからコピー）</button>'+
     '<button class="btn ghost accent" onclick="batchAdd()">➕ その場で利用者を追加</button>'+
+    '<button class="btn ghost accent" onclick="openImgForm(\''+clientId+'\',{date:(el(\'ba_date\')?el(\'ba_date\').value:\''+iso+'\')})">📸 画像フォーマットで入力（氏名＋カット/カラー/パーマ）</button>'+
     '<div id="m"></div>'+
     '<label style="display:flex;align-items:center;gap:8px;margin:8px 0;font-size:13px;cursor:pointer;"><input type="checkbox" id="ba_learnprice" style="width:auto;">入力した料金を「'+esc(c.name)+'」の料金表に反映する（次回の初期メニューになる）</label>'+
     '<button class="btn primary" onclick="saveBatch()">まとめて保存</button>'+
@@ -1794,6 +1803,113 @@ async function openFacilityBatch(clientId, opts){
     '<button class="btn ghost" onclick="closeSheet()">キャンセル</button>';
   openSheet(body);
   wireBatchAutosave();
+}
+/* ===== 画像フォーマット入力（アップリケア方式：氏名＋カット/カラー/パーマにチェック → 請求書・個人領収書） =====
+   施設から送られてくる「散髪リスト（画像の形式）」を、名簿に溜めずそのまま入力する。
+   受けた内容をタップ→料金は施設の料金表（無ければ既定 カット1650/カラー4550/パーマ4550）で自動計算。
+   保存＝施術終了として記録→i hairの請求書と、利用者ごとの個人領収書がそのまま作れる。 */
+var IMGF_MENUS=["カット","カラー","パーマ"];
+var IMGF_DEF={ "カット":1650, "カラー":4550, "パーマ":4550 };
+function imgFormMenus(c){
+  var pl=Array.isArray(c&&c.price_list)?c.price_list:[];
+  return IMGF_MENUS.map(function(nm){ var f=pl.find(function(p){return p.name===nm;});
+    return { name:nm, price:(f&&f.price!=null&&f.price!==""?Number(f.price):IMGF_DEF[nm]) }; });
+}
+function isImgFormFacility(c){
+  if(!isFacility(c)) return false;
+  var pl=Array.isArray(c.price_list)?c.price_list:[]; var names=pl.map(function(p){return p.name;});
+  return IMGF_MENUS.every(function(n){return names.indexOf(n)>=0;});
+}
+function imgDraftKey(){ return "imgfdraft_"+(ME&&ME.id); }
+function loadImgDraft(){ try{ return JSON.parse(localStorage.getItem(imgDraftKey())||"null"); }catch(e){ return null; } }
+function clearImgDraft(){ try{ localStorage.removeItem(imgDraftKey()); }catch(e){} }
+function readImgRows(){ var rows=[]; Array.prototype.forEach.call(document.querySelectorAll("#if_rows .if-row"),function(row){
+  var svc={}; Array.prototype.forEach.call(row.querySelectorAll(".if-svc"),function(b){ svc[b.getAttribute("data-name")]=(b.getAttribute("data-on")==="1"); });
+  rows.push({ name:((row.querySelector(".if_nm")||{}).value||""), svc:svc }); }); return rows; }
+function captureImgDraft(){ if(!window._imgf||!el("if_rows")) return;
+  try{ localStorage.setItem(imgDraftKey(), JSON.stringify({ clientId:window._imgf.clientId, date:(el("if_date")||{}).value||"", time:(el("if_time")||{}).value||"", rows:readImgRows() })); }catch(e){} }
+function ifRowHtml(menus, pre){
+  pre=pre||{}; var svc=pre.svc||{};
+  var btns=menus.map(function(m){ var on=!!svc[m.name];
+    return '<button type="button" class="if-svc'+(on?" on":"")+'" data-name="'+esc(m.name)+'" data-price="'+m.price+'" data-on="'+(on?"1":"0")+'" onclick="ifToggle(this)">'+esc(m.name)+'</button>'; }).join("");
+  return '<div class="if-row">'+
+    '<input class="if_nm" value="'+esc(pre.name||"")+'" placeholder="氏名（例：デイ 水谷 育子）" oninput="captureImgDraft()">'+
+    '<div class="if-svcs">'+btns+'<span class="if-amt">'+yen(0)+'</span><button type="button" class="if-del" onclick="ifDelRow(this)">×</button></div>'+
+  '</div>';
+}
+function ifRowAmt(row){ var a=0; Array.prototype.forEach.call(row.querySelectorAll(".if-svc"),function(b){ if(b.getAttribute("data-on")==="1") a+=Number(b.getAttribute("data-price"))||0; }); return a; }
+function ifRecalc(){ var ppl=0,total=0;
+  Array.prototype.forEach.call(document.querySelectorAll("#if_rows .if-row"),function(row){
+    var a=ifRowAmt(row); var amtEl=row.querySelector(".if-amt"); if(amtEl) amtEl.textContent=yen(a);
+    var nm=((row.querySelector(".if_nm")||{}).value||"").trim(); if(a>0&&nm){ ppl++; total+=a; } });
+  var t=el("if_total"); if(t) t.innerHTML='合計 <b>'+ppl+'名</b>　<b class="amt">'+yen(total)+'</b>';
+}
+function ifToggle(b){ var on=b.getAttribute("data-on")==="1"; b.setAttribute("data-on",on?"0":"1"); b.classList.toggle("on",!on); ifRecalc(); captureImgDraft(); }
+function ifAddRow(){ var c=clientById(window._imgf.clientId)||{}; el("if_rows").insertAdjacentHTML("beforeend", ifRowHtml(imgFormMenus(c),{})); ifRecalc(); }
+function ifDelRow(x){ var row=x.closest(".if-row"); if(row) row.remove(); ifRecalc(); captureImgDraft(); }
+function ifPaste(){
+  var t=prompt("氏名を貼り付け（1行に1名）"); if(!t) return;
+  var c=clientById(window._imgf.clientId)||{}; var menus=imgFormMenus(c);
+  var names=t.split(/\r?\n/).map(function(s){return s.trim();}).filter(function(s){return s;});
+  if(!names.length) return;
+  el("if_rows").insertAdjacentHTML("beforeend", names.map(function(n){ return ifRowHtml(menus,{name:n}); }).join(""));
+  ifRecalc(); captureImgDraft(); toast(names.length+"名を追加しました");
+}
+function ifDiscard(){ if(!confirm("入力途中の内容を破棄しますか？")) return; clearImgDraft(); var b=window._imgf||{}; openImgForm(b.clientId,{}); }
+function openImgForm(clientId, opts){
+  opts=opts||{}; var c=clientById(clientId)||{}; var iso=opts.date||todayISO();
+  window._imgf={ clientId:clientId, bookingId:opts.booking_id||null };
+  var menus=imgFormMenus(c);
+  var draft=loadImgDraft(); var resuming=false; var rows=[];
+  if(draft && draft.clientId===clientId){ rows=(draft.rows||[]).slice(); iso=draft.date||iso; resuming=true; }
+  var defTime=opts.time||(draft&&draft.time)||defHM();
+  var rowsHtml = rows.length ? rows.map(function(r){ return ifRowHtml(menus,{name:r.name, svc:r.svc}); }).join("")
+    : [0,1,2].map(function(){ return ifRowHtml(menus,{}); }).join("");   // 初期は空欄3行
+  var priceTxt=menus.map(function(m){return esc(m.name)+" "+yen(m.price);}).join(" ／ ");
+  var body='<div class="sheet-title">🧾 '+esc(c.name)+'　'+esc(dateLabel(iso))+'</div>'+
+    (resuming?'<div class="msg ok" style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px;">📝 入力途中を復元しました<button class="btn ghost sm" style="width:auto;" onclick="ifDiscard()">🗑 破棄</button></div>':'')+
+    '<div class="muted" style="margin-bottom:8px;">送られてきたリスト（この画像の形式）を<b>そのまま入力</b>します。名簿には溜めません。<b>氏名</b>を入れて、受けた<b>内容（カット/カラー/パーマ）</b>をタップ→料金は自動。保存すると<b>請求書</b>と<b>個人領収書</b>が作れます。<br>料金：'+priceTxt+'</div>'+
+    '<div class="row"><div><div class="hint">日付</div><input id="if_date" type="date" value="'+esc(iso)+'" onchange="captureImgDraft()"></div>'+
+      '<div><div class="hint">時間</div>'+timeInput("if_time", defTime)+'</div></div>'+
+    laneFieldHtml("if_lane", defaultLaneId())+
+    '<div id="if_total" class="card" style="padding:10px 12px;margin-top:10px;text-align:center;font-size:15px;"></div>'+
+    '<div id="if_rows" style="margin-top:10px;">'+rowsHtml+'</div>'+
+    '<button class="btn ghost accent" onclick="ifAddRow()">➕ 行を追加</button>'+
+    '<button class="btn ghost accent" onclick="ifPaste()">📋 氏名をまとめて貼り付け</button>'+
+    '<div id="m"></div>'+
+    '<button class="btn primary" onclick="saveImgForm()">保存して請求書・個人領収書へ</button>'+
+    '<button class="btn ghost sm" style="width:auto;margin-top:6px;" onclick="openFacilityBatch(\''+clientId+'\',{date:\''+iso+'\',forceBatch:true})">通常の名簿入力に切り替える</button>'+
+    '<button class="btn ghost" onclick="closeSheet()">閉じる</button>';
+  openSheet(body); ifRecalc();
+}
+async function saveImgForm(){
+  var b=window._imgf||{}; var clientId=b.clientId; if(!clientId) return;
+  var iso=el("if_date")?el("if_date").value:todayISO();
+  var time=el("if_time")?el("if_time").value:""; var lane=readLane("if_lane");
+  var payload=[];
+  Array.prototype.forEach.call(document.querySelectorAll("#if_rows .if-row"),function(row){
+    var nm=((row.querySelector(".if_nm")||{}).value||"").trim(); if(!nm) return;
+    var svcs=[], amt=0;
+    Array.prototype.forEach.call(row.querySelectorAll(".if-svc"),function(btn){ if(btn.getAttribute("data-on")==="1"){ svcs.push(btn.getAttribute("data-name")); amt+=Number(btn.getAttribute("data-price"))||0; } });
+    if(!svcs.length) return;
+    var ph=recExtra({nm:nm, t:time, lane:lane}); ph.done=true;   // 送られたリスト＝実施済み。施術終了として記録
+    payload.push({ org_id:PROFILE.org_id, client_id:clientId, booking_id:b.bookingId||null, member_id:null, staff_id:ME.id,
+      menu:svcs.join("・"), amount:amt, date:iso, note:"", photos:ph });
+  });
+  if(!payload.length){ showMsg("氏名と内容（カット/カラー/パーマ）を入れてください"); return; }
+  if(!ensureCanVisit(clientId, iso)) return;
+  var dupN=RC.filter(function(r){ return r.client_id===clientId && r.date===iso; }).length;
+  if(dupN){ var dc=clientById(clientId)||{}; if(!confirm("⚠️「"+(dc.name||"この施設")+"」の "+dateLabel(iso)+" は、すでに "+dupN+"件 記録があります。\n二重登録かもしれません。それでも保存しますか？")) return; }
+  var r=await insertRecords(payload);
+  if(r.error){ showMsg("保存エラー："+esc(r.error.message)); return; }
+  if(b.bookingId){ try{ await sb.from("bookings").update({status:"施術終了"}).eq("id",b.bookingId); }catch(e){} }   // 予約から開いた場合はその予約も終了扱いに
+  // この施設を画像フォーマットとして記憶（次回から自動でこの画面を開く）
+  try{ var c=clientById(clientId)||{}; if(!isImgFormFacility(c)){ var pl=Array.isArray(c.price_list)?c.price_list.slice():[];
+    imgFormMenus(c).forEach(function(m){ if(!pl.find(function(p){return p.name===m.name;})) pl.push({name:m.name,price:m.price}); });
+    await sb.from("clients").update({price_list:pl}).eq("id",clientId); c.price_list=pl; } }catch(e){}
+  clearImgDraft(); closeSheet(); toast("💴 "+payload.length+"名分を記録しました");
+  await loadAll(); renderTab();
+  openInvoicePicker(clientId, iso.slice(0,7));
 }
 /* ===== 施設一括入力の下書き自動保存（途中で離れても消えない） ===== */
 function batchDraftKey(){ return "batchdraft_"+(ME&&ME.id); }
