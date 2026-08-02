@@ -2,7 +2,13 @@
 <html lang="ja">
 <head>
 <meta charset="utf-8">
-<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="default">
+<meta name="apple-mobile-web-app-title" content="楽々アプリ">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="theme-color" content="#1d9e75">
+<meta name="format-detection" content="telephone=no">
 <title>訪問美容 楽々アプリ</title>
 <style>
   :root{ --accent:#1d9e75; --accent-soft:#e7f5ee; --accent-text:#147a59; --line:#e5e7e6; --bg:#f4f6f5; --surface:#fff; --text:#1f2624; --muted:#6b7572; --hint:#9aa39f; --danger:#c0392b; --radius:14px; }
@@ -131,6 +137,104 @@
   .guide-step b{font-size:14px;}
   .center-narrow{max-width:400px; margin:0 auto; padding:24px 18px;}
   h1.brand{font-size:20px; text-align:center; margin:24px 0 4px;}
+
+  /* ============================================================
+     iPad（タブレット）最適化
+     ・幅で切り替えるので Split View / Stage Manager でも崩れません
+     ・iPhone表示（〜699px）はこれまでと同じ見た目のままです
+     ============================================================ */
+  /* --- 画面の縁（ホームバー・角丸）にボタンが隠れないように --- */
+  .tabbar{padding-bottom:env(safe-area-inset-bottom);}
+  .sheet{padding-bottom:calc(28px + env(safe-area-inset-bottom));}
+  .toast{bottom:calc(80px + env(safe-area-inset-bottom));}
+  .docbar{padding-top:calc(10px + env(safe-area-inset-top));}
+  /* --- ダブルタップで画面が拡大してしまうのを防ぐ（押した反応も速くなる） --- */
+  button,a.btn,.item,.mchip,.seg,.dayhead,.cal .cell,.ba-row label.chk{touch-action:manipulation;}
+  /* --- 外付けキーボード（Magic Keyboard 等）で今どこを操作中か分かるように --- */
+  button:focus-visible,input:focus-visible,select:focus-visible,textarea:focus-visible{outline:2px solid var(--accent); outline-offset:2px;}
+  /* --- トラックパッド/マウス接続時だけホバー反応（指では反応させない） --- */
+  @media (hover:hover) and (pointer:fine){
+    .item:hover{border-color:#cfe0d9;}
+    .btn:hover{filter:brightness(.97);}
+    .cal .cell:hover:not(.blank):not(.sel){background:var(--accent-soft);}
+    .dayhead:hover{border-color:#cfe0d9;}
+  }
+  /* --- 指で操作する端末：文字入力で勝手に拡大しないよう16px、当たり判定も広めに --- */
+  @media (pointer:coarse){
+    input,select,textarea{font-size:16px;}
+    .btn{padding:14px;}
+    .mchip{padding:11px 15px;}
+  }
+
+  /* ===== ここから iPad（横幅700px以上） ===== */
+  @media (min-width:700px){
+    .wrap{max-width:760px;}
+    .tabbar{max-width:760px;}
+    .topbar{padding:14px 22px;}
+    .topbar .t{font-size:18px;}
+    .gear{padding:8px 12px;}
+    .view{padding:18px 22px calc(100px + env(safe-area-inset-bottom));}
+    h2.page{font-size:20px;}
+    .card{padding:16px 18px;}
+    .item{padding:14px 16px;}
+    .item .name{font-size:16px;}
+    .item .meta{font-size:13px;}
+    .sec{font-size:13px;}
+    .muted{font-size:14px;}
+    /* タブは「アイコン＋文字」を横並びに（幅が余るので読みやすく） */
+    .tabbar button{flex-direction:row; gap:8px; font-size:14px; padding:13px 0 14px;}
+    .tabbar button .ic{font-size:20px;}
+    /* カレンダーの日付を大きく（正方形だと間延びするので高さを固定） */
+    .cal{gap:5px;}
+    .cal .cell{aspect-ratio:auto; min-height:58px; font-size:16px; border-radius:11px;}
+    .cal .wd{font-size:12px;}
+    /* タイムライン（予定表）を見やすく */
+    .sched-hline{left:52px;} .sched-now{left:52px;}
+    .sched-ev,.sched-move{left:58px; font-size:13px; padding:5px 10px;}
+    .sched-hlabel{font-size:12px;}
+    /* 入力シートは画面中央のダイアログに（下端まで手を伸ばさなくていい） */
+    .overlay{align-items:center; padding:24px;}
+    .sheet{max-width:620px; border-radius:18px; max-height:84vh; padding:14px 22px 24px;}
+    .sheet-handle{display:none;}
+    .sheet-title{font-size:18px;}
+    .price-row .px{height:46px;}
+    .docpage{font-size:14px; padding:28px;}
+  }
+
+  /* ===== 横幅900px以上：一覧を2列に（顧客が多くても一覧しやすい） ===== */
+  @media (min-width:900px){
+    .wrap{max-width:840px;}
+    .tabbar{max-width:840px;}
+    #clList{display:grid; grid-template-columns:repeat(auto-fill,minmax(320px,1fr)); gap:8px; align-content:start;}
+    #clList>*{grid-column:1/-1;}                       /* 見出し・ボタンは横いっぱい */
+    #clList>.item{grid-column:auto; margin-bottom:0;}  /* 顧客カードだけ2列に並べる */
+  }
+
+  /* ===== 横幅1024px以上（iPad横向き / 12.9インチ）：左サイドメニュー ===== */
+  @media (min-width:1024px){
+    .wrap.app-shell{max-width:none; margin:0; padding-left:232px;}
+    .app-shell .topbar{padding:16px 28px;}
+    .app-shell .view{max-width:920px; margin:0 auto; padding:20px 28px 48px;}
+    /* 下タブバー → 左の縦メニューへ */
+    .app-shell .tabbar{top:0; bottom:0; right:auto; width:232px; max-width:none; margin:0;
+      flex-direction:column; align-items:stretch; justify-content:flex-start; gap:4px;
+      border-top:none; border-right:1px solid var(--line);
+      padding:16px 12px calc(16px + env(safe-area-inset-bottom));}
+    .app-shell .tabbar::before{content:"訪問美容 楽々アプリ"; display:block; font-size:13px; font-weight:700; color:var(--muted); padding:6px 12px 14px;}
+    .app-shell .tabbar button{flex:0 0 auto; flex-direction:row; justify-content:flex-start; gap:12px; padding:14px; font-size:15px; border-radius:12px;}
+    .app-shell .tabbar button .ic{font-size:22px;}
+    .app-shell .tabbar button.on{background:var(--accent-soft);}
+    .app-shell .tabbar button.on::before{top:20%; bottom:20%; left:0; right:auto; width:4px; height:auto; border-radius:0 4px 4px 0;}
+    .app-shell .tabbar button.on .ic{transform:none;}
+    /* サイドメニューの分だけ、シート・通知の中心を本文側へずらす */
+    body.has-nav .toast{left:calc(50% + 116px);}
+    body.has-nav .overlay{padding-left:calc(24px + 232px);}
+    /* 予定・売上は「左に見出し／右に中身」の2段組（横向きの広さを活かす） */
+    .app-shell .view-plan,.app-shell .view-sales{max-width:1160px;}
+    .app-shell .split2{display:grid; grid-template-columns:minmax(300px,370px) minmax(0,1fr); gap:20px; align-items:start;}
+    .app-shell .split2>.sp-a{position:sticky; top:66px;}   /* 左は画面に貼り付いたまま（スクロールしても見える） */
+    .app-shell .split2>.sp-b>.sec:first-child{margin-top:0;}
+  }
 </style>
 </head>
 <body>
@@ -159,7 +263,7 @@ function setTimeUnit(u){ TIME_UNIT=u; try{ localStorage.setItem("timeunit_"+(ME&
   var seg=el("tu_seg"); if(seg){ Array.prototype.forEach.call(seg.children,function(b){ b.classList.toggle("on", b.textContent===(u+"分")); }); }
   saveCloudSettings(); toast("⏱ 時間の単位を"+u+"分にしました"); }
 var TAB="today";
-var APP_VERSION="20260708-15";   // ← 更新のたびにこの値を上げる。全端末で「新しい版があります」バナーが出る
+var APP_VERSION="20260802-16";   // ← 更新のたびにこの値を上げる。全端末で「新しい版があります」バナーが出る
 
 /* ===== プラン（無料/Pro）＝訪問回数で切替。今はUX検証用の“見た目”のみ（サーバー強制・Stripeは後日） ===== */
 var FREE_LIMIT=30;   // 無料プラン：訪問 30回/月まで（施設は何名でも1回。この数字で無料枠を調整）
@@ -329,6 +433,7 @@ async function reloadTimeBlocks(){ var d=await sb.from("time_blocks").select("*"
 /* ===== ログイン / 新規登録 ===== */
 function setAuthMode(mmode){ var e=el("email"),p=el("pw"),n=el("nm"); if(e)window._ae=e.value; if(p)window._ap=p.value; if(n)window._an=n.value; window._am=mmode; renderAuth(); }
 function renderAuth(){
+  setShell(false);
   var mode=window._am||"signin", su=(mode==="signup");
   APP.innerHTML='<div class="center-narrow">'+
     '<h1 class="brand">訪問美容 楽々アプリ</h1><div class="sub" style="text-align:center;margin-bottom:16px;">予約・顧客・売上まで、これひとつ。<br>訪問美容のためのオールインワン</div>'+
@@ -375,6 +480,7 @@ async function doResetPassword(){
   showMsg("📧 再設定メールを「"+esc(email)+"」に送りました。メール内のリンクを開き、新しいパスワードを設定してください。","ok");
 }
 function renderResetPassword(){
+  setShell(false);
   APP.innerHTML='<div class="center-narrow">'+
     '<h1 class="brand">パスワードの再設定</h1>'+
     '<div class="sub" style="text-align:center;margin-bottom:16px;">新しいパスワードを入力してください。</div>'+
@@ -396,8 +502,26 @@ async function doSetNewPassword(){
   toast("🔑 パスワードを変更しました"); ME=r.data.user||ME; boot();
 }
 
+/* ===== 画面サイズ（iPad / iPhone・回転・Split View）の判定 ===== */
+function isTablet(){ return window.innerWidth>=700; }          // iPad相当の広さか
+function schedHourH(){ return isTablet()?64:48; }              // 予定表の「1時間」の高さ(px)。iPadは広くとる
+function widthBucket(){ var w=window.innerWidth; return w>=1024?"lg":(w>=700?"md":"sm"); }
+var _wBucket=widthBucket();
+/* 回転・Split Viewの幅変更で表示の作りが変わるときだけ描き直す（入力中は触らない） */
+window.addEventListener("resize", function(){
+  var b=widthBucket(); if(b===_wBucket) return; _wBucket=b;
+  var ov=el("overlay"); if(ov && ov.classList.contains("show")) return;   // 入力シートを開いている間は作り直さない
+  if(el("view")) renderTab();
+});
+/* 左サイドメニュー版（iPad横向き）に切り替えるための目印 */
+function setShell(on){
+  APP.className = on?"wrap app-shell":"wrap";
+  document.body.classList[on?"add":"remove"]("has-nav");
+}
+
 /* ===== アプリ本体（上部バー＋タブ） ===== */
 function renderApp(){
+  setShell(true);
   APP.innerHTML=
     '<div class="topbar"><div class="t" id="topTitle"></div><button class="gear" onclick="openSettings()">⚙️<span class="lbl">設定</span></button></div>'+
     '<div class="view" id="view"></div>'+
@@ -408,9 +532,12 @@ function renderApp(){
 }
 function tabBtn(id,ic,label){ return '<button class="'+(TAB===id?"on":"")+'" onclick="switchTab(\''+id+'\')"><span class="ic">'+ic+'</span>'+label+'</button>'; }
 function switchTab(t){ TAB=t; renderApp(); window.scrollTo(0,0); }
+/* 画面が広いとき（iPad横向き）だけ左右2段組にする入れ物。狭い画面では今までどおり縦に並ぶ */
+function split2(a,b){ return '<div class="split2"><div class="sp-a">'+a+'</div><div class="sp-b">'+b+'</div></div>'; }
 function renderTab(){
   var titles={today:"ホーム",plan:"予定",clients:"顧客・施設",sales:"売上"};
   el("topTitle").textContent=titles[TAB]||"";
+  el("view").className="view view-"+TAB;   // タブごとに幅・段組を変えるための目印
   if(TAB==="today") renderToday();
   else if(TAB==="plan") renderPlan();
   else if(TAB==="clients") renderClients();
@@ -522,7 +649,7 @@ function dayScheduleHtml(iso){
   moves.forEach(function(mv){ var m=hm2min(mv.time); var sh=Math.floor(m/60); var eh=Math.ceil((m+(mv.duration||15))/60); if(startH==null||sh<startH)startH=sh; if(endH==null||eh>endH)endH=eh; });
   if(startH==null){ startH=9; endH=18; } else { startH=Math.max(0,startH-1); endH=Math.min(24,endH+1); }
   if(endH<=startH) endH=startH+1;
-  var hourH=48, ppm=hourH/60, top0=startH*60, PAD=8;
+  var hourH=schedHourH(), ppm=hourH/60, top0=startH*60, PAD=8;   // iPadでは1時間を広く表示（短い予定もタップしやすい）
   var h='<div class="muted" style="font-size:11px;margin:2px 0 4px;"><span style="color:var(--c-plan,var(--accent));">■</span>予定　<span style="color:var(--c-fin,var(--muted));">■</span>施術終了　<span style="color:var(--c-move,#d8a85f);">■</span>移動'+(iso===todayISO()?'　<span style="color:var(--danger);">—</span>今':'')+'　｜　ブロックはドラッグで移動</div>';
   h+='<div class="sched" data-start="'+startH+'" style="height:'+((endH-startH)*hourH+PAD*2)+'px;touch-action:pan-y;" onclick="schedClick(event,\''+iso+'\')" onpointerdown="schedDown(event)">';
   for(var hh=startH; hh<=endH; hh++){ var y=(hh-startH)*hourH+PAD; h+='<div class="sched-hline" style="top:'+y+'px;"></div><div class="sched-hlabel" style="top:'+y+'px;">'+pad(hh)+':00</div>'; }
@@ -537,7 +664,7 @@ function dayScheduleHtml(iso){
     var cls=done?"fin":"plan";   // 未=予定(緑)/済=施術終了(灰)
     var laneId=itemLane(it); var laneStyle=(multiLane()&&laneId)?'border-left:5px solid '+laneColor(laneId)+';':'';
     h+='<div class="sched-ev '+cls+'" '+dataAttr+' style="top:'+top+'px;height:'+hgt+'px;cursor:grab;'+laneStyle+'">'+
-      '<b>'+esc(it.t)+'</b> '+label+laneTag(laneId)+(sub?'<div style="opacity:.85;">'+sub+'</div>':'')+'<div class="sched-resize"></div></div>';
+      '<b>'+esc(it.t)+'</b> '+label+laneTag(laneId)+((sub&&hgt>=44)?'<div style="opacity:.85;">'+sub+'</div>':'')+'<div class="sched-resize"></div></div>';   // 高さが足りない短い予定は2行目を出さない（文字が切れないように）
   });
   // 独立した移動ブロック（好きな時間・場所に配置）
   moves.forEach(function(mv){
@@ -566,7 +693,7 @@ function schedMove(ev){
   if(!_sdrag) return; var dy=ev.clientY-_sdrag.y0;
   if(!_sdrag.moved && Math.abs(dy)>4) _sdrag.moved=true;
   if(_sdrag.moved){ if(ev.cancelable) ev.preventDefault();
-    var slot=TIME_UNIT*(48/60);   // 1刻み分のpx。ドラッグ中も設定の時間単位でカチッと吸着
+    var slot=TIME_UNIT*(schedHourH()/60);   // 1刻み分のpx。ドラッグ中も設定の時間単位でカチッと吸着
     if(_sdrag.mode==="resize"){ var nh=Math.round((_sdrag.h0+dy)/slot)*slot; if(nh<slot)nh=slot; _sdrag.block.style.height=nh+"px"; _sdrag.block.style.opacity="0.9"; _sdrag.block.style.zIndex="20"; }
     else { var nt=Math.round((_sdrag.top0+dy-8)/slot)*slot+8; if(nt<8)nt=8; _sdrag.block.style.top=nt+"px"; _sdrag.block.style.opacity="0.85"; _sdrag.block.style.zIndex="20"; _sdrag.block.style.cursor="grabbing"; }
   }
@@ -576,7 +703,7 @@ async function schedUp(ev){
   var d=_sdrag; _sdrag=null; if(!d) return;
   d.block.style.opacity=""; d.block.style.zIndex=""; d.block.style.cursor="grab";
   if(!d.moved){ if(d.mode!=="resize") schedOpen(d.block); return; }
-  var ppm=48/60, PAD=8, top0=d.startH*60;
+  var ppm=schedHourH()/60, PAD=8, top0=d.startH*60;
   if(d.mode==="resize"){ var newH=parseFloat(d.block.style.height)||16; var dur=snapUnit(newH/ppm); if(dur<TIME_UNIT)dur=TIME_UNIT; await resizeSchedItem(d.block, dur); }
   else { var newTop=parseFloat(d.block.style.top)||PAD; var min=snapUnit((newTop-PAD)/ppm+top0); if(min<0)min=0; if(min>1435)min=1435; await moveSchedItem(d.block, pad(Math.floor(min/60))+":"+pad(min%60)); }
 }
@@ -617,7 +744,7 @@ function schedClick(ev, iso){
   var sched=ev.currentTarget; var rect=sched.getBoundingClientRect();
   var startH=+sched.getAttribute("data-start")||9;
   var y=ev.clientY-rect.top-8; if(y<0)y=0;              // PAD=8
-  var min=startH*60 + y/(48/60); min=snapUnit(min);   // 時間の単位でスナップ
+  var min=startH*60 + y/(schedHourH()/60); min=snapUnit(min);   // 時間の単位でスナップ
   var t=pad(Math.floor(min/60))+":"+pad(min%60);
   openNewAt(iso, t);
 }
@@ -812,16 +939,16 @@ function renderPlan(){
     html+='<div class="'+cls+'" onclick="planSelect(\''+iso+'\')">'+d+(dateHasEntries(iso)?'<span class="dot"></span>':"")+'</div>';
   }
   html+='</div><div class="muted" style="font-size:11px;margin-top:4px;"><span class="dot" style="display:inline-block;vertical-align:middle;"></span> 印＝予定あり</div></div>';
-  // 選択日のタイムスケジュール（時間軸で目視）
-  html+='<div class="sec">'+esc(dateLabel(PLAN_SEL))+' の予定</div>';
+  // 選択日のタイムスケジュール（時間軸で目視）。iPad横向きでは カレンダー｜その日の予定 の2段組
+  var day='<div class="sec">'+esc(dateLabel(PLAN_SEL))+' の予定</div>';
   // タップした日のすぐ下に追加ボタン（スマホで見やすい・iPhoneカレンダー風）
-  html+='<button class="btn primary" style="margin-bottom:6px;" onclick="openPicker(\'bkWith\',{title:\'だれの予約を入れますか？\',allowNew:true})">＋ 予約する</button>';
-  html+='<div class="muted" style="font-size:11px;margin-bottom:6px;">空き時間をタップでその時刻に追加。日時は後から自由に変えられます。</div>';
-  html+=dayScheduleHtml(PLAN_SEL);
-  html+='<button class="btn ghost accent" style="margin-top:10px;" onclick="openMoveForm(null,{date:\''+PLAN_SEL+'\',duration:15})">🚗 移動時間を追加</button>';
-  html+='<button class="btn ghost accent" style="margin-top:8px;" onclick="showRouteMap(\''+PLAN_SEL+'\')">🗺 この日の動線を地図で見る</button>';
-  html+='<div id="routeMap" style="display:none;margin-top:8px;"></div>';
-  v.innerHTML=html;
+  day+='<button class="btn primary" style="margin-bottom:6px;" onclick="openPicker(\'bkWith\',{title:\'だれの予約を入れますか？\',allowNew:true})">＋ 予約する</button>';
+  day+='<div class="muted" style="font-size:11px;margin-bottom:6px;">空き時間をタップでその時刻に追加。日時は後から自由に変えられます。</div>';
+  day+=dayScheduleHtml(PLAN_SEL);
+  day+='<button class="btn ghost accent" style="margin-top:10px;" onclick="openMoveForm(null,{date:\''+PLAN_SEL+'\',duration:15})">🚗 移動時間を追加</button>';
+  day+='<button class="btn ghost accent" style="margin-top:8px;" onclick="showRouteMap(\''+PLAN_SEL+'\')">🗺 この日の動線を地図で見る</button>';
+  day+='<div id="routeMap" style="display:none;margin-top:8px;"></div>';
+  v.innerHTML=split2(html, day);
 }
 
 /* ===== 動線マップ（Leaflet＋OSM・無料） ===== */
@@ -893,7 +1020,7 @@ async function showRouteMap(iso){
   if(!pts.length){ box.innerHTML='<div class="list-empty">この住所を地図で特定できませんでした：<br>'+
     stops.map(function(s){return '・'+esc(s.client.name)+'（'+esc(s.client.address||"住所なし")+'）';}).join("<br>")+
     '<br><br>「神戸市〇〇区〇〇1-2-3」のように<b>市区町村＋番地</b>まで入れると出ます。予定の施術／予約をタップ→お客様情報の住所を直してください。</div>'; return; }
-  box.innerHTML='<div id="mapCanvas" style="height:300px;border-radius:12px;overflow:hidden;border:1px solid var(--line,#e3e3e3);"></div>'+
+  box.innerHTML='<div id="mapCanvas" style="height:'+(isTablet()?440:300)+'px;border-radius:12px;overflow:hidden;border:1px solid var(--line,#e3e3e3);"></div>'+
     '<a class="btn primary" style="margin-top:8px;display:block;text-align:center;text-decoration:none;" href="'+navAllUrl(pts)+'" target="_blank" rel="noopener">🚗 全部まとめてナビ（'+pts.length+'件）</a>'+
     '<div id="routeList" style="margin-top:8px;"></div>'+
     '<div class="muted" style="font-size:11px;margin-top:8px;">※ 地図表示のため、住所を外部の地図サービス（国土地理院・OpenStreetMap）に送信して位置に変換します。</div>';
@@ -1014,7 +1141,9 @@ function renderSales(){
     '<button class="btn ghost accent" onclick="openExpenseForm(null,{date:(SALES_MONTH===curMonth()?todayISO():SALES_MONTH+\'-01\')})">🧾 経費を追加</button>'+
     '<button class="btn ghost accent" onclick="openInvoicePicker()">📄 施設の請求書を作る</button>'+
     '<button class="btn ghost accent" onclick="openReceiptForm()">🧾 領収書を作る</button>';
-  if(!recs.length && !exs.length){ html+='<div class="list-empty">この月の売上・経費はまだありません。<br>予定を「✅施術終了」にすると売上に、上の「🧾経費を追加」で経費が反映されます。</div>'; v.innerHTML=html; return; }
+  // iPad横向きでは 左＝合計と作成ボタン／右＝内訳と明細 の2段組（スクロールしても合計が見える）
+  var head=html; html="";
+  if(!recs.length && !exs.length){ v.innerHTML=split2(head,'<div class="list-empty">この月の売上・経費はまだありません。<br>予定を「✅施術終了」にすると売上に、「🧾経費を追加」で経費が反映されます。</div>'); return; }
   html+='<div class="sec">📊 内訳<span class="muted" style="font-size:11px;font-weight:400;">（施術料ベース・🚗出張料'+yen(feeTot)+'は含みません）</span></div>';
   if(multiLane()){ html+=breakdownCard("👥 枠・担当別", sumBy(recs,function(r){ var ln=exRec(r).lane; return ln?(laneName(ln)||"（不明な枠）"):"（枠なし）"; })); }
   html+=breakdownCard("🏢 顧客別（施設・お客様）", sumBy(recs,function(r){ return r.client_id?clientName(r.client_id):(exRec(r).nm||"その他"); }));
@@ -1043,7 +1172,7 @@ function renderSales(){
       '</div>';
     });
   }
-  v.innerHTML=html;
+  v.innerHTML=split2(head,html);
 }
 function salesItemHtml(r){
   return '<div class="item" onclick="openRecordForm(\''+r.id+'\')"><div class="top">'+
