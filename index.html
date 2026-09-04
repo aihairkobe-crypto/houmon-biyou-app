@@ -166,7 +166,7 @@ function setTimeUnit(u){ TIME_UNIT=u; try{ localStorage.setItem("timeunit_"+(ME&
   var seg=el("tu_seg"); if(seg){ Array.prototype.forEach.call(seg.children,function(b){ b.classList.toggle("on", b.textContent===(u+"分")); }); }
   saveCloudSettings(); toast("⏱ 時間の単位を"+u+"分にしました"); }
 var TAB="today";
-var APP_VERSION="20260708-20";   // ← 更新のたびにこの値を上げる。全端末で「新しい版があります」バナーが出る
+var APP_VERSION="20260708-21";   // ← 更新のたびにこの値を上げる。全端末で「新しい版があります」バナーが出る
 
 /* ===== プラン（無料/Pro）＝訪問回数で切替。今はUX検証用の“見た目”のみ（サーバー強制・Stripeは後日） ===== */
 var FREE_LIMIT=30;   // 無料プラン：訪問 30回/月まで（施設は何名でも1回。この数字で無料枠を調整）
@@ -1730,18 +1730,22 @@ function openRecordForm(id, prefill){
     '<input id="rf_menu" value="'+esc(rec.menu||"")+'" placeholder="メニュー（例：カット）">'+
     '<div class="hint" style="margin-top:8px;">料金（円）</div><input id="rf_amount" type="number" value="'+(rec.amount||"")+'" placeholder="0">'+
     (rec.client_id?'<label style="display:flex;align-items:center;gap:8px;margin-top:8px;font-size:13px;cursor:pointer;"><input type="checkbox" id="rf_learnprice" style="width:auto;">次回からこの料金を「'+esc(c.name||"この顧客")+'」の初期メニューに登録する</label>':'')+
+    ((rec.client_id && !isFacility(c))?'<div class="hint" style="margin-top:12px;">👪 ご家族・同席の方（任意・この訪問にまとめて記録）</div><datalist id="rfFamMenuDL">'+priceListFor(rec.client_id).map(function(p){return '<option value="'+esc(p.name)+'"></option>';}).join("")+'</datalist><div id="rf_family"></div><button type="button" class="btn ghost accent sm" style="width:auto;" onclick="rfAddFamily()">＋ ご家族・同席の方を追加</button>':"")+
     '<div class="hint" style="margin-top:8px;">🚗 訪問出張料（円・任意）</div><input id="rf_fee" type="number" value="'+(Number(exRec(rec).fee)||"")+'" placeholder="0">'+
     '<div class="hint" style="margin-top:8px;">メモ・カルテ</div><input id="rf_note" value="'+esc(rec.note||"")+'" placeholder="任意">'+
     '<div id="m"></div>'+
     '<button class="btn primary" onclick="saveRecord(\''+(id||"")+'\')">保存</button>'+
     (id?'<button class="btn ghost accent" onclick="toggleRecordDone(\''+id+'\')">'+(exRec(rec).done?"↩ 予定に戻す":"✅ 施術終了にする")+'</button>':"")+
-    ((rec.client_id && !isFacility(c))?'<button class="btn ghost accent" onclick="closeSheet();openFacilityBatch(\''+rec.client_id+'\',{date:\''+(rec.date||todayISO())+'\'})">👪 複数人（ご家族）で入力</button>':"")+
     '<button class="btn ghost accent" onclick="receiptFromRecordForm()">🧾 この内容で領収書</button>'+
     (id?'<button class="btn danger" onclick="delRecord(\''+id+'\')">削除</button>':"")+
     '<button class="btn ghost" onclick="closeSheet()">キャンセル</button>';
   openSheet(body);
 }
 function rfMenu(){ var sel=el("rf_menusel"); var opt=sel.options[sel.selectedIndex]; if(!opt||!opt.value) return; el("rf_menu").value=opt.value; var p=opt.getAttribute("data-price"); if(p!=null) el("rf_amount").value=p; }
+/* 👪 ご家族・同席の方：施術カードでその場に行を足す（お名前・メニュー・料金） */
+function famRow(){ return '<div class="fam-row price-row" style="margin-top:6px;"><input class="fam_name" placeholder="お名前" style="flex:1.3;"><input class="fam_menu" list="rfFamMenuDL" onchange="famMenuFill(this)" placeholder="メニュー" style="flex:1.2;"><input class="fam_amt" type="number" placeholder="円" style="flex:0.8;"><button class="px" onclick="this.closest(\'.fam-row\').remove()">×</button></div>'; }
+function rfAddFamily(){ var b=el("rf_family"); if(b){ b.insertAdjacentHTML("beforeend", famRow()); var rows=b.querySelectorAll(".fam_name"); if(rows.length) rows[rows.length-1].focus(); } }
+function famMenuFill(inp){ var cid=el("rf_client")?el("rf_client").value:""; var pl=priceListFor(cid); var f=pl.find(function(p){return p.name===inp.value.trim();}); if(f&&f.price!=null){ var a=inp.closest(".fam-row").querySelector(".fam_amt"); if(a && !a.value) a.value=f.price; } }
 function qrMenu(){ var sel=el("qr_menusel"); var opt=sel.options[sel.selectedIndex]; if(!opt||!opt.value) return; el("qr_menu").value=opt.value; var p=opt.getAttribute("data-price"); if(p!=null) el("qr_amount").value=p; }
 async function saveRecord(id){
   if(!id && !ensureCanVisit(el("rf_client").value||null, el("rf_date").value)) return;   // 新規のみ無料枠（訪問回数）チェック
@@ -1765,7 +1769,19 @@ async function saveRecord(id){
   if(client && el("rf_learnprice") && el("rf_learnprice").checked){
     var mn=el("rf_menu").value.trim(); if(mn) await upsertClientPrice(client, mn, Number(el("rf_amount").value)||0);
   }
-  closeSheet(); toast("💴 施術を記録しました"); await loadAll(); renderTab();
+  // 👪 ご家族・同席の方＝同じ顧客・日付・時間でまとめて記録（施術カードでその場入力）
+  var famN=0;
+  if(client){
+    var fam=[]; Array.prototype.forEach.call(document.querySelectorAll("#rf_family .fam-row"),function(row){
+      var nm=(row.querySelector(".fam_name")||{}).value.trim(); if(!nm) return;
+      fam.push({ org_id:PROFILE.org_id, client_id:client, booking_id:el("rf_booking").value||null, member_id:null, staff_id:ME.id,
+        menu:(row.querySelector(".fam_menu")||{}).value.trim(), amount:Number((row.querySelector(".fam_amt")||{}).value)||0,
+        note:"", date:el("rf_date").value,
+        photos:recExtra({nm:nm, t:el("rf_time").value, pk:el("rf_pk").value, dur:Number(el("rf_dur").value)||0, lane:(el("rf_lane")?el("rf_lane").value:defaultLaneId())}) });
+    });
+    if(fam.length){ var fr=await insertRecords(fam); if(!fr.error) famN=fam.length; }
+  }
+  closeSheet(); toast(famN?("💴 本人＋ご家族 計"+(famN+1)+"名を記録しました"):"💴 施術を記録しました"); await loadAll(); renderTab();
 }
 async function delRecord(id){
   if(!confirm("この売上・カルテを削除しますか？")) return;
@@ -1778,6 +1794,8 @@ async function delRecord(id){
 async function openFacilityBatch(clientId, opts){
   opts=opts||{}; var c=clientById(clientId)||{}; var iso=opts.date||todayISO();
   window._batch={ clientId:clientId, bookingId:opts.booking_id||null, date:iso };
+  var isFac=isFacility(c);   // 施設/病院か個人宅かで文言を出し分け
+  var whoWord=isFac?"利用者":"ご家族・同席の方";
   var defTime=opts.time||defHM();   // 貼り付けで開き直しても時間を保持・記録画面から引き継ぎ
   var defAddr=(opts.addr!=null?opts.addr:(c.address||"")), defPhone=(opts.phone!=null?opts.phone:(c.phone||""));
   openSheet('<div class="sheet-title">読み込み中…</div>');
@@ -1798,8 +1816,8 @@ async function openFacilityBatch(clientId, opts){
   var hasRows=rowsHtml!=="";
   var body='<div class="sheet-title">'+esc(c.name)+'　'+esc(dateLabel(iso))+'</div>'+
     (resuming?'<div class="msg ok" style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px;">📝 入力途中を復元しました<button class="btn ghost sm" style="width:auto;" onclick="discardBatchDraft()">🗑 破棄して新規</button></div>':'')+
-    (existRecs.length?'<div class="warn" style="margin-bottom:8px;">⚠️ この施設の '+esc(dateLabel(iso))+' は、すでに <b>'+existRecs.length+'名分</b> 記録済みです。同じ人をもう一度保存すると二重になります。既存分の修正は各行の「🏢中を見る／✏️」から。</div>':'')+
-    '<div class="muted" style="margin-bottom:8px;">この日に来る<b>利用者リストを入力</b>（毎回変わってOK）。<b>📋名簿を貼り付け</b>か「＋利用者を追加」で入れて、まとめて保存。保存分は履歴・領収書の元として残ります。<br>※入力は<b>自動保存</b>。途中で閉じても続きから再開できます。</div>'+
+    (existRecs.length?'<div class="warn" style="margin-bottom:8px;">⚠️ '+(isFac?'この施設':'このお客様')+'の '+esc(dateLabel(iso))+' は、すでに <b>'+existRecs.length+'名分</b> 記録済みです。同じ人をもう一度保存すると二重になります。既存分の修正は各行の「中を見る／✏️」から。</div>':'')+
+    '<div class="muted" style="margin-bottom:8px;">'+(isFac?'この日に来る<b>利用者リストを入力</b>（毎回変わってOK）。':'この訪問の<b>ご家族・同席の方を入力</b>。')+'<b>📋名簿を貼り付け</b>か「＋'+whoWord+'を追加」で入れて、まとめて保存。保存分は履歴・領収書の元として残ります。<br>※入力は<b>自動保存</b>。途中で閉じても続きから再開できます。</div>'+
     '<div class="hint">お客様情報（ここで直すと顧客に反映・地図にも使われます）</div>'+
     '<input id="ba_caddr" value="'+esc(defAddr)+'" placeholder="住所（例：神戸市中央区元町通5-7-4-202）">'+
     '<input id="ba_cphone" value="'+esc(defPhone)+'" placeholder="電話（任意）" style="margin-top:6px;">'+
@@ -1816,7 +1834,7 @@ async function openFacilityBatch(clientId, opts){
         '<button class="btn primary sm" style="flex:0 0 auto;" onclick="batchApplyAll()">適用</button></div>'+
     '</div>':'')+
     '<datalist id="baMenuDL">'+pl.map(function(p){ return '<option value="'+esc(p.name)+'"></option>'; }).join("")+'</datalist>'+
-    '<div id="ba_rows" style="margin-top:10px;">'+(rowsHtml||'<div class="list-empty">まだ利用者がいません。<br>下の「📋 名簿を貼り付け」か「＋ 利用者を追加」で、この日の人を入れてください。</div>')+'</div>'+
+    '<div id="ba_rows" style="margin-top:10px;">'+(rowsHtml||'<div class="list-empty">まだ入力がありません。<br>下の「📋 名簿を貼り付け」か「＋ '+whoWord+'を追加」で、この日の方を入れてください。</div>')+'</div>'+
     '<button class="btn ghost accent" onclick="facilityBulkPaste()">📋 名簿を貼り付け（Excelからコピー）</button>'+
     '<button class="btn ghost accent" onclick="batchAdd()">➕ その場で利用者を追加</button>'+
     '<div id="m"></div>'+
