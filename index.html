@@ -166,7 +166,7 @@ function setTimeUnit(u){ TIME_UNIT=u; try{ localStorage.setItem("timeunit_"+(ME&
   var seg=el("tu_seg"); if(seg){ Array.prototype.forEach.call(seg.children,function(b){ b.classList.toggle("on", b.textContent===(u+"分")); }); }
   saveCloudSettings(); toast("⏱ 時間の単位を"+u+"分にしました"); }
 var TAB="today";
-var APP_VERSION="20260708-18";   // ← 更新のたびにこの値を上げる。全端末で「新しい版があります」バナーが出る
+var APP_VERSION="20260708-19";   // ← 更新のたびにこの値を上げる。全端末で「新しい版があります」バナーが出る
 
 /* ===== プラン（無料/Pro）＝訪問回数で切替。今はUX検証用の“見た目”のみ（サーバー強制・Stripeは後日） ===== */
 var FREE_LIMIT=30;   // 無料プラン：訪問 30回/月まで（施設は何名でも1回。この数字で無料枠を調整）
@@ -1447,7 +1447,7 @@ async function saveQuick(){
 function openBookingForm(id, prefill){
   var b=id?(BK.find(function(x){return x.id===id;})||{}):(prefill||{});
   var c=clientById(b.client_id)||{};
-  var body='<div class="sheet-title">'+(id?"予約の編集":"新規予約")+'</div>'+
+  var body='<div class="sheet-title">'+(id?"予約の編集":"新規予約")+(id?' <span class="pill '+(b.status==="施術終了"?"plan":"done")+'" style="font-size:11px;vertical-align:middle;">'+(b.status==="施術終了"?"済 施術終了":"予定")+'</span>':"")+'</div>'+
     '<div class="card" style="margin-bottom:10px;padding:10px 12px;"><b>'+esc(c.name||"（顧客未設定）")+'</b>'+(c.address?'<div class="meta">📍 '+esc(c.address)+'</div>':"")+'</div>'+
     '<input type="hidden" id="bf_client" value="'+esc(b.client_id||"")+'">'+
     (b.client_id?'<div class="hint">お客様情報（ここで直すと顧客に反映・地図にも使われます）</div>'+
@@ -1702,7 +1702,7 @@ function openRecordForm(id, prefill){
   var rec=id?(RC.find(function(x){return x.id===id;})||{}):(prefill||{});
   var c=clientById(rec.client_id)||{};
   var hasPl=priceListFor(rec.client_id).length;   // お客様の料金表 or 標準メニューがあれば選択式
-  var body='<div class="sheet-title">🗂 施術カード'+(id?"（編集）":"")+'</div>'+
+  var body='<div class="sheet-title">🗂 施術カード'+(id?"（編集）":"")+(id?' <span class="pill '+(exRec(rec).done?"plan":"done")+'" style="font-size:11px;vertical-align:middle;">'+(exRec(rec).done?"済 施術終了":"予定")+'</span>':"")+'</div>'+
     '<div class="card" style="margin-bottom:10px;padding:10px 12px;"><b>'+esc(c.name||"（顧客）")+'</b>'+
       (exRec(rec).nm?'<div class="meta">👤 '+esc(exRec(rec).nm)+'</div>':"")+'</div>'+
     '<input type="hidden" id="rf_client" value="'+esc(rec.client_id||"")+'">'+
