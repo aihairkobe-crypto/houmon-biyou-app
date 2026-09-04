@@ -160,7 +160,7 @@ function setTimeUnit(u){ TIME_UNIT=u; try{ localStorage.setItem("timeunit_"+(ME&
   var seg=el("tu_seg"); if(seg){ Array.prototype.forEach.call(seg.children,function(b){ b.classList.toggle("on", b.textContent===(u+"分")); }); }
   saveCloudSettings(); toast("⏱ 時間の単位を"+u+"分にしました"); }
 var TAB="today";
-var APP_VERSION="20260708-16";   // ← 更新のたびにこの値を上げる。全端末で「新しい版があります」バナーが出る
+var APP_VERSION="20260708-17";   // ← 更新のたびにこの値を上げる。全端末で「新しい版があります」バナーが出る
 
 /* ===== プラン（無料/Pro）＝訪問回数で切替。今はUX検証用の“見た目”のみ（サーバー強制・Stripeは後日） ===== */
 var FREE_LIMIT=30;   // 無料プラン：訪問 30回/月まで（施設は何名でも1回。この数字で無料枠を調整）
@@ -281,7 +281,8 @@ async function boot(){
   applyCloudSettings();   // クラウド設定があれば端末より優先（無ければ端末設定をアップして移行）
   await loadAll();
   renderApp();
-  if(!setupDone()) openInitialSetup();   // 初回だけ：屋号＋デフォルトメニューのかんたん設定（スキップ可）
+  // 初回だけ：屋号＋デフォルトメニューのかんたん設定（スキップ可）。既に屋号がある（=設定済み/他端末で設定済み）なら二度と出さない
+  if(!setupDone() && !(ORGP&&ORGP.shop)) openInitialSetup(); else markSetupDone();
   subscribeRealtime();
 }
 async function loadProfile(){ var r=await sb.from("profiles").select("*").eq("id",ME.id).maybeSingle(); PROFILE=r.data||null; }
