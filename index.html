@@ -166,7 +166,7 @@ function setTimeUnit(u){ TIME_UNIT=u; try{ localStorage.setItem("timeunit_"+(ME&
   var seg=el("tu_seg"); if(seg){ Array.prototype.forEach.call(seg.children,function(b){ b.classList.toggle("on", b.textContent===(u+"分")); }); }
   saveCloudSettings(); toast("⏱ 時間の単位を"+u+"分にしました"); }
 var TAB="today";
-var APP_VERSION="20260708-19";   // ← 更新のたびにこの値を上げる。全端末で「新しい版があります」バナーが出る
+var APP_VERSION="20260708-20";   // ← 更新のたびにこの値を上げる。全端末で「新しい版があります」バナーが出る
 
 /* ===== プラン（無料/Pro）＝訪問回数で切替。今はUX検証用の“見た目”のみ（サーバー強制・Stripeは後日） ===== */
 var FREE_LIMIT=30;   // 無料プラン：訪問 30回/月まで（施設は何名でも1回。この数字で無料枠を調整）
@@ -539,7 +539,7 @@ function dayScheduleHtml(iso){
     var m=hm2min(it.t), top=(m-top0)*ppm+PAD, hgt=Math.max(itDur(it)*ppm, 34);
     var isBk=it.kind==="bk", isFac=it.kind==="fac";
     var done, label, sub, dataAttr;
-    if(isFac){ done=it.recs.every(function(r){return !!exRec(r).done;}); label='🏢 '+esc(clientName(it.clientId))+'（'+it.recs.length+'名）'; sub=esc(menuSummary(it.recs))+'　'+yen(it.recs.reduce(function(a,r){return a+(r.amount||0);},0)); dataAttr='data-mv="fac" data-cid="'+esc(it.clientId)+'" data-iso="'+esc(it.iso)+'" data-t="'+esc(it.t)+'"'; }
+    if(isFac){ done=it.recs.every(function(r){return !!exRec(r).done;}); label=groupIcon(it.clientId)+' '+esc(clientName(it.clientId))+'（'+it.recs.length+'名）'; sub=esc(menuSummary(it.recs))+'　'+yen(it.recs.reduce(function(a,r){return a+(r.amount||0);},0)); dataAttr='data-mv="fac" data-cid="'+esc(it.clientId)+'" data-iso="'+esc(it.iso)+'" data-t="'+esc(it.t)+'"'; }
     else if(isBk){ done=(it.b.status==="施術終了"); label=esc(clientName(it.b.client_id)); sub=done?'✅ 施術終了':(it.b.duration?it.b.duration+'分':'予定'); dataAttr='data-mv="bk" data-id="'+esc(it.b.id)+'"'; }
     else { done=!!exRec(it.r).done; label=recordWho(it.r); sub=esc(it.r.menu||'')+(it.r.amount?'　'+yen(it.r.amount):''); dataAttr='data-mv="rc" data-id="'+esc(it.r.id)+'"'; }
     var cls=done?"fin":"plan";   // 未=予定(緑)/済=施術終了(灰)
@@ -681,17 +681,23 @@ function rcAtPick(id){ var a=window._newAt||{}; var c=clientById(id); if(isFacil
 /* ===== 予約＋記録を「その日」に束ねる共通処理 ===== */
 function dayTimeline(iso){
   var items=BK.filter(function(b){return b.date===iso;}).map(function(b){return {t:b.time||"",kind:"bk",b:b};});
-  var groups={};
+  var groups={}, order=[];
   RC.filter(function(r){return r.date===iso && !r.booking_id;}).forEach(function(r){
-    var c=clientById(r.client_id);
-    if(r.client_id && isFacility(c)){   // 施設は1件にまとめる（時間ごと）
+    if(r.client_id){   // 顧客ひもづき記録は 顧客＋時間 でまとめる（施設も・個人の家族も）
       var t=exRec(r).t||""; var key=r.client_id+"|"+t;
-      if(!groups[key]){ groups[key]={t:t,kind:"fac",clientId:r.client_id,iso:iso,recs:[]}; items.push(groups[key]); }
+      if(!groups[key]){ groups[key]={t:t,clientId:r.client_id,iso:iso,recs:[]}; order.push(key); }
       groups[key].recs.push(r);
-    } else { items.push({t:exRec(r).t||"",kind:"rc",r:r}); }
+    } else { items.push({t:exRec(r).t||"",kind:"rc",r:r}); }   // 飛込み(顧客なし)は単体
+  });
+  // 施設は常に、個人は同時刻2人以上（＝ご家族）ならまとめカードに。個人1人は従来の単体カード
+  order.forEach(function(key){ var g=groups[key]; var c=clientById(g.clientId);
+    if(isFacility(c) || g.recs.length>=2){ items.push({t:g.t,kind:"fac",clientId:g.clientId,iso:iso,recs:g.recs}); }
+    else { items.push({t:exRec(g.recs[0]).t||"",kind:"rc",r:g.recs[0]}); }
   });
   return items.sort(function(a,b){return (a.t||"").localeCompare(b.t||"");});
 }
+/* まとめカードの見出しアイコン：施設=🏢/病院=🏥、個人の家族グループ=🏠 */
+function groupIcon(clientId){ var c=clientById(clientId); return c&&c.kind==="病院"?"🏥":c&&c.kind==="施設"?"🏢":"🏠"; }
 /* 予約の重なりチェック（一人では同時に対応できない前提。団体＝同施設・同時刻は正常なので除外） */
 function overlapMin(aS,aD,bS,bD){ return aS < bS+bD && bS < aS+aD; }   // 時間帯が重なるか
 function conflictLabel(it){
@@ -733,7 +739,7 @@ async function toggleFacDone(clientId, iso, t){
 function openFacVisit(clientId, iso, t){
   var recs=facGroupRecs(clientId,iso,t); var c=clientById(clientId)||{}; var plArr=Array.isArray(c.price_list)?c.price_list:[];
   var allDone=recs.length&&recs.every(function(r){return !!exRec(r).done;});
-  var body='<div class="sheet-title">🏢 '+esc(clientName(clientId))+'　'+esc(dateLabel(iso))+(t?'　'+esc(t):'')+'</div>'+
+  var body='<div class="sheet-title">'+groupIcon(clientId)+' '+esc(clientName(clientId))+'　'+esc(dateLabel(iso))+(t?'　'+esc(t):'')+'</div>'+
     '<div class="muted" style="margin-bottom:8px;">利用者 '+recs.length+'名。<b>メニュー・料金・時間はここで直せます</b>（名前タップで詳細編集）。</div>'+
     '<div class="row"><div><div class="hint">時間（全員）</div>'+timeInput("fv_time", t||defHM())+'</div>'+
       '<div><div class="hint">施術時間（分）</div><input id="fv_dur" type="number" step="'+TIME_UNIT+'" value="'+(Number(exRec(recs[0]||{}).dur)||60)+'"></div></div>'+
@@ -768,7 +774,7 @@ function timelineItemHtml(it){
     var frecs=it.recs; var ftot=frecs.reduce(function(a,r){return a+(r.amount||0);},0);
     var fdone=frecs.every(function(r){return !!exRec(r).done;});
     return '<div class="item"><div class="top">'+
-      '<div style="cursor:pointer;" onclick="openFacVisit(\''+it.clientId+'\',\''+it.iso+'\',\''+it.t+'\')"><div class="name">'+(it.t?esc(it.t)+'　':'')+'🏢 '+esc(clientName(it.clientId))+'（'+frecs.length+'名）'+laneTag(itemLane(it))+'</div>'+
+      '<div style="cursor:pointer;" onclick="openFacVisit(\''+it.clientId+'\',\''+it.iso+'\',\''+it.t+'\')"><div class="name">'+(it.t?esc(it.t)+'　':'')+groupIcon(it.clientId)+' '+esc(clientName(it.clientId))+'（'+frecs.length+'名）'+laneTag(itemLane(it))+'</div>'+
         '<div class="meta">✂️ '+esc(menuSummary(frecs))+'　'+yen(ftot)+'</div></div>'+
       '<span class="pill '+(fdone?"plan":"done")+'">'+(fdone?"施術終了":"予定")+'</span></div>'+
       '<div class="row" style="margin-top:10px;gap:6px;">'+
@@ -1250,7 +1256,7 @@ function receiptFromFacilityVisit(clientId, iso, t){
   var treat=recs.reduce(function(a,r){return a+(r.amount||0);},0);
   var travel=recs.reduce(function(a,r){return a+recFee(r);},0);
   var c=clientById(clientId)||{};
-  openReceiptForm({ name:(c.name||"")+" 御中", treat:treat, travel:travel, date:iso });
+  openReceiptForm({ name:(c.name||"")+(isFacility(c)?" 御中":" 様"), treat:treat, travel:travel, date:iso });
 }
 function receiptFromBooking(bid){
   var b=BK.find(function(x){return x.id===bid;}); if(!b) return;
@@ -1729,6 +1735,7 @@ function openRecordForm(id, prefill){
     '<div id="m"></div>'+
     '<button class="btn primary" onclick="saveRecord(\''+(id||"")+'\')">保存</button>'+
     (id?'<button class="btn ghost accent" onclick="toggleRecordDone(\''+id+'\')">'+(exRec(rec).done?"↩ 予定に戻す":"✅ 施術終了にする")+'</button>':"")+
+    ((rec.client_id && !isFacility(c))?'<button class="btn ghost accent" onclick="closeSheet();openFacilityBatch(\''+rec.client_id+'\',{date:\''+(rec.date||todayISO())+'\'})">👪 複数人（ご家族）で入力</button>':"")+
     '<button class="btn ghost accent" onclick="receiptFromRecordForm()">🧾 この内容で領収書</button>'+
     (id?'<button class="btn danger" onclick="delRecord(\''+id+'\')">削除</button>':"")+
     '<button class="btn ghost" onclick="closeSheet()">キャンセル</button>';
@@ -2124,6 +2131,7 @@ function openClientDetail(id){
       (plTxt?'<div class="meta">💴 '+plTxt+'</div>':"")+'</div>'+
     '<div class="row"><button class="btn primary" onclick="bkWith(\''+id+'\')">＋ 新規で予約</button>'+
       '<button class="btn ghost accent" onclick="recWith(\''+id+'\')">💴 施術を記録</button></div>'+
+    ((c && !isFacility(c))?'<button class="btn ghost accent" style="margin-top:8px;" onclick="closeSheet();openFacilityBatch(\''+id+'\',{date:todayISO()})">👪 複数人（ご家族）で入力</button>':"")+
     '<button class="btn ghost sm" style="width:auto;margin-top:8px;" onclick="openClientForm(\''+id+'\')">✏️ 情報を編集</button>'+
     '<div class="hint" style="margin-top:14px;">来店履歴（カルテ）</div>'+
     clientHistoryHtml(id)+
