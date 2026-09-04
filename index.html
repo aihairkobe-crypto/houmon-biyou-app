@@ -42,6 +42,12 @@
   .item .name{font-weight:700; font-size:15px;}
   .item .meta{color:var(--muted); font-size:12px; margin-top:3px; line-height:1.5;}
   .item .rules{color:var(--danger); font-size:12px; margin-top:3px;}
+  /* コンパクト行（最近・よく行く先を1行に詰める） */
+  .item.compact{padding:9px 12px; margin-bottom:6px;}
+  .item.compact .rec-line{display:flex; justify-content:space-between; align-items:baseline; gap:10px;}
+  .item.compact .name{font-size:14px; overflow:hidden; text-overflow:ellipsis; white-space:nowrap;}
+  .item.compact .rec-sub{font-size:12px; color:var(--muted); white-space:nowrap; flex:0 0 auto;}
+  .item.compact .rec-warn{color:var(--danger); font-size:11px; margin-top:2px;}
   .pill{font-size:11px; font-weight:700; padding:3px 9px; border-radius:12px; white-space:nowrap;}
   .pill.plan{background:#eef1f0; color:var(--muted);} .pill.done{background:var(--accent-soft); color:var(--accent-text);}
   .amt{font-weight:700; color:var(--accent-text);}
@@ -160,7 +166,7 @@ function setTimeUnit(u){ TIME_UNIT=u; try{ localStorage.setItem("timeunit_"+(ME&
   var seg=el("tu_seg"); if(seg){ Array.prototype.forEach.call(seg.children,function(b){ b.classList.toggle("on", b.textContent===(u+"分")); }); }
   saveCloudSettings(); toast("⏱ 時間の単位を"+u+"分にしました"); }
 var TAB="today";
-var APP_VERSION="20260708-17";   // ← 更新のたびにこの値を上げる。全端末で「新しい版があります」バナーが出る
+var APP_VERSION="20260708-18";   // ← 更新のたびにこの値を上げる。全端末で「新しい版があります」バナーが出る
 
 /* ===== プラン（無料/Pro）＝訪問回数で切替。今はUX検証用の“見た目”のみ（サーバー強制・Stripeは後日） ===== */
 var FREE_LIMIT=30;   // 無料プラン：訪問 30回/月まで（施設は何名でも1回。この数字で無料枠を調整）
@@ -940,6 +946,16 @@ function renderClients(){
 function clSort(lastMap){ return function(a,b){ var da=lastMap[a.id]||"",db=lastMap[b.id]||""; if(da!==db) return db.localeCompare(da); return (a.name||"").localeCompare(b.name||""); }; }
 function clKindLabel(c){ return isFacility(c)?(c.kind==="病院"?"🏥 病院":"🏢 施設"):"🧑 お客様"; }
 /* 顧客タブの1行 */
+/* 「最近・よく行く先」のコンパクト1行（予約ピッカー・顧客タブ共通）。onclickだけ差し替え */
+function recentRowHtml(c, lastMap, onclick){
+  var last=lastMap[c.id];
+  var ke=isFacility(c)?(c.kind==="病院"?"🏥":"🏢"):"🧑";
+  var sub=last?('前回 '+esc(dateLabel(last))):(isFacility(c)?'施設':'お客様');
+  return '<div class="item compact" onclick="'+onclick+'">'+
+    '<div class="rec-line"><span class="name">'+ke+' '+esc(c.name)+'</span><span class="rec-sub">'+sub+'</span></div>'+
+    (c.rules?'<div class="rec-warn">⚠️ '+esc(c.rules)+'</div>':'')+
+  '</div>';
+}
 function clientRowHtml(c, lastMap){
   var pl=Array.isArray(c.price_list)?c.price_list:[];
   var plShort=pl.slice(0,2).map(function(p){return esc(p.name)+" "+priceLabel(p.price);}).join("・")+(pl.length>2?" 他":"");
@@ -972,9 +988,9 @@ function renderClientList(){
     box.innerHTML=hit?html:'<div class="list-empty">「'+esc(q)+'」は見つかりません。</div>'; return;
   }
   // 非検索＝「最近・よく行く先」だけ。全件は「すべて表示」で展開（増えても最初はスッキリ・重複なし）
-  var recent=CL.filter(function(c){return lastMap[c.id];}).sort(function(a,b){return (lastMap[b.id]||"").localeCompare(lastMap[a.id]||"");}).slice(0,8);
+  var recent=CL.filter(function(c){return lastMap[c.id];}).sort(function(a,b){return (lastMap[b.id]||"").localeCompare(lastMap[a.id]||"");}).slice(0,6);
   var rid={}; recent.forEach(function(c){rid[c.id]=1;});
-  if(recent.length){ html+='<div class="sec">⏱ 最近・よく行く先</div>'; recent.forEach(function(c){ html+=clientRowHtml(c,lastMap); }); }
+  if(recent.length){ html+='<div class="sec">⏱ 最近・よく行く先</div>'; recent.forEach(function(c){ html+=recentRowHtml(c,lastMap,"openClientDetail('"+c.id+"')"); }); }
   var rest=CL.filter(function(c){return !rid[c.id];});
   if(window._clAll){
     groups.forEach(function(g){
@@ -1304,9 +1320,9 @@ function renderPickList(){
     box.innerHTML=hit?html:'<div class="list-empty">「'+esc(q)+'」は見つかりません。'+(window._pickNew?'<br>上の「➕新しい顧客・施設を登録」から追加できます。':'')+'</div>'; return;
   }
   // 非検索＝「最近・よく行く先」だけ。全件は「すべて表示」で展開（電話中でも最初はスッキリ・重複なし）
-  var recent=CL.filter(function(c){return lastMap[c.id];}).sort(function(a,b){return (lastMap[b.id]||"").localeCompare(lastMap[a.id]||"");}).slice(0,8);
+  var recent=CL.filter(function(c){return lastMap[c.id];}).sort(function(a,b){return (lastMap[b.id]||"").localeCompare(lastMap[a.id]||"");}).slice(0,6);
   var rid={}; recent.forEach(function(c){rid[c.id]=1;});
-  if(recent.length){ html+='<div class="sec">⏱ 最近・よく行く先</div>'; recent.forEach(function(c){ html+=pickItemHtml(c,lastMap); }); }
+  if(recent.length){ html+='<div class="sec">⏱ 最近・よく行く先</div>'; recent.forEach(function(c){ html+=recentRowHtml(c,lastMap,"pickChoose('"+c.id+"')"); }); }
   var rest=CL.filter(function(c){return !rid[c.id];});
   if(window._pickAll){
     groups.forEach(function(g){
