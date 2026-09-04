@@ -2,11 +2,12 @@
 <html lang="ja">
 <head>
 <meta charset="utf-8">
-<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1">
 <title>訪問美容 楽々アプリ</title>
 <style>
   :root{ --accent:#1d9e75; --accent-soft:#e7f5ee; --accent-text:#147a59; --line:#e5e7e6; --bg:#f4f6f5; --surface:#fff; --text:#1f2624; --muted:#6b7572; --hint:#9aa39f; --danger:#c0392b; --radius:14px; }
   *{box-sizing:border-box;}
+  html,body{max-width:100%; overflow-x:hidden;}   /* 横はみ出しで中央がズレるのを防ぐ保険 */
   body{margin:0; font-family:-apple-system,"Hiragino Sans",sans-serif; background:var(--bg); color:var(--text); -webkit-text-size-adjust:100%;}
   .wrap{max-width:480px; margin:0 auto; min-height:100vh;}
   /* 上部バー */
@@ -159,7 +160,7 @@ function setTimeUnit(u){ TIME_UNIT=u; try{ localStorage.setItem("timeunit_"+(ME&
   var seg=el("tu_seg"); if(seg){ Array.prototype.forEach.call(seg.children,function(b){ b.classList.toggle("on", b.textContent===(u+"分")); }); }
   saveCloudSettings(); toast("⏱ 時間の単位を"+u+"分にしました"); }
 var TAB="today";
-var APP_VERSION="20260708-15";   // ← 更新のたびにこの値を上げる。全端末で「新しい版があります」バナーが出る
+var APP_VERSION="20260708-16";   // ← 更新のたびにこの値を上げる。全端末で「新しい版があります」バナーが出る
 
 /* ===== プラン（無料/Pro）＝訪問回数で切替。今はUX検証用の“見た目”のみ（サーバー強制・Stripeは後日） ===== */
 var FREE_LIMIT=30;   // 無料プラン：訪問 30回/月まで（施設は何名でも1回。この数字で無料枠を調整）
@@ -457,7 +458,7 @@ function firstRunGuide(){
     '<div class="guide-step"><span class="gnum">3</span><div><b>施術を記録</b><div class="muted">施術したら料金を記録。売上に自動で集計。</div></div></div>'+
     '</div>'+
     '<div class="sec">まずはここから</div>'+
-    '<button class="btn primary" onclick="openPicker(\'bkWith\',{title:\'だれの予約を入れますか？\',allowNew:true})">📅 予約する</button>'+
+    '<button class="btn primary" onclick="openPicker(\'bkWith\',{title:\'だれの予約を入れますか？\',allowNew:true})">📅 予約を追加</button>'+
     '<div class="muted" style="font-size:11px;margin:-2px 0 8px;">相手はその場で登録もできます。まずは1件入れてみましょう。</div>'+
     '<button class="btn ghost accent" onclick="onboardExisting()">📋 既にお客様・施設をお持ちの方はこちら</button>'+
     '<button class="btn ghost" onclick="openHelp()">📖 詳しい使い方を見る</button>';
@@ -497,11 +498,11 @@ function renderToday(){
     '</div>'+
     '<div class="muted" style="font-size:11px;margin:-4px 0 2px;">※未終了＝まだ「✅施術終了」にしていない予定</div>';
   html+='<div class="sec">'+esc(dateLabel(tISO))+' の訪問</div>';
-  if(!todays.length){ html+='<div class="list-empty">今日の予定・記録はありません。<br>下の「＋ 予約する」から入力できます。</div>'; }
+  if(!todays.length){ html+='<div class="list-empty">今日の予定・記録はありません。<br>下の「＋ 予約を追加」から入力できます。</div>'; }
   else { todays.forEach(function(it){ html+=timelineItemHtml(it); }); }
   html+='<button class="btn ghost accent" style="margin-top:10px;" onclick="showRouteMap(\''+tISO+'\')">🗺 今日の動線を地図で見る</button>';
   html+='<div id="routeMap" style="display:none;margin-top:8px;"></div>';
-  html+='<button class="btn primary" style="margin-top:10px;" onclick="openPicker(\'bkWith\',{title:\'だれの予約を入れますか？\',allowNew:true})">＋ 予約する</button>';
+  html+='<button class="btn primary" style="margin-top:10px;" onclick="openPicker(\'bkWith\',{title:\'だれの予約を入れますか？\',allowNew:true})">＋ 予約を追加</button>';
   v.innerHTML=html;
 }
 
@@ -523,7 +524,7 @@ function dayScheduleHtml(iso){
   if(startH==null){ startH=9; endH=18; } else { startH=Math.max(0,startH-1); endH=Math.min(24,endH+1); }
   if(endH<=startH) endH=startH+1;
   var hourH=48, ppm=hourH/60, top0=startH*60, PAD=8;
-  var h='<div class="muted" style="font-size:11px;margin:2px 0 4px;"><span style="color:var(--c-plan,var(--accent));">■</span>予定　<span style="color:var(--c-fin,var(--muted));">■</span>施術終了　<span style="color:var(--c-move,#d8a85f);">■</span>移動'+(iso===todayISO()?'　<span style="color:var(--danger);">—</span>今':'')+'　｜　ブロックはドラッグで移動</div>';
+  var h='<div class="muted" style="font-size:11px;margin:2px 0 4px;"><span style="color:var(--c-plan,var(--accent));">■</span>予定　<span style="color:var(--c-fin,var(--muted));">■</span>施術終了　<span style="color:var(--c-move,#d8a85f);">■</span>移動'+(iso===todayISO()?'　<span style="color:var(--danger);">—</span>今':'')+'　｜　ブロックは長押しで掴んで移動</div>';
   h+='<div class="sched" data-start="'+startH+'" style="height:'+((endH-startH)*hourH+PAD*2)+'px;touch-action:pan-y;" onclick="schedClick(event,\''+iso+'\')" onpointerdown="schedDown(event)">';
   for(var hh=startH; hh<=endH; hh++){ var y=(hh-startH)*hourH+PAD; h+='<div class="sched-hline" style="top:'+y+'px;"></div><div class="sched-hlabel" style="top:'+y+'px;">'+pad(hh)+':00</div>'; }
   if(iso===todayISO()){ var nm=(new Date()).getHours()*60+(new Date()).getMinutes(); if(nm>=top0 && nm<=endH*60){ var ny=(nm-top0)*ppm+PAD; h+='<div class="sched-now" style="top:'+ny+'px;"><span class="sched-now-dot"></span></div>'; } }
@@ -558,24 +559,31 @@ function schedDown(ev){
   var isResize=!!(ev.target.closest && ev.target.closest(".sched-resize"));
   var block=ev.target.closest?ev.target.closest(".sched-ev, .sched-move"):null; if(!block) return;
   var sched=block.closest(".sched"); var startH=+sched.getAttribute("data-start")||9;
-  _sdrag={ block:block, startH:startH, y0:ev.clientY, top0:parseFloat(block.style.top)||8, h0:parseFloat(block.style.height)||34, moved:false, mode:(isResize?"resize":"move") };
+  _sdrag={ block:block, startH:startH, y0:ev.clientY, x0:ev.clientX, top0:parseFloat(block.style.top)||8, h0:parseFloat(block.style.height)||34, moved:false, armed:false, canceled:false, mode:(isResize?"resize":"move") };
+  // 長押し(0.32秒)で「掴んだ」状態に。軽く触れただけ・スクロールでは動かさない（誤操作防止）
+  _sdrag.armTimer=setTimeout(function(){ if(_sdrag){ _sdrag.armed=true; _sdrag.block.style.opacity="0.85"; _sdrag.block.style.zIndex="20"; _sdrag.block.style.boxShadow="0 3px 12px rgba(0,0,0,.35)"; _sdrag.block.style.cursor="grabbing"; } }, 320);
   window.addEventListener("pointermove", schedMove, {passive:false});
   window.addEventListener("pointerup", schedUp);
 }
 function schedMove(ev){
-  if(!_sdrag) return; var dy=ev.clientY-_sdrag.y0;
-  if(!_sdrag.moved && Math.abs(dy)>4) _sdrag.moved=true;
-  if(_sdrag.moved){ if(ev.cancelable) ev.preventDefault();
-    var slot=TIME_UNIT*(48/60);   // 1刻み分のpx。ドラッグ中も設定の時間単位でカチッと吸着
-    if(_sdrag.mode==="resize"){ var nh=Math.round((_sdrag.h0+dy)/slot)*slot; if(nh<slot)nh=slot; _sdrag.block.style.height=nh+"px"; _sdrag.block.style.opacity="0.9"; _sdrag.block.style.zIndex="20"; }
-    else { var nt=Math.round((_sdrag.top0+dy-8)/slot)*slot+8; if(nt<8)nt=8; _sdrag.block.style.top=nt+"px"; _sdrag.block.style.opacity="0.85"; _sdrag.block.style.zIndex="20"; _sdrag.block.style.cursor="grabbing"; }
+  if(!_sdrag) return; var dy=ev.clientY-_sdrag.y0, dx=ev.clientX-_sdrag.x0;
+  if(!_sdrag.armed){
+    // まだ掴んでいない：大きく動いたら「スクロール/誤タッチ」とみなしドラッグ中止（勝手に動かさない）
+    if(Math.abs(dx)+Math.abs(dy)>12){ clearTimeout(_sdrag.armTimer); _sdrag.canceled=true; }
+    return;
   }
+  if(ev.cancelable) ev.preventDefault(); _sdrag.moved=true;
+  var slot=TIME_UNIT*(48/60);   // 1刻み分のpx。ドラッグ中も設定の時間単位でカチッと吸着
+  if(_sdrag.mode==="resize"){ var nh=Math.round((_sdrag.h0+dy)/slot)*slot; if(nh<slot)nh=slot; _sdrag.block.style.height=nh+"px"; }
+  else { var nt=Math.round((_sdrag.top0+dy-8)/slot)*slot+8; if(nt<8)nt=8; _sdrag.block.style.top=nt+"px"; }
 }
 async function schedUp(ev){
   window.removeEventListener("pointermove", schedMove); window.removeEventListener("pointerup", schedUp);
   var d=_sdrag; _sdrag=null; if(!d) return;
-  d.block.style.opacity=""; d.block.style.zIndex=""; d.block.style.cursor="grab";
-  if(!d.moved){ if(d.mode!=="resize") schedOpen(d.block); return; }
+  clearTimeout(d.armTimer);
+  d.block.style.opacity=""; d.block.style.zIndex=""; d.block.style.cursor="grab"; d.block.style.boxShadow="";
+  if(!d.armed){ if(!d.canceled && d.mode!=="resize") schedOpen(d.block); return; }   // 掴む前に離した＝タップ→開く
+  if(!d.moved){ if(d.mode!=="resize") schedOpen(d.block); return; }                    // 掴んだが動かさず→開く
   var ppm=48/60, PAD=8, top0=d.startH*60;
   if(d.mode==="resize"){ var newH=parseFloat(d.block.style.height)||16; var dur=snapUnit(newH/ppm); if(dur<TIME_UNIT)dur=TIME_UNIT; await resizeSchedItem(d.block, dur); }
   else { var newTop=parseFloat(d.block.style.top)||PAD; var min=snapUnit((newTop-PAD)/ppm+top0); if(min<0)min=0; if(min>1435)min=1435; await moveSchedItem(d.block, pad(Math.floor(min/60))+":"+pad(min%60)); }
@@ -625,7 +633,7 @@ function openNewAt(iso, t){
   window._newAt={iso:iso, t:t};
   openSheet('<div class="sheet-title">'+esc(dateLabel(iso))+'　'+esc(t)+'</div>'+
     '<div class="muted" style="margin-bottom:8px;">この時間に追加します。</div>'+
-    '<button class="btn primary" onclick="newBookingAt()">＋ 予約する</button>'+
+    '<button class="btn primary" onclick="newBookingAt()">＋ 予約を追加</button>'+
     '<button class="btn ghost accent" onclick="newMoveAt()">🚗 移動時間を追加</button>'+
     '<button class="btn ghost" onclick="closeSheet()">キャンセル</button>');
 }
@@ -815,7 +823,7 @@ function renderPlan(){
   // 選択日のタイムスケジュール（時間軸で目視）
   html+='<div class="sec">'+esc(dateLabel(PLAN_SEL))+' の予定</div>';
   // タップした日のすぐ下に追加ボタン（スマホで見やすい・iPhoneカレンダー風）
-  html+='<button class="btn primary" style="margin-bottom:6px;" onclick="openPicker(\'bkWith\',{title:\'だれの予約を入れますか？\',allowNew:true})">＋ 予約する</button>';
+  html+='<button class="btn primary" style="margin-bottom:6px;" onclick="openPicker(\'bkWith\',{title:\'だれの予約を入れますか？\',allowNew:true})">＋ 予約を追加</button>';
   html+='<div class="muted" style="font-size:11px;margin-bottom:6px;">空き時間をタップでその時刻に追加。日時は後から自由に変えられます。</div>';
   html+=dayScheduleHtml(PLAN_SEL);
   html+='<button class="btn ghost accent" style="margin-top:10px;" onclick="openMoveForm(null,{date:\''+PLAN_SEL+'\',duration:15})">🚗 移動時間を追加</button>';
