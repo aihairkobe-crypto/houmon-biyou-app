@@ -177,7 +177,7 @@ function setTimeUnit(u){ TIME_UNIT=u; try{ localStorage.setItem("timeunit_"+(ME&
   var seg=el("tu_seg"); if(seg){ Array.prototype.forEach.call(seg.children,function(b){ b.classList.toggle("on", b.textContent===(u+"分")); }); }
   saveCloudSettings(); toast("⏱ 時間の単位を"+u+"分にしました"); }
 var TAB="today";
-var APP_VERSION="20260708-23";   // ← 更新のたびにこの値を上げる。全端末で「新しい版があります」バナーが出る
+var APP_VERSION="20260708-24";   // ← 更新のたびにこの値を上げる。全端末で「新しい版があります」バナーが出る
 
 /* ===== プラン（無料/Pro）＝訪問回数で切替。今はUX検証用の“見た目”のみ（サーバー強制・Stripeは後日） ===== */
 var FREE_LIMIT=30;   // 無料プラン：訪問 30回/月まで（施設は何名でも1回。この数字で無料枠を調整）
@@ -530,6 +530,27 @@ function itDur(it){ return it.kind==="bk" ? (it.b.duration||60) : it.kind==="fac
 function itemDone(it){ return it.kind==="bk" ? (it.b.status==="施術終了") : it.kind==="fac" ? it.recs.every(function(r){return !!exRec(r).done;}) : !!exRec(it.r).done; }
 function itemLane(it){ return it.kind==="bk" ? (it.b.lane||"") : it.kind==="fac" ? (exRec(it.recs[0]||{}).lane||"") : (exRec(it.r||{}).lane||""); }   // その予定の枠
 function movesForDay(iso){ return TB.filter(function(m){return m.date===iso && m.time;}); }   // 独立した移動ブロック
+/* 予定タイトル末尾の「担当:○○」を取り出す（メモに記録） */
+function staffOf(it){
+  var note = it.kind==="bk" ? (it.b&&it.b.note||"") : it.kind==="fac" ? ((it.recs&&it.recs[0]||{}).note||"") : ((it.r||{}).note||"");
+  var m = String(note).match(/担当[:：]\s*([^\s\/｜|]+)/); return m?m[1]:"";
+}
+/* 担当スタッフごとに一定の色（別スタッフが同時稼働＝色で見分ける） */
+var STAFF_PALETTE=["#2f8f6b","#c0453b","#3b6fc0","#c0892f","#8a4fbf","#2f9fb0","#b0562f","#5a8f2f"];
+function staffColor(name){ if(!name) return ""; var h=0; for(var i=0;i<name.length;i++){ h=(h*31+name.charCodeAt(i))>>>0; } return STAFF_PALETTE[h%STAFF_PALETTE.length]; }
+/* 時間が重なる予定を横の列に振り分ける（カレンダーのように潰れず並ぶ）。戻り値は入力と同じ並びの[{col,ncols}] */
+function packColumns(intervals){
+  var evs=intervals.map(function(x,i){return {i:i,s:x.start,e:x.end};}).sort(function(a,b){return a.s-b.s||a.e-b.e;});
+  var out=new Array(intervals.length), cluster=[], colsEnd=[], maxEnd=-1;
+  function flush(){ var nc=colsEnd.length||1; cluster.forEach(function(ev){ out[ev.i]={col:ev.col,ncols:nc}; }); cluster=[]; colsEnd=[]; maxEnd=-1; }
+  evs.forEach(function(ev){
+    if(cluster.length && ev.s>=maxEnd) flush();
+    var placed=-1; for(var c=0;c<colsEnd.length;c++){ if(colsEnd[c]<=ev.s){ placed=c; break; } }
+    if(placed<0){ placed=colsEnd.length; colsEnd.push(ev.e); } else colsEnd[placed]=ev.e;
+    ev.col=placed; cluster.push(ev); if(ev.e>maxEnd) maxEnd=ev.e;
+  });
+  flush(); return out;
+}
 function dayScheduleHtml(iso){
   var items=dayTimeline(iso);
   var timed=items.filter(function(it){return it.t;});
@@ -542,11 +563,12 @@ function dayScheduleHtml(iso){
   if(startH==null){ startH=9; endH=18; } else { startH=Math.max(0,startH-1); endH=Math.min(24,endH+1); }
   if(endH<=startH) endH=startH+1;
   var hourH=48, ppm=hourH/60, top0=startH*60, PAD=8;
-  var h='<div class="muted" style="font-size:11px;margin:2px 0 4px;"><span style="color:var(--c-plan,var(--accent));">■</span>予定　<span style="color:var(--c-fin,var(--muted));">■</span>施術終了　<span style="color:var(--c-move,#d8a85f);">■</span>移動'+(iso===todayISO()?'　<span style="color:var(--danger);">—</span>今':'')+'　｜　ブロックは長押しで掴んで移動</div>';
+  var h='<div class="muted" style="font-size:11px;margin:2px 0 4px;"><span style="color:var(--c-plan,var(--accent));">■</span>予定　<span style="color:var(--c-fin,var(--muted));">■</span>施術終了　<span style="color:var(--c-move,#d8a85f);">■</span>移動'+(iso===todayISO()?'　<span style="color:var(--danger);">—</span>今':'')+'　｜　重なりは横に分割・担当ごとに色分け／長押しで移動</div>';
   h+='<div class="sched" data-start="'+startH+'" style="height:'+((endH-startH)*hourH+PAD*2)+'px;touch-action:pan-y;" onclick="schedClick(event,\''+iso+'\')" onpointerdown="schedDown(event)">';
   for(var hh=startH; hh<=endH; hh++){ var y=(hh-startH)*hourH+PAD; h+='<div class="sched-hline" style="top:'+y+'px;"></div><div class="sched-hlabel" style="top:'+y+'px;">'+pad(hh)+':00</div>'; }
   if(iso===todayISO()){ var nm=(new Date()).getHours()*60+(new Date()).getMinutes(); if(nm>=top0 && nm<=endH*60){ var ny=(nm-top0)*ppm+PAD; h+='<div class="sched-now" style="top:'+ny+'px;"><span class="sched-now-dot"></span></div>'; } }
-  timed.forEach(function(it){
+  var packed=packColumns(timed.map(function(it){var s=hm2min(it.t)||0;return {start:s,end:s+itDur(it)};}));
+  timed.forEach(function(it, idx){
     var m=hm2min(it.t), top=(m-top0)*ppm+PAD, hgt=Math.max(itDur(it)*ppm, 34);
     var isBk=it.kind==="bk", isFac=it.kind==="fac";
     var done, label, sub, dataAttr;
@@ -555,8 +577,17 @@ function dayScheduleHtml(iso){
     else { done=!!exRec(it.r).done; label=recordWho(it.r); sub=esc(it.r.menu||'')+(it.r.amount?'　'+yen(it.r.amount):''); dataAttr='data-mv="rc" data-id="'+esc(it.r.id)+'"'; }
     var cls=done?"fin":"plan";   // 未=予定(緑)/済=施術終了(灰)
     var laneId=itemLane(it); var laneStyle=(multiLane()&&laneId)?'border-left:5px solid '+laneColor(laneId)+';':'';
-    h+='<div class="sched-ev '+cls+'" '+dataAttr+' style="top:'+top+'px;height:'+hgt+'px;cursor:grab;'+laneStyle+'">'+
-      '<b>'+esc(it.t)+'</b> '+label+laneTag(laneId)+(sub?'<div style="opacity:.85;">'+sub+'</div>':'')+'<div class="sched-resize"></div></div>';
+    // 重なりは横に分割（列表示で文字が潰れない）
+    var pc=packed[idx]||{col:0,ncols:1}, ncols=pc.ncols||1, col=pc.col||0;
+    var colStyle=ncols>1?('left:calc(48px + (100% - 50px)*'+col+'/'+ncols+');width:calc((100% - 50px)/'+ncols+' - 2px);right:auto;'):'';
+    // 担当スタッフで色分け（メモの「担当:○○」から。無ければ従来の予定/済の色）
+    var stf=staffOf(it), sc=stf?staffColor(stf):"";
+    var clsx, extra;
+    if(sc){ clsx="sched-ev"; extra='background:'+hexToRgba(sc,0.16)+';border-left:4px solid '+sc+';color:var(--text);'+(done?'opacity:.55;':''); }
+    else { clsx="sched-ev "+cls; extra=laneStyle; }
+    var stfTag=stf?' <span style="font-size:10px;padding:0 5px;border-radius:8px;background:'+(sc||"#888")+';color:#fff;">'+esc(stf)+'</span>':'';
+    h+='<div class="'+clsx+'" '+dataAttr+' style="top:'+top+'px;height:'+hgt+'px;cursor:grab;'+colStyle+extra+'">'+
+      '<b>'+esc(it.t)+'</b> '+label+stfTag+laneTag(laneId)+(sub?'<div style="opacity:.85;">'+sub+'</div>':'')+'<div class="sched-resize"></div></div>';
   });
   // 独立した移動ブロック（好きな時間・場所に配置）
   moves.forEach(function(mv){
