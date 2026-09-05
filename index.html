@@ -177,7 +177,7 @@ function setTimeUnit(u){ TIME_UNIT=u; try{ localStorage.setItem("timeunit_"+(ME&
   var seg=el("tu_seg"); if(seg){ Array.prototype.forEach.call(seg.children,function(b){ b.classList.toggle("on", b.textContent===(u+"分")); }); }
   saveCloudSettings(); toast("⏱ 時間の単位を"+u+"分にしました"); }
 var TAB="today";
-var APP_VERSION="20260708-22";   // ← 更新のたびにこの値を上げる。全端末で「新しい版があります」バナーが出る
+var APP_VERSION="20260708-23";   // ← 更新のたびにこの値を上げる。全端末で「新しい版があります」バナーが出る
 
 /* ===== プラン（無料/Pro）＝訪問回数で切替。今はUX検証用の“見た目”のみ（サーバー強制・Stripeは後日） ===== */
 var FREE_LIMIT=30;   // 無料プラン：訪問 30回/月まで（施設は何名でも1回。この数字で無料枠を調整）
@@ -2320,6 +2320,9 @@ function openSettings(){
     '<div class="hint">🧪 お試し（テスト用）</div>'+
     '<button class="btn ghost accent" onclick="loadSampleData()">🧪 サンプルを入れる</button>'+
     '<div class="muted" style="font-size:11px;text-align:center;margin:2px 0 8px;">施設・お客様・予約・売上・経費の見本を追加。試したら下の「リセット」で消せます。</div>'+
+    '<button class="btn ghost accent" onclick="loadCalendarTest()">📆 運用テストデータ投入（実カレンダー9/7-13）</button>'+
+    '<button class="btn ghost" onclick="clearCalendarTest()">🗑 運用テストデータだけ消去</button>'+
+    '<div class="muted" style="font-size:11px;text-align:center;margin:2px 0 8px;">実カレンダーの訪問予定14件を「テスト印」で投入。消去はテスト分だけ（本物のデータは残ります）。投入した端末で消去してください。</div>'+
     '<div style="border-top:1px solid var(--line);margin:14px 0 8px;"></div>'+
     '<div class="hint" style="color:var(--danger);">⚠️ 危険な操作</div>'+
     '<button class="btn danger" onclick="resetAll()">🧹 自分のデータをすべてリセット</button>'+
@@ -2335,6 +2338,59 @@ async function resetAll(){
   await loadAll(); closeSheet(); toast("🧹 リセットしました"); renderTab();
 }
 /* ===== お試し用サンプルデータ投入（テスト用・自分のデータに追加） ===== */
+/* ===== 運用テスト：実カレンダー(予約 訪問)9/7〜13 の実データ。テスト印つきで投入し、後で丸ごと消せる ===== */
+var CALTEST_SEED=[
+  {fac:1,name:"シニアライフコート潮芦屋",nm:"松永",date:"2026-09-07",t:"09:00",dur:180,staff:"高村"},
+  {fac:0,name:"ミチヒロ",addr:"東灘区本山南町9-8-36 サンハイツ本山603",phone:"08083085014",menu:"パーマ",date:"2026-09-07",t:"14:00",dur:120,staff:"高村",note:"在宅"},
+  {fac:1,name:"清華苑デイ",date:"2026-09-08",t:"09:45",dur:105,staff:"直香"},
+  {fac:1,name:"清華苑すいすい",date:"2026-09-08",t:"10:30",dur:120,staff:"高村"},
+  {fac:1,name:"笑夢（西区）",date:"2026-09-08",t:"13:00",dur:120,staff:"直香"},
+  {fac:1,name:"そよ風長田",nm:"宮本",room:"3階",menu:"カット",date:"2026-09-08",t:"13:00",dur:150,staff:"高村"},
+  {fac:1,name:"山陽",nm:"ニシムラサナエ",room:"壱番館503",menu:"カットパーマ",amount:8000,date:"2026-09-08",t:"16:00",dur:90,staff:"高村"},
+  {fac:1,name:"山帽子",date:"2026-09-09",t:"10:00",dur:90,staff:"直香"},
+  {fac:1,name:"ヴィラ潮芦屋",date:"2026-09-10",t:"09:30",dur:240,staff:"高村"},
+  {fac:1,name:"海岸",date:"2026-09-10",t:"09:30",dur:360,staff:"直香"},
+  {fac:0,name:"ハマグチハル",addr:"兵庫県神戸市灘区紙前町2-2-24",menu:"カット",amount:2000,date:"2026-09-10",t:"17:30",dur:60,staff:"直香",note:"在宅・美容チケット"},
+  {fac:1,name:"こまどり",nm:"結城",date:"2026-09-11",t:"09:30",dur:180,staff:"稲山"},
+  {fac:0,name:"ウエダ（バンノ娘）",addr:"伊丹市奥畑2-116",menu:"カットカラーパーマ",amount:17000,date:"2026-09-11",t:"09:30",dur:120,staff:"高村",note:"在宅・伊丹"},
+  {fac:1,name:"東神戸",nm:"ヤマモトミチコ",room:"南316",menu:"カット顔剃り",date:"2026-09-11",t:"10:00",dur:60,staff:"",note:"お金:詰所"}
+];
+async function loadCalendarTest(){
+  if(!confirm("📆 実カレンダー（訪問）9/7〜13 の予定14件を『運用テスト用』として投入します。\nすべてテスト印つきで、あとで『運用テストデータだけ消去』で消せます。よろしいですか？")) return;
+  try{
+    var org=PROFILE.org_id;
+    var idByName={}; (CL||[]).forEach(function(c){ if(!(c.name in idByName)) idByName[c.name]=c.id; });   // 既存と同名は使い回し（重複回避）
+    var created=[], seen={};
+    for(var i=0;i<CALTEST_SEED.length;i++){ var s=CALTEST_SEED[i]; if(seen[s.name]) continue; seen[s.name]=1;
+      if(idByName[s.name]) continue;   // 既存clientを使う
+      var ins=await sb.from("clients").insert({org_id:org, kind:(s.fac?"施設":"個人"), name:s.name, address:s.addr||"", phone:s.phone||"", billing:(s.fac?"一括":"個別"), price_list:[]}).select().single();
+      if(ins.error){ alert("投入エラー(施設/顧客)："+esc(ins.error.message)); return; }
+      idByName[s.name]=ins.data.id; created.push(ins.data.id);
+    }
+    var rows=CALTEST_SEED.map(function(s){
+      var note=(s.staff?("担当:"+s.staff):"")+(s.note?((s.staff?" / ":"")+s.note):"");
+      return { org_id:org, client_id:idByName[s.name], booking_id:null, member_id:null, staff_id:ME.id,
+        menu:s.menu||"", amount:s.amount||0, note:note, date:s.date,
+        photos:{ nm:s.nm||"", t:s.t, dur:s.dur||60, room:s.room||"", lane:defaultLaneId(), seed:"cal" } };
+    });
+    var rr=await insertRecords(rows);
+    if(rr.error){ alert("投入エラー(記録)："+esc(rr.error.message)); return; }
+    try{ localStorage.setItem("caltest_clients", JSON.stringify(created)); }catch(e){}
+    await loadAll(); closeSheet(); toast("📆 運用テスト14件を投入しました"); renderTab();
+  }catch(err){ alert("投入エラー："+(err&&err.message?err.message:err)); }
+}
+async function clearCalendarTest(){
+  if(!confirm("🗑 運用テスト用データ（テスト印の記録＋このテストで作った施設・お客様）だけを消します。本物のデータは残ります。よろしいですか？")) return;
+  try{
+    var org=PROFILE.org_id;
+    var dr=await sb.from("records").delete().eq("org_id",org).filter("photos->>seed","eq","cal");
+    if(dr.error){ alert("消去エラー(記録)："+esc(dr.error.message)); return; }
+    var ids=[]; try{ ids=JSON.parse(localStorage.getItem("caltest_clients")||"[]"); }catch(e){}
+    if(ids.length){ var dc=await sb.from("clients").delete().eq("org_id",org).in("id",ids); if(dc.error){ alert("消去エラー(顧客)："+esc(dc.error.message)); return; } }
+    try{ localStorage.removeItem("caltest_clients"); }catch(e){}
+    await loadAll(); closeSheet(); toast("🗑 運用テストデータを消去しました"); renderTab();
+  }catch(err){ alert("消去エラー："+(err&&err.message?err.message:err)); }
+}
 async function loadSampleData(){
   if(!confirm("🧪 お試し用のサンプル（施設・お客様・予約・売上・経費）を追加します。\nあなたのデータに足されます。よろしいですか？")) return;
   try{
