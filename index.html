@@ -138,6 +138,17 @@
   .guide-step b{font-size:14px;}
   .center-narrow{max-width:400px; margin:0 auto; padding:24px 18px;}
   h1.brand{font-size:20px; text-align:center; margin:24px 0 4px;}
+  /* ===== iPad / タブレット最適化：中央のゆったり1カラムに広げて読みやすく ===== */
+  @media (min-width:768px){
+    .wrap, .tabbar, .sheet{ max-width:700px; }
+    .topbar{ padding:14px 22px; }
+    .sheet{ border-radius:20px 20px 0 0; padding:12px 22px 32px; }
+    .topbar h1{ font-size:20px; }
+    .card{ padding:16px; }
+    .item{ padding:14px 16px; }
+    .btn{ font-size:16px; }
+    .tabbar .tab{ font-size:12px; }
+  }
 </style>
 </head>
 <body>
@@ -166,7 +177,7 @@ function setTimeUnit(u){ TIME_UNIT=u; try{ localStorage.setItem("timeunit_"+(ME&
   var seg=el("tu_seg"); if(seg){ Array.prototype.forEach.call(seg.children,function(b){ b.classList.toggle("on", b.textContent===(u+"分")); }); }
   saveCloudSettings(); toast("⏱ 時間の単位を"+u+"分にしました"); }
 var TAB="today";
-var APP_VERSION="20260708-21";   // ← 更新のたびにこの値を上げる。全端末で「新しい版があります」バナーが出る
+var APP_VERSION="20260708-22";   // ← 更新のたびにこの値を上げる。全端末で「新しい版があります」バナーが出る
 
 /* ===== プラン（無料/Pro）＝訪問回数で切替。今はUX検証用の“見た目”のみ（サーバー強制・Stripeは後日） ===== */
 var FREE_LIMIT=30;   // 無料プラン：訪問 30回/月まで（施設は何名でも1回。この数字で無料枠を調整）
