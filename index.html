@@ -21,9 +21,14 @@
   .sub{color:var(--muted); font-size:13px;}
   .card{background:var(--surface); border:1px solid var(--line); border-radius:var(--radius); padding:14px; margin-bottom:10px;}
   label{display:block;}
-  input, select{width:100%; padding:11px 12px; border:1px solid var(--line); border-radius:10px; font-size:15px; background:var(--surface); color:var(--text);}
-  .btn{display:block; width:100%; padding:13px; border:none; border-radius:12px; font-size:15px; font-weight:700; margin-top:10px; cursor:pointer;}
+  input, select{width:100%; min-height:44px; padding:11px 12px; border:1px solid var(--line); border-radius:10px; font-size:15px; background:var(--surface); color:var(--text); outline:none; transition:border-color .15s, box-shadow .15s, background .15s;}
+  input:focus, select:focus{border-color:var(--accent); box-shadow:0 0 0 3px var(--accent-soft);}
+  input::placeholder{color:var(--hint);}
+  .btn{display:block; width:100%; min-height:46px; padding:13px; border:none; border-radius:12px; font-size:15px; font-weight:700; margin-top:10px; cursor:pointer; transition:transform .08s, filter .15s, box-shadow .15s;}
+  .btn:active{transform:scale(.985);}
+  .btn:focus-visible{outline:3px solid var(--accent-soft); outline-offset:2px;}
   .btn.primary{background:var(--accent); color:#fff;}
+  .btn.primary:hover{filter:brightness(.96);}
   .btn.ghost{background:var(--surface); border:1px solid var(--line); color:var(--text);}
   .btn.ghost.accent{border-color:var(--accent); color:var(--accent-text);}
   .btn.danger{background:#fbeaea; color:var(--danger);}
@@ -137,7 +142,19 @@
   .guide-step .gnum{flex:0 0 26px; height:26px; border-radius:50%; background:var(--accent); color:#fff; font-weight:700; display:flex; align-items:center; justify-content:center; font-size:14px;}
   .guide-step b{font-size:14px;}
   .center-narrow{max-width:400px; margin:0 auto; padding:24px 18px;}
-  h1.brand{font-size:20px; text-align:center; margin:24px 0 4px;}
+  h1.brand{font-size:23px; text-align:center; margin:24px 0 5px; letter-spacing:.02em;}
+  .auth-shell{display:flex; min-height:100vh; align-items:center; padding-top:28px; padding-bottom:28px;}
+  .auth-shell .center-narrow{width:100%;}
+  .auth-card{padding:24px; border-radius:16px; box-shadow:0 8px 26px rgba(31,38,36,.06);}
+  .auth-title{text-align:center; font-size:21px; font-weight:800; margin:0 0 7px;}
+  .auth-lead{text-align:center; color:var(--muted); font-size:13px; line-height:1.6; margin-bottom:20px;}
+  .field-group{margin-top:12px;}
+  .field-label{display:block; font-size:13px; font-weight:700; margin:0 0 5px; color:var(--text);}
+  .field-help{font-size:11px; color:var(--muted); margin-top:5px; line-height:1.5;}
+  .auth-foot{text-align:center; color:var(--muted); font-size:13px; margin-top:18px; line-height:1.5;}
+  .text-link{border:0; background:none; padding:2px 3px; color:var(--accent-text); font:inherit; font-weight:700; cursor:pointer; text-decoration:none;}
+  .text-link:focus-visible{outline:2px solid var(--accent); border-radius:4px;}
+  .setup-lead{background:var(--accent-soft); color:var(--accent-text); border-radius:12px; padding:11px 12px; font-size:13px; line-height:1.6; margin-bottom:14px;}
   /* ===== iPad / タブレット最適化：中央のゆったり1カラムに広げて読みやすく ===== */
   @media (min-width:768px){
     .wrap, .tabbar, .sheet{ max-width:700px; }
@@ -177,7 +194,7 @@ function setTimeUnit(u){ TIME_UNIT=u; try{ localStorage.setItem("timeunit_"+(ME&
   var seg=el("tu_seg"); if(seg){ Array.prototype.forEach.call(seg.children,function(b){ b.classList.toggle("on", b.textContent===(u+"分")); }); }
   saveCloudSettings(); toast("⏱ 時間の単位を"+u+"分にしました"); }
 var TAB="today";
-var APP_VERSION="20260708-24";   // ← 更新のたびにこの値を上げる。全端末で「新しい版があります」バナーが出る
+var APP_VERSION="20260920-01";   // ← 更新のたびにこの値を上げる。全端末で「新しい版があります」バナーが出る
 
 /* ===== プラン（無料/Pro）＝訪問回数で切替。今はUX検証用の“見た目”のみ（サーバー強制・Stripeは後日） ===== */
 var FREE_LIMIT=30;   // 無料プラン：訪問 30回/月まで（施設は何名でも1回。この数字で無料枠を調整）
@@ -349,21 +366,20 @@ async function reloadTimeBlocks(){ var d=await sb.from("time_blocks").select("*"
 function setAuthMode(mmode){ var e=el("email"),p=el("pw"),n=el("nm"); if(e)window._ae=e.value; if(p)window._ap=p.value; if(n)window._an=n.value; window._am=mmode; renderAuth(); }
 function renderAuth(){
   var mode=window._am||"signin", su=(mode==="signup");
-  APP.innerHTML='<div class="center-narrow">'+
-    '<h1 class="brand">訪問美容 楽々アプリ</h1><div class="sub" style="text-align:center;margin-bottom:16px;">予約・顧客・売上まで、これひとつ。<br>訪問美容のためのオールインワン</div>'+
-    '<div class="card">'+
-    '<div class="seg-wrap" style="margin-bottom:12px;">'+
-      '<button class="seg'+(su?"":" on")+'" onclick="setAuthMode(\'signin\')">ログイン</button>'+
-      '<button class="seg'+(su?" on":"")+'" onclick="setAuthMode(\'signup\')">新規登録</button>'+
-    '</div>'+
-    (su?'<div class="hint">お名前</div><input id="nm" placeholder="例：板谷 直澄" value="'+esc(window._an||"")+'">':"")+
-    '<div class="hint" style="margin-top:'+(su?"8px":"0")+';">メールアドレス</div><input id="email" type="email" autocomplete="username" placeholder="you@example.com" value="'+esc(window._ae||"")+'">'+
-    '<div class="hint" style="margin-top:8px;">パスワード</div><input id="pw" type="password" autocomplete="'+(su?"new-password":"current-password")+'" placeholder="6文字以上" value="'+esc(window._ap||"")+'">'+
+  APP.innerHTML='<div class="auth-shell"><div class="center-narrow">'+
+    '<h1 class="brand">訪問らくらく</h1><div class="sub" style="text-align:center;margin-bottom:20px;">予約・段取り・カルテ・売上を、ひとつに。</div>'+
+    '<div class="card auth-card">'+
+    '<div class="auth-title">'+(su?"新規登録":"ログイン")+'</div>'+
+    '<div class="auth-lead">'+(su?"必要な情報を入力して、利用を始めましょう。":"登録済みのメールアドレスとパスワードを入力してください。")+'</div>'+
+    (su?'<div class="field-group"><label class="field-label" for="nm">お名前</label><input id="nm" autocomplete="name" placeholder="例：板谷 直澄" value="'+esc(window._an||"")+'"></div>':"")+
+    '<div class="field-group"><label class="field-label" for="email">メールアドレス</label><input id="email" type="email" autocomplete="username" inputmode="email" placeholder="you@example.com" value="'+esc(window._ae||"")+'"></div>'+
+    '<div class="field-group"><label class="field-label" for="pw">パスワード</label><input id="pw" type="password" autocomplete="'+(su?"new-password":"current-password")+'" placeholder="6文字以上" value="'+esc(window._ap||"")+'">'+(su?'<div class="field-help">6文字以上で入力してください</div>':'')+'</div>'+
     (su?'<div class="warn">⚠️ この<b>メールとパスワード</b>は次回のログインに必要です。必ず控えてください。</div>':"")+
     '<button class="btn primary" onclick="'+(su?"doSignUp()":"doSignIn()")+'">'+(su?"登録して始める":"ログイン")+'</button>'+
-    (su?"":'<button class="btn ghost sm" style="width:auto;margin:8px auto 0;display:block;color:var(--muted);" onclick="doResetPassword()">パスワードを忘れた方はこちら</button>')+
+    (su?"":'<div style="text-align:center;margin-top:10px;"><button class="text-link" onclick="doResetPassword()">パスワードをお忘れですか？</button></div>')+
     '<div id="m"></div>'+
-    '</div></div>';
+    '<div class="auth-foot">'+(su?'すでにアカウントをお持ちですか？ <button class="text-link" onclick="setAuthMode(\'signin\')">ログイン</button>':'初めてお使いですか？ <button class="text-link" onclick="setAuthMode(\'signup\')">無料で新規登録</button>')+'</div>'+
+    '</div></div></div>';
 }
 async function doSignIn(){
   var email=el("email").value.trim(), pw=el("pw").value;
@@ -394,15 +410,15 @@ async function doResetPassword(){
   showMsg("📧 再設定メールを「"+esc(email)+"」に送りました。メール内のリンクを開き、新しいパスワードを設定してください。","ok");
 }
 function renderResetPassword(){
-  APP.innerHTML='<div class="center-narrow">'+
-    '<h1 class="brand">パスワードの再設定</h1>'+
-    '<div class="sub" style="text-align:center;margin-bottom:16px;">新しいパスワードを入力してください。</div>'+
-    '<div class="card">'+
-      '<div class="hint">新しいパスワード</div><input id="np" type="password" autocomplete="new-password" placeholder="6文字以上">'+
-      '<div class="hint" style="margin-top:8px;">新しいパスワード（確認）</div><input id="np2" type="password" autocomplete="new-password" placeholder="もう一度">'+
+  APP.innerHTML='<div class="auth-shell"><div class="center-narrow">'+
+    '<h1 class="brand">訪問らくらく</h1>'+
+    '<div class="card auth-card">'+
+      '<div class="auth-title">パスワードの再設定</div><div class="auth-lead">新しいパスワードを2回入力してください。</div>'+
+      '<div class="field-group"><label class="field-label" for="np">新しいパスワード</label><input id="np" type="password" autocomplete="new-password" placeholder="6文字以上"></div>'+
+      '<div class="field-group"><label class="field-label" for="np2">新しいパスワード（確認）</label><input id="np2" type="password" autocomplete="new-password" placeholder="もう一度入力"></div>'+
       '<button class="btn primary" onclick="doSetNewPassword()">パスワードを変更する</button>'+
       '<div id="m"></div>'+
-    '</div></div>';
+    '</div></div></div>';
 }
 async function doSetNewPassword(){
   var p=(el("np")||{}).value||"", p2=(el("np2")||{}).value||"";
@@ -1634,13 +1650,13 @@ function markSetupDone(){ try{ localStorage.setItem("setupdone_"+(ME&&ME.id),"1"
 function openInitialSetup(){
   var o=ORGP||{};
   var menuRows=(STD_MENU.length?STD_MENU:[{name:"カット",price:""},{name:"",price:""}]).map(function(p){return priceRow(p.name,p.price);}).join("");
-  openSheet('<div class="sheet-title">はじめの設定 🎉</div>'+
-    '<div class="muted" style="margin-bottom:8px;">お店の名前と、よく使う<b>デフォルトメニュー</b>を先に登録しておくと、予約入力がぐっと楽になります。<br>あとで「設定」からいつでも変えられます。</div>'+
-    '<div class="hint">屋号・お店/活動名</div><input id="su_shop" value="'+esc(o.shop||"")+'" placeholder="例：i,hair 訪問美容">'+
-    '<div class="hint" style="margin-top:8px;">お名前（担当者）</div><input id="su_name" value="'+esc(o.name||PROFILE.name||"")+'" placeholder="例：板谷">'+
-    '<div class="hint" style="margin-top:10px;">デフォルトメニュー（料金表）</div>'+
+  openSheet('<div class="sheet-title">はじめの設定</div>'+
+    '<div class="setup-lead"><b>最初に一度だけ</b><br>お店・活動名と、よく使う料金を登録すると予約入力が楽になります。内容はあとから設定で変更できます。</div>'+
+    '<div class="field-group"><label class="field-label" for="su_shop">屋号・お店／活動名</label><input id="su_shop" value="'+esc(o.shop||"")+'" placeholder="例：i,hair 訪問美容"></div>'+
+    '<div class="field-group"><label class="field-label" for="su_name">お名前（担当者）</label><input id="su_name" value="'+esc(o.name||PROFILE.name||"")+'" placeholder="例：板谷"></div>'+
+    '<div class="field-group"><div class="field-label">デフォルトメニュー（料金表）</div>'+
     '<div class="muted" style="font-size:11px;margin-bottom:4px;">施設・生活保護など条件で変わる料金は、予約入力時に自由入力＆その場で上書きできます。</div>'+
-    '<div id="su_rows">'+menuRows+'</div>'+
+    '<div id="su_rows">'+menuRows+'</div></div>'+
     '<button class="btn ghost accent sm" style="width:auto;" onclick="addPriceRow(\'su_rows\')">＋ メニューを追加</button>'+
     '<button class="btn primary" style="margin-top:10px;" onclick="saveInitialSetup()">保存して始める</button>'+
     '<button class="btn ghost" onclick="skipInitialSetup()">あとで（スキップ）</button>');
