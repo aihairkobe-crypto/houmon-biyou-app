@@ -194,7 +194,7 @@ function setTimeUnit(u){ TIME_UNIT=u; try{ localStorage.setItem("timeunit_"+(ME&
   var seg=el("tu_seg"); if(seg){ Array.prototype.forEach.call(seg.children,function(b){ b.classList.toggle("on", b.textContent===(u+"分")); }); }
   saveCloudSettings(); toast("⏱ 時間の単位を"+u+"分にしました"); }
 var TAB="today";
-var APP_VERSION="20260920-01";   // ← 更新のたびにこの値を上げる。全端末で「新しい版があります」バナーが出る
+var APP_VERSION="20260920-02";   // ← 更新のたびにこの値を上げる。全端末で「新しい版があります」バナーが出る
 
 /* ===== プラン（無料/Pro）＝訪問回数で切替。今はUX検証用の“見た目”のみ（サーバー強制・Stripeは後日） ===== */
 var FREE_LIMIT=30;   // 無料プラン：訪問 30回/月まで（施設は何名でも1回。この数字で無料枠を調整）
@@ -546,6 +546,18 @@ function itDur(it){ return it.kind==="bk" ? (it.b.duration||60) : it.kind==="fac
 function itemDone(it){ return it.kind==="bk" ? (it.b.status==="施術終了") : it.kind==="fac" ? it.recs.every(function(r){return !!exRec(r).done;}) : !!exRec(it.r).done; }
 function itemLane(it){ return it.kind==="bk" ? (it.b.lane||"") : it.kind==="fac" ? (exRec(it.recs[0]||{}).lane||"") : (exRec(it.r||{}).lane||""); }   // その予定の枠
 function movesForDay(iso){ return TB.filter(function(m){return m.date===iso && m.time;}); }   // 独立した移動ブロック
+/* time_blocksに列を増やさず、label先頭へ移動の枠IDを埋め込む。画面にはメモだけを表示する */
+function moveInfo(m){
+  var raw=String((m&&m.label)||""), hit=raw.match(/^\[\[lane:([^\]]*)\]\]/), lane="";
+  if(hit){ try{ lane=decodeURIComponent(hit[1]); }catch(e){ lane=hit[1]; } raw=raw.slice(hit[0].length); }
+  return {lane:lane||(LANES[0]&&LANES[0].id)||"self", label:raw};   // 既存データは本人枠として扱う
+}
+function moveStoredLabel(label,lane){ return "[[lane:"+encodeURIComponent(lane||defaultLaneId())+"]]"+(label||""); }
+function moveColumnStyle(laneId){
+  if(!multiLane()) return "";
+  var n=LANES.length, col=LANES.findIndex(function(l){return l.id===laneId;}); if(col<0) col=0;
+  return 'left:calc(48px + (100% - 50px)*'+col+'/'+n+');width:calc((100% - 50px)/'+n+' - 2px);right:auto;';
+}
 /* 予定タイトル末尾の「担当:○○」を取り出す（メモに記録） */
 function staffOf(it){
   var note = it.kind==="bk" ? (it.b&&it.b.note||"") : it.kind==="fac" ? ((it.recs&&it.recs[0]||{}).note||"") : ((it.r||{}).note||"");
@@ -607,8 +619,8 @@ function dayScheduleHtml(iso){
   });
   // 独立した移動ブロック（好きな時間・場所に配置）
   moves.forEach(function(mv){
-    var m=hm2min(mv.time), top=(m-top0)*ppm+PAD, mh=Math.max((mv.duration||15)*ppm,20);
-    h+='<div class="sched-move" data-mv="mv" data-id="'+esc(mv.id)+'" style="top:'+top+'px;height:'+mh+'px;cursor:grab;">🚗 '+esc(mv.label||"移動")+(mv.duration?' '+mv.duration+'分':'')+'<button class="sched-del" onclick="delMove(\''+esc(mv.id)+'\')">✕</button><div class="sched-resize"></div></div>';
+    var m=hm2min(mv.time), top=(m-top0)*ppm+PAD, mh=Math.max((mv.duration||15)*ppm,20), mi=moveInfo(mv);
+    h+='<div class="sched-move" data-mv="mv" data-id="'+esc(mv.id)+'" style="top:'+top+'px;height:'+mh+'px;cursor:grab;'+moveColumnStyle(mi.lane)+'">🚗 '+esc(mi.label||"移動")+(mv.duration?' '+mv.duration+'分':'')+laneTag(mi.lane)+'<button class="sched-del" onclick="delMove(\''+esc(mv.id)+'\')">✕</button><div class="sched-resize"></div></div>';
   });
   h+='</div>';
   if(untimed.length){
@@ -706,12 +718,14 @@ function newMoveAt(){ var a=window._newAt||{}; openMoveForm(null,{date:a.iso, ti
 /* 独立した移動ブロック（time_blocks）＝好きな時間・場所に自由に配置 */
 function openMoveForm(id, prefill){
   var m=id?(TB.find(function(x){return x.id===id;})||{}):(prefill||{});
+  var mi=moveInfo(m);
   var body='<div class="sheet-title">🚗 移動時間</div>'+
     '<div class="muted" style="margin-bottom:8px;">移動の時間を予定表に入れます。次の訪問先までの移動などにどうぞ。</div>'+
     '<div class="row"><div><div class="hint">日付</div><input id="mv_date" type="date" value="'+esc(m.date||todayISO())+'"></div>'+
       '<div><div class="hint">開始時間</div>'+timeInput("mv_time", m.time||defHM())+'</div></div>'+
     '<div class="hint" style="margin-top:8px;">移動時間（分）</div><input id="mv_dur" type="number" step="'+TIME_UNIT+'" value="'+(m.duration||15)+'">'+
-    '<div class="hint" style="margin-top:8px;">メモ（任意）</div><input id="mv_label" value="'+esc(m.label||"")+'" placeholder="例：〇〇苑へ移動 / 休憩">'+
+    laneFieldHtml("mv_lane", mi.lane||defaultLaneId())+
+    '<div class="hint" style="margin-top:8px;">メモ（任意）</div><input id="mv_label" value="'+esc(mi.label||"")+'" placeholder="例：〇〇苑へ移動 / 休憩">'+
     '<div id="m"></div>'+
     '<button class="btn primary" onclick="saveMove(\''+(id||"")+'\')">保存</button>'+
     (id?'<button class="btn danger" onclick="delMove(\''+id+'\')">削除</button>':"")+
@@ -719,8 +733,9 @@ function openMoveForm(id, prefill){
   openSheet(body);
 }
 async function saveMove(id){
+  var lane=readLane("mv_lane");
   var data={ org_id:PROFILE.org_id, date:el("mv_date").value, time:el("mv_time").value,
-    duration:Number(el("mv_dur").value)||0, label:el("mv_label").value.trim() };
+    duration:Number(el("mv_dur").value)||0, label:moveStoredLabel(el("mv_label").value.trim(),lane) };
   var r=id?await sb.from("time_blocks").update(data).eq("id",id):await sb.from("time_blocks").insert(data);
   if(r.error){ showMsg("保存エラー："+esc(r.error.message)); return; }
   closeSheet(); toast("🚗 移動時間を入れました"); await reloadTimeBlocks();
