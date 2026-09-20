@@ -194,7 +194,7 @@ function setTimeUnit(u){ TIME_UNIT=u; try{ localStorage.setItem("timeunit_"+(ME&
   var seg=el("tu_seg"); if(seg){ Array.prototype.forEach.call(seg.children,function(b){ b.classList.toggle("on", b.textContent===(u+"分")); }); }
   saveCloudSettings(); toast("⏱ 時間の単位を"+u+"分にしました"); }
 var TAB="today";
-var APP_VERSION="20260920-02";   // ← 更新のたびにこの値を上げる。全端末で「新しい版があります」バナーが出る
+var APP_VERSION="20260920-03";   // ← 更新のたびにこの値を上げる。全端末で「新しい版があります」バナーが出る
 
 /* ===== プラン（無料/Pro）＝訪問回数で切替。今はUX検証用の“見た目”のみ（サーバー強制・Stripeは後日） ===== */
 var FREE_LIMIT=30;   // 無料プラン：訪問 30回/月まで（施設は何名でも1回。この数字で無料枠を調整）
@@ -548,15 +548,41 @@ function itemLane(it){ return it.kind==="bk" ? (it.b.lane||"") : it.kind==="fac"
 function movesForDay(iso){ return TB.filter(function(m){return m.date===iso && m.time;}); }   // 独立した移動ブロック
 /* time_blocksに列を増やさず、label先頭へ移動の枠IDを埋め込む。画面にはメモだけを表示する */
 function moveInfo(m){
-  var raw=String((m&&m.label)||""), hit=raw.match(/^\[\[lane:([^\]]*)\]\]/), lane="";
-  if(hit){ try{ lane=decodeURIComponent(hit[1]); }catch(e){ lane=hit[1]; } raw=raw.slice(hit[0].length); }
-  return {lane:lane||(LANES[0]&&LANES[0].id)||"self", label:raw};   // 既存データは本人枠として扱う
+  var raw=String((m&&m.label)||""), hit=raw.match(/^\[\[(lane|staff):([^\]]*)\]\]/), type="", id="";
+  if(hit){ type=hit[1]; try{ id=decodeURIComponent(hit[2]); }catch(e){ id=hit[2]; } raw=raw.slice(hit[0].length); }
+  return {type:type, id:id, label:raw};
 }
-function moveStoredLabel(label,lane){ return "[[lane:"+encodeURIComponent(lane||defaultLaneId())+"]]"+(label||""); }
-function moveColumnStyle(laneId){
-  if(!multiLane()) return "";
-  var n=LANES.length, col=LANES.findIndex(function(l){return l.id===laneId;}); if(col<0) col=0;
+function moveStoredLabel(label,target){
+  var p=String(target||"").split(":"), type=p.shift()||"lane", id=p.join(":")||defaultLaneId();
+  return "[["+type+":"+encodeURIComponent(id)+"]]"+(label||"");
+}
+function staffTargetsForDate(iso){
+  var out=[]; dayTimeline(iso).forEach(function(it){ var n=staffOf(it); if(n&&out.indexOf(n)<0) out.push(n); }); return out;
+}
+function moveTargetsForDate(iso){
+  if(multiLane()) return LANES.map(function(l){return {value:"lane:"+l.id,label:l.name};});
+  var staff=staffTargetsForDate(iso); if(staff.length>1) return staff.map(function(n){return {value:"staff:"+n,label:n};});
+  return [];
+}
+function moveTargetFieldHtml(iso,selected){
+  var opts=moveTargetsForDate(iso); if(opts.length<2) return "";
+  if(!opts.some(function(o){return o.value===selected;})) selected=opts[0].value;
+  return '<div class="hint" style="margin-top:8px;">移動する枠・担当</div><select id="mv_target">'+opts.map(function(o){return '<option value="'+esc(o.value)+'"'+(o.value===selected?' selected':'')+'>'+esc(o.label)+'</option>';}).join("")+'</select>';
+}
+function refreshMoveTarget(){ var wrap=el("mv_target_wrap"), date=el("mv_date"); if(!wrap||!date)return; var old=el("mv_target"); wrap.innerHTML=moveTargetFieldHtml(date.value,old?old.value:""); }
+function moveColumnStyle(col,n){
+  if(n<2) return ""; if(col<0) col=0;
   return 'left:calc(48px + (100% - 50px)*'+col+'/'+n+');width:calc((100% - 50px)/'+n+' - 2px);right:auto;';
+}
+function moveDisplayInfo(mi,iso){
+  if(mi.type==="staff"){
+    var ss=staffTargetsForDate(iso), si=ss.indexOf(mi.id); return {style:moveColumnStyle(si,ss.length),tag:mi.id,color:staffColor(mi.id)};
+  }
+  if(multiLane()){
+    var li=LANES.findIndex(function(l){return l.id===mi.id;}), ln=laneName(mi.id); return {style:moveColumnStyle(li,LANES.length),tag:ln,color:laneColor(mi.id)};
+  }
+  var staffs=staffTargetsForDate(iso);   // 枠が1つで担当者列が複数の日は、旧データを先頭列へ寄せる
+  return staffs.length>1?{style:moveColumnStyle(0,staffs.length),tag:staffs[0],color:staffColor(staffs[0])}:{style:"",tag:"",color:""};
 }
 /* 予定タイトル末尾の「担当:○○」を取り出す（メモに記録） */
 function staffOf(it){
@@ -619,8 +645,9 @@ function dayScheduleHtml(iso){
   });
   // 独立した移動ブロック（好きな時間・場所に配置）
   moves.forEach(function(mv){
-    var m=hm2min(mv.time), top=(m-top0)*ppm+PAD, mh=Math.max((mv.duration||15)*ppm,20), mi=moveInfo(mv);
-    h+='<div class="sched-move" data-mv="mv" data-id="'+esc(mv.id)+'" style="top:'+top+'px;height:'+mh+'px;cursor:grab;'+moveColumnStyle(mi.lane)+'">🚗 '+esc(mi.label||"移動")+(mv.duration?' '+mv.duration+'分':'')+laneTag(mi.lane)+'<button class="sched-del" onclick="delMove(\''+esc(mv.id)+'\')">✕</button><div class="sched-resize"></div></div>';
+    var m=hm2min(mv.time), top=(m-top0)*ppm+PAD, mh=Math.max((mv.duration||15)*ppm,20), mi=moveInfo(mv), md=moveDisplayInfo(mi,iso);
+    var mt=md.tag?' <span style="font-size:10px;padding:0 5px;border-radius:8px;background:'+md.color+';color:#fff;">'+esc(md.tag)+'</span>':'';
+    h+='<div class="sched-move" data-mv="mv" data-id="'+esc(mv.id)+'" style="top:'+top+'px;height:'+mh+'px;cursor:grab;'+md.style+'">🚗 '+esc(mi.label||"移動")+(mv.duration?' '+mv.duration+'分':'')+mt+'<button class="sched-del" onclick="delMove(\''+esc(mv.id)+'\')">✕</button><div class="sched-resize"></div></div>';
   });
   h+='</div>';
   if(untimed.length){
@@ -719,12 +746,13 @@ function newMoveAt(){ var a=window._newAt||{}; openMoveForm(null,{date:a.iso, ti
 function openMoveForm(id, prefill){
   var m=id?(TB.find(function(x){return x.id===id;})||{}):(prefill||{});
   var mi=moveInfo(m);
+  var selected=mi.type?(mi.type+":"+mi.id):"";
   var body='<div class="sheet-title">🚗 移動時間</div>'+
     '<div class="muted" style="margin-bottom:8px;">移動の時間を予定表に入れます。次の訪問先までの移動などにどうぞ。</div>'+
-    '<div class="row"><div><div class="hint">日付</div><input id="mv_date" type="date" value="'+esc(m.date||todayISO())+'"></div>'+
+    '<div class="row"><div><div class="hint">日付</div><input id="mv_date" type="date" value="'+esc(m.date||todayISO())+'" onchange="refreshMoveTarget()"></div>'+
       '<div><div class="hint">開始時間</div>'+timeInput("mv_time", m.time||defHM())+'</div></div>'+
     '<div class="hint" style="margin-top:8px;">移動時間（分）</div><input id="mv_dur" type="number" step="'+TIME_UNIT+'" value="'+(m.duration||15)+'">'+
-    laneFieldHtml("mv_lane", mi.lane||defaultLaneId())+
+    '<div id="mv_target_wrap">'+moveTargetFieldHtml(m.date||todayISO(),selected)+'</div>'+
     '<div class="hint" style="margin-top:8px;">メモ（任意）</div><input id="mv_label" value="'+esc(mi.label||"")+'" placeholder="例：〇〇苑へ移動 / 休憩">'+
     '<div id="m"></div>'+
     '<button class="btn primary" onclick="saveMove(\''+(id||"")+'\')">保存</button>'+
@@ -733,9 +761,9 @@ function openMoveForm(id, prefill){
   openSheet(body);
 }
 async function saveMove(id){
-  var lane=readLane("mv_lane");
+  var target=el("mv_target")?el("mv_target").value:("lane:"+defaultLaneId());
   var data={ org_id:PROFILE.org_id, date:el("mv_date").value, time:el("mv_time").value,
-    duration:Number(el("mv_dur").value)||0, label:moveStoredLabel(el("mv_label").value.trim(),lane) };
+    duration:Number(el("mv_dur").value)||0, label:moveStoredLabel(el("mv_label").value.trim(),target) };
   var r=id?await sb.from("time_blocks").update(data).eq("id",id):await sb.from("time_blocks").insert(data);
   if(r.error){ showMsg("保存エラー："+esc(r.error.message)); return; }
   closeSheet(); toast("🚗 移動時間を入れました"); await reloadTimeBlocks();
