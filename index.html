@@ -194,7 +194,7 @@ function setTimeUnit(u){ TIME_UNIT=u; try{ localStorage.setItem("timeunit_"+(ME&
   var seg=el("tu_seg"); if(seg){ Array.prototype.forEach.call(seg.children,function(b){ b.classList.toggle("on", b.textContent===(u+"分")); }); }
   saveCloudSettings(); toast("⏱ 時間の単位を"+u+"分にしました"); }
 var TAB="today";
-var APP_VERSION="20260920-03";   // ← 更新のたびにこの値を上げる。全端末で「新しい版があります」バナーが出る
+var APP_VERSION="20260923-01";   // ← 更新のたびにこの値を上げる。全端末で「新しい版があります」バナーが出る
 
 /* ===== プラン（無料/Pro）＝訪問回数で切替。今はUX検証用の“見た目”のみ（サーバー強制・Stripeは後日） ===== */
 var FREE_LIMIT=30;   // 無料プラン：訪問 30回/月まで（施設は何名でも1回。この数字で無料枠を調整）
@@ -2505,7 +2505,24 @@ async function doSignOut(){ unsubscribeRealtime(); await sb.auth.signOut(); ME=n
 
 /* パスワード再設定リンクを開いた時（Supabaseが検知して発火）＝再設定画面へ */
 sb.auth.onAuthStateChange(function(ev){ if(ev==="PASSWORD_RECOVERY"){ RECOVERY=true; renderResetPassword(); } });
-boot();
+/* 起動が固まって見える対策（2026-09-23）：バックエンド接続不調（Supabase一時停止直後等）で
+   getSession()が数十秒かかることがあり、「読み込み中…」がフリーズしたように見えていた。
+   8秒たっても起動が終わっていなければ、いったん「読み込みに失敗」表示＋再読み込みボタンを出す。
+   その後boot()自体が遅れて成功すれば、renderAuth()/renderApp()がこの表示を上書きするので害はない。
+   起動処理そのものが例外を投げた場合も同様にここで拾う（従来は無反応のまま止まっていた）。 */
+function showBootError(msg){
+  APP.innerHTML='<div class="center-narrow"><div class="card">'+
+    '<div style="font-weight:700;margin-bottom:6px;">⚠️ '+esc(msg||"読み込みに失敗しました")+'</div>'+
+    '<div class="muted" style="font-size:13px;margin-bottom:10px;">電波状況をご確認のうえ、もう一度お試しください。</div>'+
+    '<button class="btn primary" onclick="location.reload()">再読み込み</button>'+
+    '</div></div>';
+}
+(function(){
+  var bootTimer=setTimeout(function(){ showBootError("接続に時間がかかっています"); }, 8000);
+  boot().then(function(){ clearTimeout(bootTimer); }).catch(function(e){
+    clearTimeout(bootTimer); showBootError("読み込みに失敗しました"); try{ console.error(e); }catch(e2){}
+  });
+})();
 </script>
 </body>
 </html>
